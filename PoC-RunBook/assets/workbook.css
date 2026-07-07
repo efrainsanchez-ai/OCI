@@ -690,7 +690,7 @@ body[data-theme="dark"] .node-icon {
 
 .bastion-flow-main {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  grid-template-columns: minmax(10.5rem, 1fr) minmax(2.2rem, auto) minmax(11.5rem, 1.15fr) minmax(2rem, auto) minmax(11.5rem, 1.15fr) minmax(2rem, auto) minmax(13rem, 1.35fr);
   gap: 0.65rem;
   align-items: stretch;
 }
@@ -698,28 +698,28 @@ body[data-theme="dark"] .node-icon {
 .bastion-step {
   position: relative;
   min-width: 0;
-  min-height: 178px;
+  min-height: 160px;
   display: grid;
   grid-template-rows: auto auto auto 1fr;
-  gap: 0.4rem;
+  gap: 0.34rem;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
-  padding: 0.9rem;
+  padding: 0.78rem;
 }
 
 .bastion-step-number {
   position: absolute;
-  top: 0.65rem;
-  right: 0.65rem;
+  top: 0.55rem;
+  right: 0.55rem;
   display: inline-grid;
   place-items: center;
-  width: 1.55rem;
-  height: 1.55rem;
+  width: 1.35rem;
+  height: 1.35rem;
   border-radius: 999px;
   background: var(--surface-strong);
   color: var(--muted);
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 850;
   line-height: 1;
 }
@@ -727,12 +727,12 @@ body[data-theme="dark"] .node-icon {
 .bastion-step-icon {
   display: inline-grid;
   place-items: center;
-  width: 2.5rem;
-  height: 2.5rem;
+  width: 2.15rem;
+  height: 2.15rem;
   border-radius: 7px;
   background: #fef3c7;
   color: #92400e;
-  font-size: 0.68rem;
+  font-size: 0.64rem;
   font-weight: 850;
   letter-spacing: 0.04em;
   line-height: 1;
@@ -740,14 +740,43 @@ body[data-theme="dark"] .node-icon {
 
 .bastion-step strong {
   color: var(--text);
-  font-size: 0.98rem;
-  line-height: 1.25;
+  font-size: 0.86rem;
+  line-height: 1.2;
 }
 
-.bastion-step span:last-child {
+.bastion-step > span:not(.bastion-step-number):not(.bastion-step-icon):not(.bastion-nsg-mini) {
   color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.42;
+  font-size: 0.76rem;
+  line-height: 1.32;
+}
+
+.bastion-nsg-mini {
+  display: grid;
+  gap: 0.12rem;
+  align-self: end;
+  margin-top: 0.28rem;
+  padding: 0.45rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--line) 74%, #22775f);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, #dcfce7);
+}
+
+.bastion-nsg-mini strong {
+  font-size: 0.72rem;
+  line-height: 1.12;
+}
+
+.bastion-nsg-mini code {
+  font-size: 0.64rem;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.bastion-nsg-mini em {
+  color: var(--muted);
+  font-size: 0.64rem;
+  font-style: normal;
+  line-height: 1.16;
 }
 
 .step-session .bastion-step-icon {
@@ -767,22 +796,22 @@ body[data-theme="dark"] .node-icon {
 
 .bastion-connector {
   align-self: center;
-  min-width: 5.4rem;
+  min-width: 2rem;
   display: grid;
   place-items: center;
   color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 850;
-  line-height: 1.15;
+  font-size: 0.58rem;
+  font-weight: 750;
+  line-height: 1.05;
   text-align: center;
-  text-transform: uppercase;
+  text-transform: none;
 }
 
 .bastion-connector::before {
   content: "";
   width: 100%;
   height: 2px;
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.28rem;
   border-radius: 999px;
   background: linear-gradient(90deg, rgba(34, 119, 95, 0.22), rgba(34, 119, 95, 0.78));
 }
