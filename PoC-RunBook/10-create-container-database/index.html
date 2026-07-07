@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create Container Database | OCI PoC RunBook</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/workbook.css">
+</head>
+<body class="workbook-chapter" data-guide-key="10-create-container-database" data-guide-scope="nested">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">OCI</span>
+        <span class="brand-text">
+          <span class="brand-title" data-series-brand-title>OCI PoC RunBook</span>
+          <span class="brand-subtitle" data-series-brand-subtitle>Workbook</span>
+        </span>
+      </a>
+      <div class="top-actions">
+        <a class="top-link" href="../index.html#documentation">Documentation</a>
+        <a class="top-link" href="../index.html#glossary">Glossary</a>
+        <button class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+      </div>
+    </div>
+  </header>
+  <div id="top"></div>
+  <section class="hero hero-compact">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Chapter 10</p>
+        <h1>Create Container Database</h1>
+        <p class="subtitle">This section creates a new container database named <code>CDB01</code> under the existing <code>dbhome_01</code> Oracle home on <code>VMCluster-01</code>. The creation request uses the OCI Database CLI <code>database create</code> path, keeps automatic backups disabled, prompts for the database character set, uses the default national character set by omitting the national character-set override, and creates the initial pluggable database <code>PDB01</code>.</p>
+        <div class="hero-meta">
+          <span>Last updated July 6, 2026</span>
+        </div>
+        <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+  <div class="page-grid">
+    <nav class="toc" aria-label="Table of contents">
+      <p>Table of contents</p>
+      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#required-database-inputs">Required database inputs</a></li><li><a href="#recommended-choices">Recommended choices</a></li><li><a href="#bash-01-validate-cloud-shell-and-oci-cli-context">BASH 01 - Validate Cloud Shell and OCI CLI context</a></li><li><a href="#bash-02-set-cdb01-creation-values">BASH 02 - Set CDB01 creation values</a></li><li><a href="#bash-03-create-cdb01-with-pdb01">BASH 03 - Create CDB01 with PDB01</a></li><li><a href="#bash-04-validate-cdb01-lifecycle">BASH 04 - Validate CDB01 lifecycle</a></li><li><a href="#bash-05-validate-pdb01-registration">BASH 05 - Validate PDB01 registration</a></li><li><a href="#bash-06-capture-pdb01-ocid">BASH 06 - Capture PDB01 OCID</a></li><li><a href="#bash-07-store-a-concise-cdb01-inventory-report">BASH 07 - Store a concise CDB01 inventory report</a></li></ol>
+    </nav>
+    <main id="main" class="article">
+      <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../09-upscale-the-cluster-to-two-nodes/index.html"><span class="nav-card-label">Previous</span><strong>09. Upscale the Cluster to Two Nodes</strong></a><a class="chapter-link nav-card" href="../11-bastion-and-cluster-ssh-connection/index.html"><span class="nav-card-label">Next</span><strong>11. Bastion and Cluster SSH Connection</strong></a>
+      </nav>
+      <section id="section-purpose" class="article-section">
+        <h2>Section purpose</h2>
+        <div class="note-box">This section creates a new container database named <code>CDB01</code> under the existing <code>dbhome_01</code> Oracle home on <code>VMCluster-01</code>. The creation request uses the OCI Database CLI <code>database create</code> path, keeps automatic backups disabled, prompts for the database character set, uses the default national character set by omitting the national character-set override, and creates the initial pluggable database <code>PDB01</code>.</div>
+<div class="note-box">OCI CLI 3.73.1 is the target command-line version for this workbook. The command flags used here are limited to the documented <code>oci db database create</code>, <code>oci db database get</code>, <code>oci db database list</code>, and <code>oci db pluggable-database list</code> surfaces.</div>
+      </section><section id="required-database-inputs" class="article-section">
+        <h2>Required database inputs</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Variable</th>
+<th scope="col">Purpose</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>REGION</code></td>
+<td>OCI region loaded by <code>~/workbook/helpers.sh</code> plus <code>load_cli_env</code> and passed explicitly to OCI CLI commands.</td>
+</tr>
+<tr>
+<td><code>DATABASE_COMPARTMENT_OCID</code></td>
+<td>Assigned PoC compartment alias that contains <code>VMCluster-01</code>, <code>dbhome_01</code>, and the new <code>CDB01</code> database.</td>
+</tr>
+<tr>
+<td><code>VM_CLUSTER_OCID</code></td>
+<td>Exadata VM cluster OCID captured in Chapter 08.</td>
+</tr>
+<tr>
+<td><code>DB_HOME_OCID</code></td>
+<td>Oracle home OCID for <code>dbhome_01</code>, created in Chapter 08.</td>
+</tr>
+<tr>
+<td><code>DB_VERSION</code></td>
+<td>Database version saved when <code>dbhome_01</code> was created.</td>
+</tr>
+<tr>
+<td><code>CDB_NAME</code></td>
+<td>Container database name. Default: <code>CDB01</code>.</td>
+</tr>
+<tr>
+<td><code>PDB_NAME</code></td>
+<td>Initial pluggable database name. Default: <code>PDB01</code>.</td>
+</tr>
+<tr>
+<td><code>CDB_ADMIN_PASSWORD</code></td>
+<td>Strong password for <code>SYS</code>, <code>SYSTEM</code>, and PDB admin. Workbook value: <code>WelCome#2026_</code>.</td>
+</tr>
+</tbody></table></div>
+      </section><section id="recommended-choices" class="article-section">
+        <h2>Recommended choices</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Choice</th>
+<th scope="col">Workbook value</th>
+<th scope="col">Rationale</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Create under an existing DB home</td>
+<td><code>DB_HOME_OCID</code> for <code>dbhome_01</code></td>
+<td>Keeps database software lifecycle separate from database creation and reuses the home prepared in Chapter 08.</td>
+</tr>
+<tr>
+<td>Initial PDB</td>
+<td><code>PDB01</code></td>
+<td>Creates the default application pluggable database during CDB provisioning.</td>
+</tr>
+<tr>
+<td>Automatic backups</td>
+<td>Disabled</td>
+<td>Matches the requested lab state. Enable backups later only after validating backup destination, retention, and recovery requirements.</td>
+</tr>
+<tr>
+<td>Character set</td>
+<td>Prompted during creation</td>
+<td>Accept the OCI Database default <code>AL32UTF8</code>, choose <code>WE8MSWIN1252</code>, or specify another supported database character set. The default path omits <code>characterSet</code> from the create payload.</td>
+</tr>
+<tr>
+<td>National character set</td>
+<td>Default</td>
+<td>Omits <code>--ncharacter-set</code>; OCI Database defaults to <code>AL16UTF16</code>.</td>
+</tr>
+<tr>
+<td>Database unique name</td>
+<td>Service default</td>
+<td>Omits <code>dbUniqueName</code> from the create payload so OCI assigns the default unique name.</td>
+</tr>
+<tr>
+<td>Time zone</td>
+<td>Region default</td>
+<td>The documented database creation command does not expose a database time-zone override. The workbook does not pass a time-zone value; the database is created on the VM cluster using the service defaults for the region and cluster context.</td>
+</tr>
+<tr>
+<td>Password handling</td>
+<td>Environment variable plus JSON payload</td>
+<td>Avoids placing the password directly on the shell command line while still keeping the workbook executable in Cloud Shell.</td>
+</tr>
+</tbody></table></div>
+      </section><section id="bash-01-validate-cloud-shell-and-oci-cli-context" class="article-section">
+        <h2>BASH 01 - Validate Cloud Shell and OCI CLI context</h2>
+        <h3>BASH 01 - Validate Cloud Shell and OCI CLI context</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Display the captured Cloud Shell, VM cluster, and DB home variables before creating CDB01.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb10_card01() {
+
+EXPECTED_OCI_CLI_VERSION="3.73.1"
+ACTUAL_OCI_CLI_VERSION="$(oci --version 2&gt;/dev/null || true)"
+
+if [ "$ACTUAL_OCI_CLI_VERSION" != "$EXPECTED_OCI_CLI_VERSION" ]; then
+  printf 'Expected OCI CLI %s for this workbook. Review command compatibility before continuing.\n' "$EXPECTED_OCI_CLI_VERSION" &gt;&amp;2
+fi
+
+missing=0
+for name in REGION DATABASE_COMPARTMENT_OCID VM_CLUSTER_OCID DB_HOME_OCID DB_VERSION; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    printf 'Missing required variable: %s\n' "$name" &gt;&amp;2
+    missing=1
+  fi
+done
+
+if [ "$missing" -ne 0 ]; then
+  printf 'Load the Exadata workbook variables into ~/workbook/cli.env before continuing.\n' &gt;&amp;2
+  return 1
+fi
+
+clear
+printf '%-30s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "------------------------------" "-----" \
+  "EXPECTED_OCI_CLI_VERSION" "$EXPECTED_OCI_CLI_VERSION" \
+  "ACTUAL_OCI_CLI_VERSION" "$ACTUAL_OCI_CLI_VERSION" \
+  "REGION" "$REGION" \
+  "DATABASE_COMPARTMENT_OCID" "$DATABASE_COMPARTMENT_OCID" \
+  "VM_CLUSTER_OCID" "$VM_CLUSTER_OCID" \
+  "DB_HOME_OCID" "$DB_HOME_OCID" \
+  "DB_VERSION" "$DB_VERSION"
+printf '\n%s\n' "wb10_card01"
+}
+
+wb10_card01</code></pre>
+</div>
+<h3>OUTPUT 01 - Expected Cloud Shell and OCI CLI context</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the expected Cloud Shell, compartment, VM cluster, and DB home variable table.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                       | VALUE
+------------------------------ | -----
+EXPECTED_OCI_CLI_VERSION       | 3.73.1
+ACTUAL_OCI_CLI_VERSION         | 3.73.1
+REGION                         | &lt;region&gt;
+DATABASE_COMPARTMENT_OCID      | &lt;poc_compartment_ocid&gt;
+VM_CLUSTER_OCID                | &lt;vm_cluster_ocid&gt;
+DB_HOME_OCID                   | &lt;db_home_ocid&gt;
+DB_VERSION                     | &lt;database_version&gt;
+
+wb10_card01</code></pre>
+</div>
+      </section><section id="bash-02-set-cdb01-creation-values" class="article-section">
+        <h2>BASH 02 - Set CDB01 creation values</h2>
+        <h3>BASH 02 - Set CDB01 creation values</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Save and display CDB01, PDB01, and the requested admin password values in the workbook environment.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb10_card02() {
+
+CDB_NAME="${CDB_NAME:-CDB01}"
+PDB_NAME="${PDB_NAME:-PDB01}"
+CDB_ADMIN_PASSWORD="${CDB_ADMIN_PASSWORD:-WelCome#2026_}"
+
+upsert_cli_env CDB_NAME "$CDB_NAME" &gt;/dev/null
+upsert_cli_env PDB_NAME "$PDB_NAME" &gt;/dev/null
+upsert_cli_env CDB_ADMIN_PASSWORD "$CDB_ADMIN_PASSWORD" &gt;/dev/null
+
+clear
+printf '%-30s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "------------------------------" "-----" \
+  "CDB_NAME" "$CDB_NAME" \
+  "PDB_NAME" "$PDB_NAME" \
+  "CDB_ADMIN_PASSWORD" "&lt;stored_in_cli_env&gt;"
+printf '\n%s\n' "wb10_card02"
+}
+
+wb10_card02</code></pre>
+</div>
+<h3>OUTPUT 02 - Expected CDB01 creation values</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the CDB01 and PDB01 values saved in the workbook environment.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                       | VALUE
+------------------------------ | -----
+CDB_NAME                       | CDB01
+PDB_NAME                       | PDB01
+CDB_ADMIN_PASSWORD             | &lt;stored_in_cli_env&gt;
+
+wb10_card02</code></pre>
+</div>
+      </section><section id="bash-03-create-cdb01-with-pdb01" class="article-section">
+        <h2>BASH 03 - Create CDB01 with PDB01</h2>
+        <h3>BASH 03 - Create CDB01 with PDB01</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Submit the CDB01 create request in dbhome_01 with PDB01, no automatic backup, and the selected database character set.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb10_card03() {
+
+CREATE_CDB_JSON="$HOME/workbook/create-cdb01.json"
+CREATE_CDB_OCID_FILE="$HOME/workbook/create-cdb01-ocid.txt"
+
+missing=0
+for name in REGION VM_CLUSTER_OCID DB_HOME_OCID CDB_NAME PDB_NAME CDB_ADMIN_PASSWORD; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    printf 'Missing required variable: %s\n' "$name" &gt;&amp;2
+    missing=1
+  fi
+done
+
+if [ "$missing" -ne 0 ]; then
+  printf 'Run BASH 01 and BASH 02 before creating CDB01.\n' &gt;&amp;2
+  return 1
+fi
+
+printf 'Select the database character set for %s.\n' "$CDB_NAME"
+printf '  1) Accept OCI Database default AL32UTF8\n'
+printf '  2) Use WE8MSWIN1252\n'
+printf '  3) Specify another supported character set\n'
+printf '  4) Cancel database creation\n'
+printf 'Enter choice [1]: '
+read -r CHARACTER_SET_CHOICE
+CHARACTER_SET_CHOICE="${CHARACTER_SET_CHOICE:-1}"
+
+case "$CHARACTER_SET_CHOICE" in
+  1)
+    CDB_CHARACTER_SET="AL32UTF8"
+    CDB_CHARACTER_SET_MODE="DEFAULT"
+    ;;
+  2)
+    CDB_CHARACTER_SET="WE8MSWIN1252"
+    CDB_CHARACTER_SET_MODE="EXPLICIT"
+    ;;
+  3)
+    printf 'Enter database character set: '
+    read -r CDB_CHARACTER_SET
+    CDB_CHARACTER_SET="$(printf '%s' "$CDB_CHARACTER_SET" | tr '[:lower:]' '[:upper:]')"
+    if [ -z "$CDB_CHARACTER_SET" ]; then
+      printf 'Character set is required when choice 3 is selected.\n' &gt;&amp;2
+      return 1
+    fi
+    CDB_CHARACTER_SET_MODE="EXPLICIT"
+    ;;
+  4)
+    clear
+    printf 'CDB01 creation canceled by user.\n'
+    printf '\n%s\n' "wb10_card03"
+    return 1
+    ;;
+  *)
+    printf 'Invalid character set choice: %s\n' "$CHARACTER_SET_CHOICE" &gt;&amp;2
+    return 1
+    ;;
+esac
+
+jq -n \
+  --arg db_home_id "$DB_HOME_OCID" \
+  --arg vm_cluster_id "$VM_CLUSTER_OCID" \
+  --arg db_name "$CDB_NAME" \
+  --arg pdb_name "$PDB_NAME" \
+  --arg admin_password "$CDB_ADMIN_PASSWORD" \
+  --arg character_set "$CDB_CHARACTER_SET" \
+  --arg character_set_mode "$CDB_CHARACTER_SET_MODE" \
+  '{
+    source: "NONE",
+    dbHomeId: $db_home_id,
+    vmClusterId: $vm_cluster_id,
+    dbName: $db_name,
+    pdbName: $pdb_name,
+    adminPassword: $admin_password,
+    autoBackupEnabled: false,
+    runImmediateFullBackup: false
+  }
+  | if $character_set_mode == "EXPLICIT"
+    then . + {characterSet: $character_set}
+    else .
+    end' &gt; "$CREATE_CDB_JSON"
+
+CDB_OCID="$(
+  oci db database create \
+    --region "$REGION" \
+    --from-json "file://$CREATE_CDB_JSON" \
+    --query 'data.id' \
+    --raw-output
+)"
+
+if [ -z "$CDB_OCID" ] || [ "$CDB_OCID" = "null" ]; then
+  printf 'Unable to capture CDB_OCID from the create response.\n' &gt;&amp;2
+  return 1
+fi
+
+printf '%s\n' "$CDB_OCID" &gt; "$CREATE_CDB_OCID_FILE"
+upsert_cli_env CDB_OCID "$CDB_OCID" &gt;/dev/null
+upsert_cli_env CDB_CHARACTER_SET "$CDB_CHARACTER_SET" &gt;/dev/null
+upsert_cli_env CDB_CHARACTER_SET_MODE "$CDB_CHARACTER_SET_MODE" &gt;/dev/null
+clear
+printf '%-24s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "------------------------" "-----" \
+  "CDB_OCID" "$CDB_OCID" \
+  "CDB_CHARACTER_SET" "$CDB_CHARACTER_SET" \
+  "CDB_CHARACTER_SET_MODE" "$CDB_CHARACTER_SET_MODE"
+printf '\n%s\n' "wb10_card03"
+}
+
+wb10_card03</code></pre>
+</div>
+<p>The CDB OCID returned by <code>oci db database create</code> is saved in <code>$CREATE_CDB_OCID_FILE</code> for troubleshooting, audit review, and later inspection.</p>
+<h3>OUTPUT 03 - Expected CDB01 create capture</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the CDB01 OCID and character set captured from the create workflow.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                 | VALUE
+------------------------ | -----
+CDB_OCID                 | &lt;database_ocid&gt;
+CDB_CHARACTER_SET        | AL32UTF8
+CDB_CHARACTER_SET_MODE   | DEFAULT
+
+wb10_card03</code></pre>
+</div>
+<h3>OUTPUT 03A - Expected CDB01 create cancellation</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the cancellation output when choice <code>4</code> is selected before submitting the create request.</span>
+  </div>
+  <pre class="code-scroll"><code>CDB01 creation canceled by user.
+
+wb10_card03</code></pre>
+</div>
+      </section><section id="bash-04-validate-cdb01-lifecycle" class="article-section">
+        <h2>BASH 04 - Validate CDB01 lifecycle</h2>
+        <h3>BASH 04 - Validate CDB01 lifecycle</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the CDB01 lifecycle state before continuing.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb10_card04() {
+
+if [ -z "${CDB_OCID:-}" ]; then
+  printf 'Missing required variable: CDB_OCID. Run BASH 03 before validating CDB01.\n' &gt;&amp;2
+  return 1
+fi
+
+clear
+DB_JSON="$(
+  oci db database get \
+    --region "$REGION" \
+    --database-id "$CDB_OCID" \
+    --query 'data' \
+    --output json
+)"
+
+DB_ROW="$(
+  printf '%s' "$DB_JSON" \
+  | jq -r --arg now "$(date -u +%s)" '
+      def epoch($stamp):
+        $stamp
+        | sub("\\.[0-9]+"; "")
+        | sub("\\+00:00$"; "Z")
+        | fromdateiso8601;
+      def elapsed($start; $finish):
+        if ($start // "") == "" then "unknown"
+        else
+          (($finish | tonumber) - epoch($start)) as $seconds
+          | if $seconds &lt; 60 then "\($seconds)s"
+            elif $seconds &lt; 3600 then "\(($seconds / 60) | floor)m \($seconds % 60)s"
+            else "\(($seconds / 3600) | floor)h \((($seconds % 3600) / 60) | floor)m"
+            end
+        end;
+      [
+        ."db-name",
+        ."db-unique-name",
+        elapsed(."time-created"; $now),
+        ."lifecycle-state"
+      ] | @tsv'
+)"
+
+if [ -z "$DB_ROW" ]; then
+  printf 'Unable to build CDB01 lifecycle summary from OCI response.\n' &gt;&amp;2
+  return 1
+fi
+
+IFS="$(printf '\t')" read -r DB_NAME_VALUE DB_UNIQUE_NAME_VALUE ELAPSED_TIME_VALUE DB_STATE_VALUE &lt;&lt;EOF
+$DB_ROW
+EOF
+
+printf '%-12s | %-24s | %-14s | %s\n' \
+  "DB_NAME" "DB_UNIQUE_NAME" "ELAPSED_TIME" "STATE" \
+  "------------" "------------------------" "--------------" "-----" \
+  "$DB_NAME_VALUE" "$DB_UNIQUE_NAME_VALUE" "$ELAPSED_TIME_VALUE" "$DB_STATE_VALUE"
+printf '\n%s\n' "wb10_card04"
+}
+
+wb10_card04</code></pre>
+</div>
+<h3>OUTPUT 04 - Expected CDB01 validation summary</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the expected database lifecycle and backup state.</span>
+  </div>
+  <pre class="code-scroll"><code>DB_NAME      | DB_UNIQUE_NAME           | ELAPSED_TIME   | STATE
+------------ | ------------------------ | -------------- | -----
+CDB01        | &lt;db_unique_name&gt;         | &lt;elapsed_time&gt; | PROVISIONING
+
+wb10_card04</code></pre>
+</div>
+<p>Wait until <code>state</code> reports <code>AVAILABLE</code> before proceeding to the next section. If the output still shows <code>PROVISIONING</code>, rerun BASH 04 after a few minutes.</p>
+      </section><section id="bash-05-validate-pdb01-registration" class="article-section">
+        <h2>BASH 05 - Validate PDB01 registration</h2>
+        <h3>BASH 05 - Validate PDB01 registration</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm OCI lists PDB01 under CDB01.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb10_card05() {
+
+if [ -z "${CDB_OCID:-}" ]; then
+  printf 'Missing required variable: CDB_OCID. Run BASH 03 before validating PDB01.\n' &gt;&amp;2
+  return 1
+fi
+
+clear
+oci db pluggable-database list \
+  --region "$REGION" \
+  --database-id "$CDB_OCID" \
+  --pdb-name "$PDB_NAME" \
+  --all \
+  --query 'data[].{pdbName:"pdb-name",state:"lifecycle-state",containerDatabaseId:"container-database-id"}' \
+  --output table
+printf '\n%s\n' "wb10_card05"
+}
+
+wb10_card05</code></pre>
+</div>
+<h3>OUTPUT 05 - Expected PDB01 validation summary</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the expected PDB01 registration under CDB01.</span>
+  </div>
+  <pre class="code-scroll"><code>+---------------------+---------+-----------+
+| containerDatabaseId | pdbName | state     |
++---------------------+---------+-----------+
+| &lt;database_ocid&gt;     | PDB01   | AVAILABLE |
++---------------------+---------+-----------+
+
+wb10_card05</code></pre>
+</div>
+      </section><section id="bash-06-capture-pdb01-ocid" class="article-section">
+        <h2>BASH 06 - Capture PDB01 OCID</h2>
+        <h3>BASH 06 - Capture PDB01 OCID</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Capture and persist the PDB01 OCID for later workbooks.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb10_card06() {
+
+if [ -z "${CDB_OCID:-}" ] || [ -z "${PDB_NAME:-}" ]; then
+  printf 'Missing CDB_OCID or PDB_NAME. Run BASH 02 and BASH 03 before capturing PDB_OCID.\n' &gt;&amp;2
+  return 1
+fi
+
+PDB_OCID="$(
+  oci db pluggable-database list \
+    --region "$REGION" \
+    --database-id "$CDB_OCID" \
+    --pdb-name "$PDB_NAME" \
+    --all \
+    --query 'data[0].id' \
+    --raw-output
+)"
+
+if [ -z "$PDB_OCID" ] || [ "$PDB_OCID" = "null" ]; then
+  printf 'Unable to locate PDB_OCID for %s\n' "$PDB_NAME" &gt;&amp;2
+  return 1
+fi
+
+upsert_cli_env PDB_OCID "$PDB_OCID" &gt;/dev/null
+clear
+printf 'PDB_OCID=%s\n' "$PDB_OCID"
+printf '\n%s\n' "wb10_card06"
+}
+
+wb10_card06</code></pre>
+</div>
+<h3>OUTPUT 06 - Expected PDB01 OCID capture</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the PDB01 OCID captured from OCI.</span>
+  </div>
+  <pre class="code-scroll"><code>PDB_OCID=&lt;pdb_ocid&gt;
+
+wb10_card06</code></pre>
+</div>
+      </section><section id="bash-07-store-a-concise-cdb01-inventory-report" class="article-section">
+        <h2>BASH 07 - Store a concise CDB01 inventory report</h2>
+        <h3>BASH 07 - Store CDB01 inventory report</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Write a local inventory file with the CDB and PDB identifiers needed by later workbooks.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb10_card07() {
+
+CDB_REPORT="$HOME/workbook/cdb01-inventory.txt"
+CDB_REPORT_SCRIPT="$HOME/workbook/show-cdb01-inventory.sh"
+
+missing=0
+for name in CDB_NAME CDB_OCID PDB_NAME PDB_OCID DB_HOME_OCID VM_CLUSTER_OCID; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    printf 'Missing required variable: %s\n' "$name" &gt;&amp;2
+    missing=1
+  fi
+done
+
+if [ "$missing" -ne 0 ]; then
+  printf 'Run the previous CDB01 and PDB01 capture cards before storing the inventory report.\n' &gt;&amp;2
+  return 1
+fi
+
+cat &gt; "$CDB_REPORT_SCRIPT" &lt;&lt;'SCRIPT'
+#!/bin/sh
+set -eu
+report_file="$1"
+printf '%-24s | %s\n' "FIELD" "VALUE"
+printf '%-24s | %s\n' "------------------------" "-----"
+while IFS='=' read -r field value; do
+  [ -n "$field" ] || continue
+  printf '%-24s | %s\n' "$field" "$value"
+done &lt; "$report_file"
+SCRIPT
+chmod +x "$CDB_REPORT_SCRIPT"
+
+printf '%s=%s\n' "CDB_NAME" "$CDB_NAME" &gt; "$CDB_REPORT"
+printf '%s=%s\n' "CDB_OCID" "$CDB_OCID" &gt;&gt; "$CDB_REPORT"
+printf '%s=%s\n' "PDB_NAME" "$PDB_NAME" &gt;&gt; "$CDB_REPORT"
+printf '%s=%s\n' "PDB_OCID" "$PDB_OCID" &gt;&gt; "$CDB_REPORT"
+printf '%s=%s\n' "DB_HOME_OCID" "$DB_HOME_OCID" &gt;&gt; "$CDB_REPORT"
+printf '%s=%s\n' "VM_CLUSTER_OCID" "$VM_CLUSTER_OCID" &gt;&gt; "$CDB_REPORT"
+printf '%s=%s\n' "AUTO_BACKUP_ENABLED" "false" &gt;&gt; "$CDB_REPORT"
+printf '%s=%s\n' "CHARACTER_SET" "${CDB_CHARACTER_SET:-AL32UTF8}" &gt;&gt; "$CDB_REPORT"
+printf '%s=%s\n' "CHARACTER_SET_MODE" "${CDB_CHARACTER_SET_MODE:-DEFAULT}" &gt;&gt; "$CDB_REPORT"
+printf '%s=%s\n' "NCHARACTER_SET" "default" &gt;&gt; "$CDB_REPORT"
+printf '%s=%s\n' "TIME_ZONE" "region default" &gt;&gt; "$CDB_REPORT"
+
+clear
+"$CDB_REPORT_SCRIPT" "$CDB_REPORT"
+printf '\n%s\n' "wb10_card07"
+}
+
+wb10_card07</code></pre>
+</div>
+<h3>OUTPUT 07 - Expected CDB01 inventory report</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the local CDB01 inventory report saved under <code>~/workbook</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                    | VALUE
+------------------------ | -----
+CDB_NAME                 | CDB01
+CDB_OCID                 | &lt;database_ocid&gt;
+PDB_NAME                 | PDB01
+PDB_OCID                 | &lt;pdb_ocid&gt;
+DB_HOME_OCID             | &lt;db_home_ocid&gt;
+VM_CLUSTER_OCID          | &lt;vm_cluster_ocid&gt;
+AUTO_BACKUP_ENABLED      | false
+CHARACTER_SET            | AL32UTF8
+CHARACTER_SET_MODE       | DEFAULT
+NCHARACTER_SET           | default
+TIME_ZONE                | region default
+
+wb10_card07</code></pre>
+</div>
+      </section>
+      <section id="chapter-navigation" class="article-section">
+        <h2>Chapter navigation</h2>
+        <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../09-upscale-the-cluster-to-two-nodes/index.html"><span class="nav-card-label">Previous</span><strong>09. Upscale the Cluster to Two Nodes</strong></a><a class="chapter-link nav-card" href="../11-bastion-and-cluster-ssh-connection/index.html"><span class="nav-card-label">Next</span><strong>11. Bastion and Cluster SSH Connection</strong></a>
+      </nav>
+        <div class="two-up">
+          <a class="content-card link-card" href="../index.html#documentation"><strong>Series documentation</strong></a>
+          <a class="content-card link-card" href="../index.html#glossary"><strong>Series glossary</strong></a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer class="site-footer">
+    <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+  </footer>
+  <button class="back-top" type="button" aria-label="Back to top">Back to top</button>
+  <script src="../shared-guide-set.js"></script>
+  <script src="../assets/workbook.js"></script>
+</body>
+</html>
