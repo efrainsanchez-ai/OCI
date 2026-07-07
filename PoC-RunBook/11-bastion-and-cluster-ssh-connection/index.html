@@ -45,7 +45,7 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#bash-01-download-bastion-and-cluster-ssh-keys">BASH 01 - Download bastion and cluster SSH keys</a></li><li><a href="#bash-02-connect-to-the-bastion-vm">BASH 02 - Connect to the bastion VM</a></li><li><a href="#bash-03-upload-cluster-key-and-connect-to-the-first-cluster-node">BASH 03 - Upload cluster key and connect to the first cluster node</a></li><li><a href="#bash-04-open-sql-plus-as-sysdba-on-cdb01">BASH 04 - Open SQL*Plus as SYSDBA on CDB01</a></li><li><a href="#bash-05-return-to-the-cloud-shell-session">BASH 05 - Return to the Cloud Shell session</a></li><li><a href="#reusable-connection-commands">Reusable connection commands</a></li><li><a href="#bash-06-allow-ssh-to-the-bastion-nsg">BASH 06 - Allow SSH to the bastion NSG</a></li></ol>
+      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#connection-model">Connection model</a></li><li><a href="#bash-01-download-bastion-and-cluster-ssh-keys">BASH 01 - Download bastion and cluster SSH keys</a></li><li><a href="#bash-02-connect-to-the-bastion-vm">BASH 02 - Connect to the bastion VM</a></li><li><a href="#bash-03-upload-cluster-key-and-connect-to-the-first-cluster-node">BASH 03 - Upload cluster key and connect to the first cluster node</a></li><li><a href="#bash-04-open-sql-plus-as-sysdba-on-cdb01">BASH 04 - Open SQL*Plus as SYSDBA on CDB01</a></li><li><a href="#bash-05-return-to-the-cloud-shell-session">BASH 05 - Return to the Cloud Shell session</a></li><li><a href="#reusable-connection-commands">Reusable connection commands</a></li><li><a href="#bash-06-allow-ssh-to-the-bastion-nsg">BASH 06 - Allow SSH to the bastion NSG</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
@@ -54,6 +54,42 @@
       <section id="section-purpose" class="article-section">
         <h2>Section purpose</h2>
         <div class="note-box">This section moves the SSH operational workflow out of the CDB creation workbook. It downloads the bastion and first cluster-node private keys from Object Storage, creates reusable connection scripts, opens the bastion and cluster sessions, validates CDB01 from SQL*Plus on the first cluster node, and adds an approved <code>/32</code> SSH source rule to the bastion network security group.</div>
+      </section><section id="connection-model" class="article-section">
+        <h2>Connection model</h2>
+        <p>The SSH path starts in OCI Cloud Shell, reaches the bastion VM through the bastion public IP, and then uses the bastion VM as the private network jump host to the first Exadata Exascale VM cluster node. Cloud Shell does not resolve or connect directly to the Exadata node FQDN; that name resolution happens from inside the bastion VM on the VCN private path.</p>
+<div class="bastion-flow-infographic" aria-label="Cloud Shell to bastion and Exadata Exascale cluster connection model infographic">
+  <div class="bastion-flow-main">
+    <div class="bastion-step step-admin">
+      <span class="bastion-step-number">1</span>
+      <span class="bastion-step-icon" aria-hidden="true">CS</span>
+      <strong>OCI Cloud Shell</strong>
+      <span>Administrator starts from the Cloud Shell public egress address.</span>
+    </div>
+    <div class="bastion-connector" aria-hidden="true">SSH 22</div>
+    <div class="bastion-step step-session">
+      <span class="bastion-step-number">2</span>
+      <span class="bastion-step-icon" aria-hidden="true">BST</span>
+      <strong>Bastion VM public IP</strong>
+      <span>Cloud Shell opens the first SSH session to the bastion VM.</span>
+      <span class="bastion-nsg-mini"><strong>Bastion NSG</strong><code>NSG_BASTION_OCID</code><em>Approved source IP /32</em></span>
+    </div>
+    <div class="bastion-connector" aria-hidden="true">SSH</div>
+    <div class="bastion-step step-target">
+      <span class="bastion-step-number">3</span>
+      <span class="bastion-step-icon" aria-hidden="true">VCN</span>
+      <strong>VCN private path</strong>
+      <span>Name resolution and routing to Exadata happen inside the VCN.</span>
+    </div>
+    <div class="bastion-connector" aria-hidden="true">FQDN</div>
+    <div class="bastion-step step-host">
+      <span class="bastion-step-number">4</span>
+      <span class="bastion-step-icon" aria-hidden="true">EXA</span>
+      <strong>Exadata Exascale cluster</strong>
+      <span>First VM cluster node is reached through the bastion, then switched to <code>oracle</code> by default.</span>
+      <span class="bastion-nsg-mini"><strong>Cluster NSG</strong><code>NSG_EXADATA_CLIENT_OCID</code><em>Private SSH from bastion</em></span>
+    </div>
+  </div>
+</div>
       </section><section id="bash-01-download-bastion-and-cluster-ssh-keys" class="article-section">
         <h2>BASH 01 - Download bastion and cluster SSH keys</h2>
         <h3>BASH 01 - Download bastion and cluster SSH keys</h3>
