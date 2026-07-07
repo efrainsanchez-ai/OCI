@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OCI PoC RunBook | OCI PoC RunBook</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/workbook.css">
+</head>
+<body class="workbook-chapter" data-guide-key="00-oci-poc-runbook" data-guide-scope="nested">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">OCI</span>
+        <span class="brand-text">
+          <span class="brand-title" data-series-brand-title>OCI PoC RunBook</span>
+          <span class="brand-subtitle" data-series-brand-subtitle>Workbook</span>
+        </span>
+      </a>
+      <div class="top-actions">
+        <a class="top-link" href="../index.html#documentation">Documentation</a>
+        <a class="top-link" href="../index.html#glossary">Glossary</a>
+        <button class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+      </div>
+    </div>
+  </header>
+  <div id="top"></div>
+  <section class="hero hero-compact">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Chapter 00</p>
+        <h1>OCI PoC RunBook</h1>
+        <p class="subtitle">This runbook defines and implements an end-to-end Oracle Cloud Infrastructure (OCI) proof of concept in one assigned Partner child compartment. It starts with the Virtual Cloud Network (VCN) baseline in the pre-created <code>(root)/Partner/LAD-01</code> compartment by default, then continues through the imported Exadata implementation, database creation, automatic backup, credential secret, and OCI Database Management workbooks. The assigned child compartment name can change for other deployments.</p>
+        <div class="hero-meta">
+          <span>Last updated July 6, 2026</span>
+        </div>
+        <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+  <div class="page-grid">
+    <nav class="toc" aria-label="Table of contents">
+      <p>Table of contents</p>
+      <ol><li><a href="#project-purpose">Project Purpose</a></li><li><a href="#design-basis">Design Basis</a></li><li><a href="#oracle-documentation-alignment">Oracle Documentation Alignment</a></li><li><a href="#assumptions">Assumptions</a></li><li><a href="#success-criteria">Success Criteria</a></li><li><a href="#initialize-the-workbook-environment">Initialize the Workbook Environment</a></li><li><a href="#key-implementation-focus">Key Implementation Focus</a></li></ol>
+    </nav>
+    <main id="main" class="article">
+      <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><span class="chapter-link nav-card is-disabled" aria-disabled="true"><span class="nav-card-label">Previous</span><strong>Start of workbook</strong></span><a class="chapter-link nav-card" href="../01-scope-and-design-principles/index.html"><span class="nav-card-label">Next</span><strong>01. Scope and Design Principles</strong></a>
+      </nav>
+      <section id="project-purpose" class="article-section">
+        <h2>Project Purpose</h2>
+        <div class="note-box">This runbook defines and implements an end-to-end Oracle Cloud Infrastructure (OCI) proof of concept in one assigned Partner child compartment. It starts with the Virtual Cloud Network (VCN) baseline in the pre-created <code>(root)/Partner/LAD-01</code> compartment by default, then continues through the imported Exadata implementation, database creation, automatic backup, credential secret, and OCI Database Management workbooks. The assigned child compartment name can change for other deployments.</div>
+<div class="note-box">The runbook now covers the complete PoC implementation sequence:</div>
+<ul class="article-list">
+<li>VCN design.</li>
+<li>CIDR planning.</li>
+<li>Subnet layout.</li>
+<li>DNS labels and resolver posture.</li>
+<li>Gateways.</li>
+<li>Route tables.</li>
+<li>Network Security Groups (NSGs).</li>
+<li>Bastion or administrator access path.</li>
+<li>Private service access to Oracle Services Network.</li>
+<li>Observability and security posture for the network baseline.</li>
+<li>Bastion VM creation when an approved jump-host exception is used.</li>
+<li>Exadata Database Service on Exascale Infrastructure cluster creation.</li>
+<li>Two-node cluster upscale.</li>
+<li>Container database and pluggable database creation.</li>
+<li>Automatic backups through Autonomous Recovery Service.</li>
+<li>Database credential secrets through OCI Vault.</li>
+<li>OCI Database Management enablement and validation.</li>
+</ul>
+<div class="note-box">The runbook remains scoped to a PoC deployment model. It does not define production governance, enterprise landing-zone policy, or application release management.</div>
+      </section><section id="design-basis" class="article-section">
+        <h2>Design Basis</h2>
+        <p>The target ExaDB-XS environment depends on a private OCI networking baseline. The VCN baseline uses <code>10.0.0.0/16</code> by default. Chapter 05 lets you override the VCN CIDR when your assigned PoC environment requires a different non-overlapping range.</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Network component</th>
+<th scope="col" class="align-right">CIDR</th>
+<th scope="col">Purpose</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>VCN</td>
+<td class="align-right"><code>10.0.0.0/16</code></td>
+<td>Dedicated network boundary for the Exadata-ready network</td>
+</tr>
+<tr>
+<td>Bastion / administrator access</td>
+<td class="align-right"><code>10.0.0.0/24</code></td>
+<td>Controlled SSH administration path</td>
+</tr>
+<tr>
+<td>Exadata client subnet</td>
+<td class="align-right"><code>10.0.1.0/24</code></td>
+<td>Target Exadata client, SCAN, VIP, and SQL*Net traffic</td>
+</tr>
+<tr>
+<td>Exadata backup subnet</td>
+<td class="align-right"><code>10.0.2.0/24</code></td>
+<td>Backup and recovery service traffic</td>
+</tr>
+<tr>
+<td>Database Tools private endpoint</td>
+<td class="align-right"><code>10.0.3.0/28</code></td>
+<td>Private Database Tools endpoint access</td>
+</tr>
+<tr>
+<td>Public load balancer subnet</td>
+<td class="align-right"><code>10.0.10.0/24</code></td>
+<td>Public entry point for application tiers, not direct database access</td>
+</tr>
+<tr>
+<td>Applications subnet</td>
+<td class="align-right"><code>10.0.11.0/24</code></td>
+<td>ORDS, APEX, middleware, application services, AI agents</td>
+</tr>
+</tbody></table></div>
+<p>The source workbook also establishes these security principles:</p>
+<ul class="article-list">
+<li>Exadata client and backup access must be private.</li>
+<li>Applications should connect to the target database through SCAN and database services, not public IP addresses.</li>
+<li>SQL*Net must be allowed only from approved application, database tooling, or hybrid network sources.</li>
+<li>SSH must be allowed only through a controlled bastion path.</li>
+<li>Backup and OCI service traffic should use a Service Gateway where possible.</li>
+<li>NAT Gateway is created for controlled outbound access that cannot use Service Gateway.</li>
+<li>Passwords, keys, and tokens are managed outside this workbook, normally with OCI Vault and Secret Management.</li>
+</ul>
+      </section><section id="oracle-documentation-alignment" class="article-section">
+        <h2>Oracle Documentation Alignment</h2>
+        <p>The workbook uses these Oracle documentation references to anchor the implementation decisions:</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Area</th>
+<th scope="col">Implementation decision used in this workbook</th>
+<th scope="col">Oracle reference</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>ExaDB-XS network prerequisites</td>
+<td>Prepare a VCN with at least a client subnet and backup subnet before ExaDB-XS provisioning. Use regional subnets where appropriate.</td>
+<td>https://docs.oracle.com/en-us/iaas/exadb-xs/doc/preparing-for-exadb-xs-deployment.html</td>
+</tr>
+<tr>
+<td>Production subnet posture</td>
+<td>Use private subnets for production database systems.</td>
+<td>https://docs.oracle.com/en-us/iaas/exadb-xs/doc/preparing-for-exadb-xs-deployment.html</td>
+</tr>
+<tr>
+<td>Service Gateway</td>
+<td>Use Service Gateway for private access from the VCN to supported Oracle services, avoiding public internet traversal.</td>
+<td>https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/servicegateway.htm</td>
+</tr>
+<tr>
+<td>NSGs</td>
+<td>Prefer NSGs for component-level security rules because they decouple subnet layout from security posture.</td>
+<td>https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/networksecuritygroups.htm</td>
+</tr>
+<tr>
+<td>Route tables</td>
+<td>Use separate custom route tables per subnet role. Route to DRG, Internet Gateway, NAT Gateway, or Service Gateway according to subnet purpose.</td>
+<td>https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingroutetables_topic-working.htm</td>
+</tr>
+<tr>
+<td>Network security</td>
+<td>Use public/private subnet separation, security rules, route control, flow logs, Cloud Guard, and CIS landing-zone patterns.</td>
+<td>https://docs.oracle.com/en-us/iaas/Content/Security/Reference/networking_security.htm</td>
+</tr>
+<tr>
+<td>Bastion</td>
+<td>Prefer OCI Bastion service for audited, time-bound access to private resources, instead of maintaining a public jump host where possible.</td>
+<td>https://docs.oracle.com/en/solutions/use-bastion-service/index.html</td>
+</tr>
+<tr>
+<td>Observability</td>
+<td>Enable VCN Flow Logs on critical subnets or VNICs for security investigation and network troubleshooting.</td>
+<td>https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/vcn-flow-logs.htm</td>
+</tr>
+<tr>
+<td>Zero Trust Packet Routing</td>
+<td>Treat ZPR as an optional additional control; if used, traffic must satisfy ZPR policy plus NSG and security-list rules.</td>
+<td>https://docs.oracle.com/en-us/iaas/Content/zero-trust-packet-routing/overview.htm</td>
+</tr>
+</tbody></table></div>
+      </section><section id="assumptions" class="article-section">
+        <h2>Assumptions</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Assumption</th>
+<th scope="col">Workbook value</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Region</td>
+<td>Placeholder. Use the region selected for the target ExaDB-XS deployment.</td>
+</tr>
+<tr>
+<td>Availability domain</td>
+<td>Placeholder. Final selection happens during Exadata deployment. The VCN uses regional subnets where possible.</td>
+</tr>
+<tr>
+<td>VCN CIDR</td>
+<td><code>10.0.0.0/16</code> by default; configurable in Chapter 05 through <code>VCN_CIDR</code></td>
+</tr>
+<tr>
+<td>VCN DNS domain</td>
+<td><code>poc.oraclevcn.com</code> when the VCN DNS label is <code>poc</code></td>
+</tr>
+<tr>
+<td>Production posture</td>
+<td>Private Exadata client and backup subnets. No public IP addresses for database nodes.</td>
+</tr>
+<tr>
+<td>Hybrid connectivity</td>
+<td>Optional. Use DRG plus FastConnect or Site-to-Site VPN when applications or administrators connect from on-premises.</td>
+</tr>
+<tr>
+<td>Direct database public access</td>
+<td>Not allowed. Public load balancer is for application tier entry points only, not database listener exposure.</td>
+</tr>
+<tr>
+<td>Administration</td>
+<td>OCI Bastion service is preferred. A traditional jump host is treated as an exception.</td>
+</tr>
+<tr>
+<td>SQL*Net transport</td>
+<td>This guide uses TCP <code>1521</code> over private subnets for workbook validation and implementation. For production Exadata Exascale deployments that require encrypted Oracle Net with TCPS on <code>2484</code>, <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/netag/configuring-secure-sockets-layer-authentication.html" target="_blank" rel="noopener">click here</a>.</td>
+</tr>
+<tr>
+<td>Subnet security mechanism</td>
+<td>NSGs are the primary control. Security lists are kept as baseline guardrails only.</td>
+</tr>
+<tr>
+<td>Oracle Services access</td>
+<td>Service Gateway with <code>All &lt;region&gt; Services in Oracle Services Network</code> is the default for private production posture.</td>
+</tr>
+</tbody></table></div>
+      </section><section id="success-criteria" class="article-section">
+        <h2>Success Criteria</h2>
+        <p>The VCN baseline is complete when:</p>
+<ul class="article-list">
+<li>The VCN exists with the selected CIDR, defaulting to <code>10.0.0.0/16</code>, and DNS support enabled.</li>
+<li>All required subnets exist with correct CIDRs, route tables, DNS labels, and public/private posture.</li>
+<li>The Exadata client and backup subnets are private and do not allow public IP assignment.</li>
+<li>Service Gateway is configured for private access to Oracle Services Network.</li>
+<li>NAT Gateway exists only if private workloads require outbound access to non-Oracle public endpoints.</li>
+<li>Internet Gateway is attached only for the admin subnet and public load balancer subnet.</li>
+<li>NSGs enforce least-privilege access between application, database, tooling, bastion, and service paths.</li>
+<li>Required ICMP rules for Path MTU Discovery and VCN connectivity errors are present.</li>
+<li>VCN Flow Logs are enabled for security-relevant subnets or VNICs.</li>
+<li>OCIDs and DNS labels are documented for the Exadata Exascale implementation team.</li>
+</ul>
+      </section><section id="initialize-the-workbook-environment" class="article-section">
+        <h2>Initialize the Workbook Environment</h2>
+        <p>Use <code>~/workbook</code> as the workbook working directory. Store all helper scripts, generated JSON artifacts, temporary OCI CLI output, and environment files under this directory. If your shell is in <code>$HOME</code>, this is the local <code>./workbook</code> directory.</p>
+<p>Create the workbook directory in your home folder, then create or update <code>~/workbook/cli.env</code>. Start the file with only the tenancy and region placeholders; later workbook steps add compartment IDs, created OCIDs, route-table IDs, gateway IDs, subnet IDs, NSG IDs, regional service IDs, and approved CIDR variables through <code>upsert_cli_env</code>.</p>
+<h3>BASH 01 - Create workbook directory and <code>cli.env</code></h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the workbook working directory and initialize <code>~/workbook/cli.env</code> with tenancy and region placeholders.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>mkdir -p ~/workbook
+cat &gt; ~/workbook/cli.env &lt;&lt;'EOF'
+set -a
+TENANCY_ID="&lt;tenancy_ocid&gt;"
+REGION="&lt;oci_region&gt;"
+set +a
+EOF
+chmod 600 ~/workbook/cli.env</code></pre>
+</div>
+<p>Create <code>~/workbook/helpers.sh</code> before the first use of <code>load_cli_env</code>, <code>upsert_cli_env</code>, or <code>capture_oci_id</code>. These are workbook helper functions. They are not built-in OCI CLI commands.</p>
+<p>The helper file uses <code>~/workbook</code> as the default location for the environment file and generated artifacts. The helpers use Bash, <code>awk</code>, <code>sed</code>, and OCI CLI query output; no Python runtime is required in OCI Cloud Shell. <code>upsert_cli_env</code> validates that a value was resolved, updates <code>~/workbook/cli.env</code>, exports the variable into the current shell, and prints the saved variable in a readable table.</p>
+<h3>BASH 02 - Define workbook helper functions</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create <code>~/workbook/helpers.sh</code> with reusable functions for loading variables, saving resolved values, and capturing OCI CLI OCIDs.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>cat &gt; ~/workbook/helpers.sh &lt;&lt;'EOF'
+WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
+
+load_cli_env() {
+  if [ ! -f "$CLI_ENV" ]; then
+    printf '%s does not exist. Create ~/workbook/cli.env before continuing.\n' "$CLI_ENV" &gt;&amp;2
+    return 1
+  fi
+  . "$CLI_ENV"
+}
+
+upsert_cli_env() {
+  KEY="${1:-}"
+  VALUE="${2:-}"
+  if [ -z "$KEY" ]; then
+    printf 'cli.env key is missing. Use upsert_cli_env KEY VALUE.\n' &gt;&amp;2
+    return 1
+  fi
+  case "$KEY" in
+    ""|*[!A-Z0-9_]*)
+      printf 'Invalid cli.env key: %s\n' "$KEY" &gt;&amp;2
+      return 1
+      ;;
+  esac
+  if [ -z "$VALUE" ] || [ "$VALUE" = "null" ]; then
+    printf '%s was not resolved. Review the command that produced this value before continuing.\n' "$KEY" &gt;&amp;2
+    return 1
+  fi
+  mkdir -p "$WORKBOOK_DIR"
+  touch "$CLI_ENV"
+  chmod 600 "$CLI_ENV"
+  if [ ! -s "$CLI_ENV" ]; then
+    printf 'set -a\nset +a\n' &gt; "$CLI_ENV"
+  fi
+  if ! grep -qx 'set -a' "$CLI_ENV"; then
+    TMP_ENV="$(mktemp "$WORKBOOK_DIR/cli-env.XXXXXX")"
+    {
+      printf 'set -a\n'
+      cat "$CLI_ENV"
+    } &gt; "$TMP_ENV"
+    mv "$TMP_ENV" "$CLI_ENV"
+  fi
+  if ! grep -qx 'set +a' "$CLI_ENV"; then
+    printf 'set +a\n' &gt;&gt; "$CLI_ENV"
+  fi
+  ESCAPED_VALUE="$(printf '%q' "$VALUE")"
+  TMP_ENV="$(mktemp "$WORKBOOK_DIR/cli-env.XXXXXX")"
+  awk -v key="$KEY" -v value="$ESCAPED_VALUE" '
+    BEGIN {
+      prefix = key "="
+      inserted = 0
+    }
+    index($0, prefix) == 1 {
+      next
+    }
+    $0 == "set +a" &amp;&amp; inserted == 0 {
+      print key "=" value
+      inserted = 1
+    }
+    {
+      print
+    }
+    END {
+      if (inserted == 0) {
+        print key "=" value
+      }
+    }
+  ' "$CLI_ENV" &gt; "$TMP_ENV"
+  mv "$TMP_ENV" "$CLI_ENV"
+  chmod 600 "$CLI_ENV"
+  export "$KEY=$VALUE"
+  printf '%-18s | %s\n%-18s | %s\n%-18s | %s\n\n' \
+    "VARIABLE" "VALUE" \
+    "------------------" "-----" \
+    "$KEY" "$VALUE"
+}
+
+capture_oci_id() {
+  KEY="$1"
+  shift
+  mkdir -p "$WORKBOOK_DIR"
+  TMP_OUT="$(mktemp "$WORKBOOK_DIR/oci-cli-output.XXXXXX.txt")"
+  if ! VALUE="$("$@" --query 'data.id' --raw-output)"; then
+    rm -f "$TMP_OUT"
+    printf 'OCI command failed while resolving %s.\n' "$KEY" &gt;&amp;2
+    return 1
+  fi
+  printf '%s\n' "$VALUE" &gt; "$TMP_OUT"
+  rm -f "$TMP_OUT"
+  upsert_cli_env "$KEY" "$VALUE"
+}
+EOF
+chmod 700 ~/workbook/helpers.sh</code></pre>
+</div>
+<p>Source <code>~/workbook/helpers.sh</code> in the current shell before running workbook commands. Then call <code>load_cli_env</code> to load variables from <code>~/workbook/cli.env</code>. If OCI Cloud Shell is reset or a new terminal session is opened, source the helper file again because shell functions are not preserved across sessions.</p>
+<h3>BASH 03 - Source helpers and load variables</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Load workbook helper functions and current <code>~/workbook/cli.env</code> variables into the active shell session.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>cd ~/workbook
+. ./helpers.sh
+load_cli_env</code></pre>
+</div>
+<p>Because <code>~/workbook/cli.env</code> starts with <code>set -a</code> and ends with <code>set +a</code>, variables loaded through <code>load_cli_env</code> are exported into the current shell session.</p>
+<h3>Discover and store prerequisite variables</h3>
+<p>Workbook prerequisite variables such as <code>TENANCY_ID</code>, <code>REGION</code>, <code>POC_PARENT_COMPARTMENT_NAME</code>, <code>POC_COMPARTMENT_NAME</code>, and <code>POC_COMPARTMENT_OCID</code> are stored in <code>~/workbook/cli.env</code>. This PoC workbook uses one pre-created compartment for every artifact: <a href="https://cloud.oracle.com/identity/compartments/ocid1.tenancy.oc1..aaaaaaaafj37mytx22oquorcznlfuh77cd45int7tt7fo27tuejsfqbybzrq" target="_blank" rel="noopener">(root)</a> / Partner/LAD-01 by default. The assigned compartment name can change by environment. The scripts ask for that compartment name, resolve it under <code>Partner</code>, and store <code>POC_COMPARTMENT_OCID</code>. The implementation runbook later aliases the workbook compartment variables to that same OCID when it creates network artifacts.</p>
+<p>Run the following commands from an OCI Cloud Shell session. Cloud Shell provides the OCI CLI and an authenticated profile; the cards below read the active Cloud Shell OCI CLI profile, then review and store the tenancy OCID and configured region in <code>~/workbook/cli.env</code>.</p>
+<h3>BASH 04 - Cloud Shell profile discovery</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Load workbook helpers and read tenancy and region from the active Cloud Shell OCI CLI profile.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>cd ~/workbook
+
+if [ ! -f ./helpers.sh ]; then
+  printf 'Workbook helpers are not available. Create ~/workbook/helpers.sh before continuing.\n' &gt;&amp;2
+elif ! . ./helpers.sh; then
+  printf 'Workbook helpers could not be loaded. Review ~/workbook/helpers.sh before continuing.\n' &gt;&amp;2
+elif ! load_cli_env; then
+  :
+else
+  OCI_CONFIG_FILE="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
+  OCI_CONFIG_PROFILE="${OCI_CLI_PROFILE:-DEFAULT}"
+
+  TENANCY_ID="$(
+    awk -F= -v profile="$OCI_CONFIG_PROFILE" '
+      $0 == "[" profile "]" { in_profile=1; next }
+      /^\[/ { in_profile=0 }
+      in_profile &amp;&amp; $1 ~ /^[[:space:]]*tenancy[[:space:]]*$/ {
+        gsub(/[[:space:]]/, "", $2)
+        print $2
+        exit
+      }
+    ' "$OCI_CONFIG_FILE"
+  )"
+
+  REGION="$(
+    awk -F= -v profile="$OCI_CONFIG_PROFILE" '
+      $0 == "[" profile "]" { in_profile=1; next }
+      /^\[/ { in_profile=0 }
+      in_profile &amp;&amp; $1 ~ /^[[:space:]]*region[[:space:]]*$/ {
+        gsub(/[[:space:]]/, "", $2)
+        print $2
+        exit
+      }
+    ' "$OCI_CONFIG_FILE"
+  )"
+fi</code></pre>
+</div>
+<h3>BASH 05 - Review and save profile values</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Save the discovered tenancy and region in <code>~/workbook/cli.env</code> and display each saved value through <code>upsert_cli_env</code>.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>if ! command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1; then
+  printf 'Workbook helpers are not loaded. Run: cd ~/workbook &amp;&amp; . ./helpers.sh\n' &gt;&amp;2
+else
+  upsert_cli_env TENANCY_ID "$TENANCY_ID"
+  upsert_cli_env REGION "$REGION"
+fi</code></pre>
+</div>
+<h3>OUTPUT 05 - Expected profile-value output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the expected <code>upsert_cli_env</code> table output after saving the tenancy OCID and region.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE           | VALUE
+------------------ | -----
+TENANCY_ID         | &lt;tenancy_ocid&gt;
+
+VARIABLE           | VALUE
+------------------ | -----
+REGION             | &lt;region&gt;</code></pre>
+</div>
+<p>The workbook expects the approved root-level parent compartment name to be <code>Partner</code>. BASH 04 in the consolidated runbook defaults the assigned pre-created child compartment name to <code>LAD-01</code> under <code>Partner</code>, lets you enter a different assigned compartment when needed, and uses that one compartment for all network artifacts.</p>
+<h3>BASH 06 - Store PoC compartment path</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Discover and save <code>TENANCY_ID</code> from the active Cloud Shell OCI CLI profile first, then save the approved parent compartment name and prompt for the assigned PoC child compartment name in <code>~/workbook/cli.env</code>.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>if ! command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1 || \
+   ! command -v load_cli_env &gt;/dev/null 2&gt;&amp;1; then
+  printf 'Workbook helpers are not loaded. Run: cd ~/workbook &amp;&amp; . ./helpers.sh\n' &gt;&amp;2
+elif ! load_cli_env; then
+  :
+else
+  if [ -z "${TENANCY_ID:-}" ] || [ "$TENANCY_ID" = "&lt;tenancy_ocid&gt;" ]; then
+    OCI_CONFIG_FILE="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
+    OCI_CONFIG_PROFILE="${OCI_CLI_PROFILE:-DEFAULT}"
+    if [ -f "$OCI_CONFIG_FILE" ]; then
+      TENANCY_ID="$(
+        awk -F= -v profile="$OCI_CONFIG_PROFILE" '
+          $0 == "[" profile "]" { in_profile=1; next }
+          /^\[/ { in_profile=0 }
+          in_profile &amp;&amp; $1 ~ /^[[:space:]]*tenancy[[:space:]]*$/ {
+            gsub(/[[:space:]]/, "", $2)
+            print $2
+            exit
+          }
+        ' "$OCI_CONFIG_FILE"
+      )"
+    fi
+  fi
+
+  if [ -z "${TENANCY_ID:-}" ] || [ "${TENANCY_ID#ocid1.tenancy.oc1}" = "$TENANCY_ID" ]; then
+    printf 'TENANCY_ID could not be discovered from the active OCI CLI profile. Run Cloud Shell profile discovery before continuing.\n' &gt;&amp;2
+  else
+    upsert_cli_env TENANCY_ID "$TENANCY_ID"
+
+    POC_PARENT_COMPARTMENT_NAME="Partner"
+    printf 'Enter assigned PoC compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME" &gt;&amp;2
+    IFS= read -r POC_COMPARTMENT_NAME
+    POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
+    upsert_cli_env POC_PARENT_COMPARTMENT_NAME "Partner"
+    upsert_cli_env POC_COMPARTMENT_NAME "$POC_COMPARTMENT_NAME"
+  fi
+fi</code></pre>
+</div>
+<p>PoC compartment record: This PoC uses one pre-created compartment for every workbook artifact: network, security, database-readiness, administration, application, and logging references all point to the same <code>Partner/LAD-01</code> compartment by default. The single-compartment model keeps the lab easy to reset, makes OCID tracking simpler, and avoids creating production-style IAM and tagging dependencies before the network baseline is validated.</p>
+<p>For production environments, use separate compartments for distinct ownership and lifecycle boundaries such as networking, security, database, application, administration, and logging. Separate compartments make IAM least privilege easier to enforce, reduce accidental cross-team changes, support different budgets and quotas, improve audit scoping, and allow backup, retention, tagging, and change-control policies to vary by operational domain.</p>
+<p>Do not record placeholder compartment OCIDs. The following resolver card discovers the real <code>Partner/LAD-01</code> compartment OCID and stores only the PoC compartment variables. The implementation runbook records the other compartment aliases later.</p>
+<h3>BASH 07 - Discover and save PoC compartment OCID</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Resolve the pre-created <code>(root)/Partner/LAD-01</code> compartment by default and save it as <code>POC_COMPARTMENT_OCID</code>. Enter a different assigned child compartment name if the deployment uses one.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>if ! command -v load_cli_env &gt;/dev/null 2&gt;&amp;1; then
+  printf 'Workbook helpers are not loaded. Run: cd ~/workbook &amp;&amp; . ./helpers.sh\n' &gt;&amp;2
+elif ! load_cli_env; then
+  :
+elif [ -z "$TENANCY_ID" ] || [ "$TENANCY_ID" = "&lt;tenancy_ocid&gt;" ]; then
+  printf 'TENANCY_ID is not set. Run the Cloud Shell profile discovery and save TENANCY_ID before discovering the PoC compartment.\n' &gt;&amp;2
+elif [ "${TENANCY_ID#ocid1.tenancy.oc1}" = "$TENANCY_ID" ]; then
+  printf 'TENANCY_ID must be a tenancy OCID starting with ocid1.tenancy.oc1. Current value: %s\n' \
+    "$TENANCY_ID" &gt;&amp;2
+else
+  : "${POC_PARENT_COMPARTMENT_NAME:=Partner}"
+  if [ -z "${POC_COMPARTMENT_NAME:-}" ]; then
+    printf 'Enter assigned PoC compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME" &gt;&amp;2
+    IFS= read -r POC_COMPARTMENT_NAME
+    POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
+  fi
+
+  POC_PARENT_COMPARTMENT_OCID="$(
+    oci iam compartment list \
+      --compartment-id "$TENANCY_ID" \
+      --all \
+      --query "data[?name=='$POC_PARENT_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+      --raw-output
+  )"
+
+  if [ -z "$POC_PARENT_COMPARTMENT_OCID" ] || [ "$POC_PARENT_COMPARTMENT_OCID" = "null" ]; then
+    printf 'STOP: Parent compartment "%s" was not found under the tenancy root.\n' \
+      "$POC_PARENT_COMPARTMENT_NAME" &gt;&amp;2
+  else
+    POC_COMPARTMENT_OCID="$(
+      oci iam compartment list \
+        --compartment-id "$POC_PARENT_COMPARTMENT_OCID" \
+        --all \
+        --query "data[?name=='$POC_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+        --raw-output
+    )"
+
+    if [ -z "$POC_COMPARTMENT_OCID" ] || [ "$POC_COMPARTMENT_OCID" = "null" ]; then
+      printf 'STOP: PoC compartment "%s/%s" was not found.\n' \
+        "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" &gt;&amp;2
+    else
+      upsert_cli_env POC_PARENT_COMPARTMENT_NAME "$POC_PARENT_COMPARTMENT_NAME"
+      upsert_cli_env POC_PARENT_COMPARTMENT_OCID "$POC_PARENT_COMPARTMENT_OCID"
+      upsert_cli_env POC_COMPARTMENT_NAME "$POC_COMPARTMENT_NAME"
+      upsert_cli_env POC_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+    fi
+  fi
+fi</code></pre>
+</div>
+<h3>BASH 08 - Variable check</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Reload the shell variables and display the required workbook variables in one readable table.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>if ! command -v load_cli_env &gt;/dev/null 2&gt;&amp;1; then
+  printf 'Workbook helpers are not loaded. Run: cd ~/workbook &amp;&amp; . ./helpers.sh\n' &gt;&amp;2
+elif ! load_cli_env; then
+  :
+else
+  printf '%-28s | %s\n' \
+    "VARIABLE" "VALUE" \
+    "----------------------------" "-----" \
+    "TENANCY_ID" "$TENANCY_ID" \
+    "REGION" "$REGION" \
+    "POC_PARENT_COMPARTMENT_NAME" "$POC_PARENT_COMPARTMENT_NAME" \
+    "POC_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" \
+    "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID"
+fi</code></pre>
+</div>
+<h3>OUTPUT 08 - Expected variable-check output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the expected table format for the workbook variable check.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                     | VALUE
+---------------------------- | -----
+TENANCY_ID                   | &lt;tenancy_ocid&gt;
+REGION                       | &lt;region&gt;
+POC_PARENT_COMPARTMENT_NAME  | Partner
+POC_COMPARTMENT_NAME         | LAD-01
+POC_COMPARTMENT_OCID         | ocid1.compartment.oc1..aaaaaaaapartnerpoccompartment</code></pre>
+</div>
+<h3>How <code>capture_oci_id</code> works</h3>
+<p><code>capture_oci_id</code> is a workbook helper function defined in <code>~/workbook/helpers.sh</code>. It is not part of OCI CLI. Use <code>capture_oci_id &lt;CLI_ENV_KEY&gt; &lt;oci command...&gt;</code> for create commands that return the new resource under <code>data.id</code>.</p>
+<p>When the helper runs, it:</p>
+<ul class="article-list">
+<li>Executes the OCI CLI command passed after the key with <code>--query 'data.id' --raw-output</code>.</li>
+<li>Writes the captured OCID output to a temporary text file under <code>~/workbook</code>.</li>
+<li>Calls <code>upsert_cli_env</code>, which validates that the command returned a non-empty value.</li>
+<li>Appends or updates <code>&lt;KEY&gt;=&lt;OCID&gt;</code> in <code>~/workbook/cli.env</code>.</li>
+<li>Exports the updated variable into the current shell.</li>
+<li>Prints the saved variable in the standard <code>VARIABLE | VALUE</code> table format.</li>
+</ul>
+      </section><section id="key-implementation-focus" class="article-section">
+        <h2>Key Implementation Focus</h2>
+        <p>Treat this workbook as the readiness baseline for the Exadata Exascale deployment. The important items to carry forward are validated private subnets, stable DNS labels, least-privilege NSGs, service-access routes, observability coverage, and recorded OCIDs so the implementation team can proceed with a clear network baseline.</p>
+      </section>
+      <section id="chapter-navigation" class="article-section">
+        <h2>Chapter navigation</h2>
+        <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><span class="chapter-link nav-card is-disabled" aria-disabled="true"><span class="nav-card-label">Previous</span><strong>Start of workbook</strong></span><a class="chapter-link nav-card" href="../01-scope-and-design-principles/index.html"><span class="nav-card-label">Next</span><strong>01. Scope and Design Principles</strong></a>
+      </nav>
+        <div class="two-up">
+          <a class="content-card link-card" href="../index.html#documentation"><strong>Series documentation</strong></a>
+          <a class="content-card link-card" href="../index.html#glossary"><strong>Series glossary</strong></a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer class="site-footer">
+    <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+  </footer>
+  <button class="back-top" type="button" aria-label="Back to top">Back to top</button>
+  <script src="../shared-guide-set.js"></script>
+  <script src="../assets/workbook.js"></script>
+</body>
+</html>

@@ -1,0 +1,1802 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Stop and Start Services | OCI PoC RunBook</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/workbook.css">
+</head>
+<body class="workbook-chapter" data-guide-key="14-stop-and-start-services" data-guide-scope="nested">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">OCI</span>
+        <span class="brand-text">
+          <span class="brand-title" data-series-brand-title>OCI PoC RunBook</span>
+          <span class="brand-subtitle" data-series-brand-subtitle>Workbook</span>
+        </span>
+      </a>
+      <div class="top-actions">
+        <a class="top-link" href="../index.html#documentation">Documentation</a>
+        <a class="top-link" href="../index.html#glossary">Glossary</a>
+        <button class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+      </div>
+    </div>
+  </header>
+  <div id="top"></div>
+  <section class="hero hero-compact">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Chapter 14</p>
+        <h1>Stop and Start Services</h1>
+        <p class="subtitle">This section stops and starts the compute-heavy parts of a non-production PoC environment when the environment does not need 24/7 operation. The stop path downscales <code>VMCluster-01</code> enabled ECPUs to <code>0</code>, stops the bastion VM with a graceful <code>SOFTSTOP</code>, and validates both resources after the change. The start path restores Exadata Exascale enabled ECPUs and starts the bastion VM when the service window reopens.</p>
+        <div class="hero-meta">
+          <span>Last updated July 6, 2026</span>
+        </div>
+        <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+  <div class="page-grid">
+    <nav class="toc" aria-label="Table of contents">
+      <p>Table of contents</p>
+      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#operating-assumptions">Operating assumptions</a></li><li><a href="#costs-that-can-still-be-charged">Costs that can still be charged</a></li><li><a href="#bash-01-prepare-admin-working-files">BASH 01 - Prepare admin working files</a></li><li><a href="#bash-02-review-current-service-runtime-state">BASH 02 - Review current service runtime state</a></li><li><a href="#bash-03-save-restore-values">BASH 03 - Save restore values</a></li><li><a href="#bash-04-downscale-enabled-ecpus-to-zero">BASH 04 - Downscale enabled ECPUs to zero</a></li><li><a href="#bash-05-stop-the-bastion-vm">BASH 05 - Stop the bastion VM</a></li><li><a href="#bash-06-validate-the-shutdown-state">BASH 06 - Validate the shutdown state</a></li><li><a href="#bash-07-discover-residual-cost-artifacts">BASH 07 - Discover residual cost artifacts</a></li><li><a href="#start-services-after-the-shutdown-window">Start services after the shutdown window</a></li><li><a href="#bash-08-start-the-bastion-vm">BASH 08 - Start the bastion VM</a></li><li><a href="#bash-09-restore-exadata-exascale-enabled-ecpus">BASH 09 - Restore Exadata Exascale enabled ECPUs</a></li><li><a href="#bash-10-validate-started-services">BASH 10 - Validate started services</a></li><li><a href="#oracle-documentation-references">Oracle documentation references</a></li></ol>
+    </nav>
+    <main id="main" class="article">
+      <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../13-oci-database-management/index.html"><span class="nav-card-label">Previous</span><strong>13. OCI Database Management</strong></a><a class="chapter-link nav-card" href="../15-recover-variables/index.html"><span class="nav-card-label">Next</span><strong>15. Recover Variables</strong></a>
+      </nav>
+      <section id="section-purpose" class="article-section">
+        <h2>Section purpose</h2>
+        <div class="note-box">This section stops and starts the compute-heavy parts of a non-production PoC environment when the environment does not need 24/7 operation. The stop path downscales <code>VMCluster-01</code> enabled ECPUs to <code>0</code>, stops the bastion VM with a graceful <code>SOFTSTOP</code>, and validates both resources after the change. The start path restores Exadata Exascale enabled ECPUs and starts the bastion VM when the service window reopens.</div>
+<div class="note-box">This action reduces runtime consumption, but it does not make the environment free. Storage, backup retention, stopped-instance storage, public IPs, logging, observability, private endpoints, and any other provisioned paid services can continue to accrue charges. Review OCI Cost Analysis, budgets, and the current Oracle Cloud price list before using this as a recurring shutdown procedure.</div>
+      </section><section id="operating-assumptions" class="article-section">
+        <h2>Operating assumptions</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Area</th>
+<th scope="col">Assumption</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Environment</td>
+<td>Non-production PoC, development, or lab only. Do not use this procedure for production without a full application stop and recovery plan.</td>
+</tr>
+<tr>
+<td>Exadata VM cluster</td>
+<td><code>VM_CLUSTER_OCID</code> points to the Exadata Database Service on Exascale Infrastructure VM cluster created earlier in the workbook.</td>
+</tr>
+<tr>
+<td>Target downscale</td>
+<td>Enabled ECPUs are set to <code>0</code>. Total ECPUs are not changed by this runbook.</td>
+</tr>
+<tr>
+<td>Bastion VM</td>
+<td><code>BASTION_VM_OCID</code> points to the approved bastion VM created earlier in the workbook.</td>
+</tr>
+<tr>
+<td>Restart plan</td>
+<td>Save the restore values from BASH 03 before downscaling so the previous enabled ECPU count can be restored when the service window reopens.</td>
+</tr>
+</tbody></table></div>
+      </section><section id="costs-that-can-still-be-charged" class="article-section">
+        <h2>Costs that can still be charged</h2>
+        <p>Downscaling enabled ECPUs to <code>0</code> and stopping the bastion VM can reduce active compute charges, but the following resources can still appear in OCI usage and cost reports:</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Resource or service</th>
+<th scope="col">Why charges can continue</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Exadata Exascale storage</td>
+<td>Allocated database storage, VM file system storage, sparse or smart database storage, and any additional Exascale storage capacity remain provisioned.</td>
+</tr>
+<tr>
+<td>Database backups</td>
+<td>Existing backups, automatic backup retention, Recovery Service protection, Object Storage backup copies, and retained backup metadata can continue to consume billable storage.</td>
+</tr>
+<tr>
+<td>Bastion VM boot and block volumes</td>
+<td>Stopping the compute instance does not delete its boot volume or any attached block volumes. Storage remains allocated until deleted.</td>
+</tr>
+<tr>
+<td>Reserved or public IPv4 addresses</td>
+<td>A reserved public IP or other billable public IPv4 resource can continue to charge even when the VM is stopped.</td>
+</tr>
+<tr>
+<td>Object Storage</td>
+<td>Buckets and objects created by the workbook, including uploaded SSH key files or reports, remain stored until deleted.</td>
+</tr>
+<tr>
+<td>Vault resources</td>
+<td>This workbook uses a <code>DEFAULT</code> Vault because software-protected keys and secrets are priced differently from a <code>VIRTUAL_PRIVATE</code> Vault. A virtual private Vault, if selected in another environment, can have a fixed recurring charge.</td>
+</tr>
+<tr>
+<td>Database Management and observability</td>
+<td>Database Management, Operations Insights, Logging, VCN Flow Logs, Log Analytics, custom metrics, alarms, or other enabled management services can continue to charge according to service configuration and retained data.</td>
+</tr>
+<tr>
+<td>Networking resources</td>
+<td>NAT Gateways, Load Balancers, Network Load Balancers, private endpoints, public IPs, and data transfer can continue to charge when provisioned or used.</td>
+</tr>
+<tr>
+<td>Licenses and commitments</td>
+<td>Universal Credits, BYOL obligations, committed spend, support, marketplace subscriptions, and organization-specific contracts are outside this runbook and can still apply.</td>
+</tr>
+</tbody></table></div>
+<p>Use this runbook as a credit-saving control, not as a deletion procedure. To stop all charges, resources normally must be deleted and retained data must be removed according to your retention and compliance rules.</p>
+      </section><section id="bash-01-prepare-admin-working-files" class="article-section">
+        <h2>BASH 01 - Prepare admin working files</h2>
+        <h3>BASH 01 - Prepare admin working files</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the <code>~/admin</code> directory and initialize every local response or error file used by this stop and start services workbook.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>SERVICE_ADMIN_DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"
+CLI_ENV="${CLI_ENV:-$SERVICE_ADMIN_DIR/cli.env}"
+HELPERS_FILE="${HELPERS_FILE:-$SERVICE_ADMIN_DIR/helpers.sh}"
+ENV_FILE="${ENV_FILE:-$SERVICE_ADMIN_DIR/env.sh}"
+[ -r "$CLI_ENV" ] &amp;&amp; . "$CLI_ENV"
+[ -r "$HELPERS_FILE" ] &amp;&amp; . "$HELPERS_FILE"
+
+wb14_card01() {
+SERVICE_ADMIN_DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"
+CLI_ENV="${CLI_ENV:-$SERVICE_ADMIN_DIR/cli.env}"
+HELPERS_FILE="${HELPERS_FILE:-$SERVICE_ADMIN_DIR/helpers.sh}"
+ENV_FILE="${ENV_FILE:-$SERVICE_ADMIN_DIR/env.sh}"
+
+mkdir -p "$SERVICE_ADMIN_DIR"
+chmod 700 "$SERVICE_ADMIN_DIR"
+
+cat &gt; "$HELPERS_FILE" &lt;&lt;'HELPERS'
+WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/admin}"
+CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
+
+load_cli_env() {
+  if [ ! -f "$CLI_ENV" ]; then
+    printf '%s does not exist. Create ~/admin/cli.env before continuing.\n' "$CLI_ENV" &gt;&amp;2
+    return 1
+  fi
+  . "$CLI_ENV"
+}
+
+upsert_cli_env() {
+  KEY="${1:-}"
+  VALUE="${2:-}"
+  if [ -z "$KEY" ]; then
+    printf 'cli.env key is missing. Use upsert_cli_env KEY VALUE.\n' &gt;&amp;2
+    return 1
+  fi
+  case "$KEY" in
+    ""|*[!A-Z0-9_]*)
+      printf 'Invalid cli.env key: %s\n' "$KEY" &gt;&amp;2
+      return 1
+      ;;
+  esac
+  if [ -z "$VALUE" ] || [ "$VALUE" = "null" ]; then
+    printf '%s was not resolved. Review the command that produced this value before continuing.\n' "$KEY" &gt;&amp;2
+    return 1
+  fi
+  mkdir -p "$WORKBOOK_DIR"
+  touch "$CLI_ENV"
+  chmod 600 "$CLI_ENV"
+  if [ ! -s "$CLI_ENV" ]; then
+    printf 'set -a\nset +a\n' &gt; "$CLI_ENV"
+  fi
+  if ! grep -qx 'set -a' "$CLI_ENV"; then
+    TMP_ENV="$(mktemp "$WORKBOOK_DIR/cli-env.XXXXXX")"
+    {
+      printf 'set -a\n'
+      cat "$CLI_ENV"
+    } &gt; "$TMP_ENV"
+    mv "$TMP_ENV" "$CLI_ENV"
+  fi
+  if ! grep -qx 'set +a' "$CLI_ENV"; then
+    printf 'set +a\n' &gt;&gt; "$CLI_ENV"
+  fi
+  ESCAPED_VALUE="$(printf '%q' "$VALUE")"
+  TMP_ENV="$(mktemp "$WORKBOOK_DIR/cli-env.XXXXXX")"
+  awk -v key="$KEY" -v value="$ESCAPED_VALUE" '
+    BEGIN {
+      prefix = key "="
+      inserted = 0
+    }
+    index($0, prefix) == 1 {
+      next
+    }
+    $0 == "set +a" &amp;&amp; inserted == 0 {
+      print key "=" value
+      inserted = 1
+    }
+    {
+      print
+    }
+    END {
+      if (inserted == 0) {
+        print key "=" value
+      }
+    }
+  ' "$CLI_ENV" &gt; "$TMP_ENV"
+  mv "$TMP_ENV" "$CLI_ENV"
+  chmod 600 "$CLI_ENV"
+  export "$KEY=$VALUE"
+  printf '%-18s | %s\n%-18s | %s\n%-18s | %s\n\n' \
+    "VARIABLE" "VALUE" \
+    "------------------" "-----" \
+    "$KEY" "$VALUE"
+}
+
+capture_oci_id() {
+  KEY="$1"
+  shift
+  mkdir -p "$WORKBOOK_DIR"
+  TMP_OUT="$(mktemp "$WORKBOOK_DIR/oci-cli-output.XXXXXX.txt")"
+  if ! VALUE="$("$@" --query 'data.id' --raw-output)"; then
+    rm -f "$TMP_OUT"
+    printf 'OCI command failed while resolving %s.\n' "$KEY" &gt;&amp;2
+    return 1
+  fi
+  printf '%s\n' "$VALUE" &gt; "$TMP_OUT"
+  rm -f "$TMP_OUT"
+  upsert_cli_env "$KEY" "$VALUE"
+}
+HELPERS
+chmod 700 "$HELPERS_FILE"
+. "$HELPERS_FILE"
+WORKBOOK_DIR="$SERVICE_ADMIN_DIR"
+CLI_ENV="$SERVICE_ADMIN_DIR/cli.env"
+[ -r "$CLI_ENV" ] &amp;&amp; . "$CLI_ENV"
+
+cat &gt; "$ENV_FILE" &lt;&lt;'EOF'
+cd ~/admin || return 1
+. ./helpers.sh || return 1
+load_cli_env || return 1
+PS1='$ '
+
+if [ "${1:-}" = "--quiet" ]; then
+  return 0
+fi
+
+clear
+printf '%-22s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "----------------------" "-----" \
+  "REGION" "$REGION" \
+  "VM_CLUSTER_OCID" "$VM_CLUSTER_OCID" \
+  "BASTION_VM_OCID" "$BASTION_VM_OCID"
+EOF
+chmod 700 "$ENV_FILE"
+
+printf 'Enter parent compartment name [Partner]: '
+IFS= read -r POC_PARENT_COMPARTMENT_NAME
+POC_PARENT_COMPARTMENT_NAME="${POC_PARENT_COMPARTMENT_NAME:-Partner}"
+
+printf 'Enter assigned compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME"
+IFS= read -r POC_COMPARTMENT_NAME
+POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
+
+EXADATA_DISPLAY_NAME="${EXADATA_DISPLAY_NAME:-VMCluster-01}"
+BASTION_DISPLAY_NAME="${BASTION_DISPLAY_NAME:-bastion-01}"
+
+printf 'This card will discover resources in /%s/%s and save values to %s.\n' \
+  "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" "$CLI_ENV"
+printf 'Confirm this compartment path? [y/N]: '
+IFS= read -r CONFIRM_DISCOVERY
+case "$CONFIRM_DISCOVERY" in
+  y|Y|yes|YES) ;;
+  *)
+    clear
+    printf '%s\n\n' "STOP: Discovery was not confirmed. No resource variables were changed." &gt;&amp;2
+    return 1
+    ;;
+esac
+
+OCI_CONFIG_FILE="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
+OCI_CONFIG_PROFILE="${OCI_CLI_PROFILE:-DEFAULT}"
+if [ -f "$OCI_CONFIG_FILE" ]; then
+  if [ -z "${REGION:-}" ]; then
+    REGION="$(
+      awk -F= -v profile="$OCI_CONFIG_PROFILE" '
+        $0 == "[" profile "]" { in_profile=1; next }
+        /^\[/ { in_profile=0 }
+        in_profile &amp;&amp; $1 ~ /^[[:space:]]*region[[:space:]]*$/ {
+          gsub(/[[:space:]]/, "", $2)
+          print $2
+          exit
+        }
+      ' "$OCI_CONFIG_FILE"
+    )"
+  fi
+  if [ -z "${TENANCY_ID:-}" ]; then
+    TENANCY_ID="$(
+      awk -F= -v profile="$OCI_CONFIG_PROFILE" '
+        $0 == "[" profile "]" { in_profile=1; next }
+        /^\[/ { in_profile=0 }
+        in_profile &amp;&amp; $1 ~ /^[[:space:]]*tenancy[[:space:]]*$/ {
+          gsub(/[[:space:]]/, "", $2)
+          print $2
+          exit
+        }
+      ' "$OCI_CONFIG_FILE"
+    )"
+  fi
+fi
+
+REGION="${REGION:-$(oci configure get region 2&gt;/dev/null)}"
+if [ -z "$REGION" ] || [ "$REGION" = "null" ]; then
+  clear
+  printf '%s\n%s\n\n' \
+    "STOP: REGION could not be discovered from the active OCI CLI profile." \
+    "Action: set REGION in ~/admin/cli.env or export REGION before rerunning this card." &gt;&amp;2
+  return 1
+fi
+
+if [ -z "${TENANCY_ID:-}" ] || [ "${TENANCY_ID#ocid1.tenancy.oc1}" = "$TENANCY_ID" ]; then
+  clear
+  printf '%s\n\n' "STOP: TENANCY_ID could not be discovered from the active OCI CLI profile." &gt;&amp;2
+  return 1
+fi
+
+POC_PARENT_COMPARTMENT_OCID="$(
+  oci iam compartment list \
+    --compartment-id "$TENANCY_ID" \
+    --all \
+    --query "data[?name=='$POC_PARENT_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+    --raw-output
+)"
+if [ -z "$POC_PARENT_COMPARTMENT_OCID" ] || [ "$POC_PARENT_COMPARTMENT_OCID" = "null" ]; then
+  clear
+  printf 'STOP: Parent compartment "%s" was not found under the tenancy root.\n\n' \
+    "$POC_PARENT_COMPARTMENT_NAME" &gt;&amp;2
+  return 1
+fi
+
+POC_COMPARTMENT_OCID="$(
+  oci iam compartment list \
+    --compartment-id "$POC_PARENT_COMPARTMENT_OCID" \
+    --all \
+    --query "data[?name=='$POC_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+    --raw-output
+)"
+if [ -z "$POC_COMPARTMENT_OCID" ] || [ "$POC_COMPARTMENT_OCID" = "null" ]; then
+  clear
+  printf 'STOP: Compartment "%s/%s" was not found.\n\n' \
+    "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" &gt;&amp;2
+  return 1
+fi
+
+VM_CLUSTER_OCID="$(
+  oci db exadb-vm-cluster list \
+    --region "$REGION" \
+    --compartment-id "$POC_COMPARTMENT_OCID" \
+    --display-name "$EXADATA_DISPLAY_NAME" \
+    --sort-by TIMECREATED \
+    --sort-order DESC \
+    --all \
+    --query 'data[0].id' \
+    --raw-output
+)"
+if [ -z "$VM_CLUSTER_OCID" ] || [ "$VM_CLUSTER_OCID" = "null" ]; then
+  clear
+  printf 'STOP: Exadata VM cluster "%s" was not found in /%s/%s.\n\n' \
+    "$EXADATA_DISPLAY_NAME" "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" &gt;&amp;2
+  return 1
+fi
+
+BASTION_VM_OCID="$(
+  oci compute instance list \
+    --region "$REGION" \
+    --compartment-id "$POC_COMPARTMENT_OCID" \
+    --display-name "$BASTION_DISPLAY_NAME" \
+    --sort-by TIMECREATED \
+    --sort-order DESC \
+    --all \
+    --query 'data[0].id' \
+    --raw-output
+)"
+if [ -z "$BASTION_VM_OCID" ] || [ "$BASTION_VM_OCID" = "null" ]; then
+  clear
+  printf 'STOP: Bastion VM "%s" was not found in /%s/%s.\n\n' \
+    "$BASTION_DISPLAY_NAME" "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" &gt;&amp;2
+  return 1
+fi
+
+upsert_cli_env REGION "$REGION" &gt;/dev/null
+upsert_cli_env VM_CLUSTER_OCID "$VM_CLUSTER_OCID" &gt;/dev/null
+upsert_cli_env BASTION_VM_OCID "$BASTION_VM_OCID" &gt;/dev/null
+
+for file_name in \
+  service-downscale-ecpu-response.json \
+  service-downscale-ecpu-error.txt \
+  service-bastion-stop-response.json \
+  service-bastion-stop-error.txt \
+  service-bastion-start-response.json \
+  service-bastion-start-error.txt \
+  service-restore-ecpu-response.json \
+  service-restore-ecpu-error.txt
+do
+  : &gt; "$SERVICE_ADMIN_DIR/$file_name"
+done
+
+clear
+printf '%-28s | %s\n' \
+  "FIELD" "VALUE" \
+  "----------------------------" "-----" \
+  "SERVICE_ADMIN_DIR" "$SERVICE_ADMIN_DIR" \
+  "CLI_ENV" "$CLI_ENV" \
+  "HELPERS_FILE" "$HELPERS_FILE" \
+  "ENV_FILE" "$ENV_FILE" \
+  "COMPARTMENT_PATH" "/$POC_PARENT_COMPARTMENT_NAME/$POC_COMPARTMENT_NAME" \
+  "REGION" "$REGION" \
+  "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID" \
+  "VM_CLUSTER_OCID" "$VM_CLUSTER_OCID" \
+  "BASTION_VM_OCID" "$BASTION_VM_OCID" \
+  "FILES_INITIALIZED" "11"
+printf '\n%s\n' "wb14_card01"
+}
+
+wb14_card01</code></pre>
+</div>
+<h3>OUTPUT 01 - Expected admin discovery and working file setup</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the local admin directory, discovered compartment path, and resource OCIDs saved for the stop and start services workbook.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                        | VALUE
+---------------------------- | -----
+SERVICE_ADMIN_DIR            | /home/oci/admin
+CLI_ENV                      | /home/oci/admin/cli.env
+HELPERS_FILE                 | /home/oci/admin/helpers.sh
+ENV_FILE                     | /home/oci/admin/env.sh
+COMPARTMENT_PATH             | /Partner/LAD-01
+REGION                       | &lt;region&gt;
+POC_COMPARTMENT_OCID         | &lt;poc_compartment_ocid&gt;
+VM_CLUSTER_OCID              | &lt;vm_cluster_ocid&gt;
+BASTION_VM_OCID              | &lt;bastion_vm_ocid&gt;
+FILES_INITIALIZED            | 11
+
+wb14_card01</code></pre>
+</div>
+      </section><section id="bash-02-review-current-service-runtime-state" class="article-section">
+        <h2>BASH 02 - Review current service runtime state</h2>
+        <h3>BASH 02 - Review current service runtime state</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Show the current VM cluster ECPU state and bastion VM lifecycle state before any shutdown action.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+
+wb14_card02() {
+missing_vars=""
+for name in REGION VM_CLUSTER_OCID BASTION_VM_OCID; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    missing_vars="${missing_vars}${missing_vars:+ }$name"
+  fi
+done
+
+if [ -n "$missing_vars" ]; then
+  clear
+  printf '\n%s\n%s\n%s\n\n' \
+    "STOP: Missing required admin variables." \
+    "Missing: $missing_vars" \
+    "Action: set the missing values in ~/admin/cli.env, then rerun this card." &gt;&amp;2
+  return 1
+fi
+
+CLUSTER_DISPLAY_NAME="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."display-name"' \
+    --raw-output
+)"
+CLUSTER_STATE="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+CLUSTER_NODE_COUNT="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."node-count"' \
+    --raw-output
+)"
+CLUSTER_ENABLED_ECPUS="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."enabled-e-cpu-count"' \
+    --raw-output
+)"
+CLUSTER_TOTAL_ECPUS="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."total-e-cpu-count"' \
+    --raw-output
+)"
+BASTION_DISPLAY_NAME="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data."display-name"' \
+    --raw-output
+)"
+BASTION_STATE="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+BASTION_SHAPE_CURRENT="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data.shape' \
+    --raw-output
+)"
+
+clear
+printf '%-26s | %s\n' \
+  "FIELD" "VALUE" \
+  "--------------------------" "-----" \
+  "CLUSTER_DISPLAY_NAME" "$CLUSTER_DISPLAY_NAME" \
+  "CLUSTER_STATE" "$CLUSTER_STATE" \
+  "CLUSTER_NODE_COUNT" "$CLUSTER_NODE_COUNT" \
+  "CLUSTER_ENABLED_ECPUS" "$CLUSTER_ENABLED_ECPUS" \
+  "CLUSTER_TOTAL_ECPUS" "$CLUSTER_TOTAL_ECPUS" \
+  "BASTION_DISPLAY_NAME" "$BASTION_DISPLAY_NAME" \
+  "BASTION_STATE" "$BASTION_STATE" \
+  "BASTION_SHAPE" "$BASTION_SHAPE_CURRENT"
+printf '\n%s\n' "wb14_card02"
+}
+
+wb14_card02</code></pre>
+</div>
+<h3>OUTPUT 02 - Expected runtime state review</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the current service VM cluster and bastion VM state before shutdown.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                      | VALUE
+-------------------------- | -----
+CLUSTER_DISPLAY_NAME       | VMCluster-01
+CLUSTER_STATE              | AVAILABLE
+CLUSTER_NODE_COUNT         | 2
+CLUSTER_ENABLED_ECPUS      | 16
+CLUSTER_TOTAL_ECPUS        | 24
+BASTION_DISPLAY_NAME       | bastion-01
+BASTION_STATE              | RUNNING
+BASTION_SHAPE              | VM.Standard.E5.Flex
+
+wb14_card02</code></pre>
+</div>
+      </section><section id="bash-03-save-restore-values" class="article-section">
+        <h2>BASH 03 - Save restore values</h2>
+        <h3>BASH 03 - Save restore values</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Save the current enabled ECPU, total ECPU, and bastion VM state in <code>~/admin/cli.env</code> before downscaling.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+
+wb14_card03() {
+if ! command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1; then
+  clear
+  printf '\n%s\n%s\n\n' \
+    "STOP: upsert_cli_env is not loaded." \
+    "Action: run BASH 01 first, then rerun this card." &gt;&amp;2
+  return 1
+fi
+
+SERVICE_RESTORE_ENABLED_ECPU_COUNT="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."enabled-e-cpu-count"' \
+    --raw-output
+)"
+SERVICE_RESTORE_TOTAL_ECPU_COUNT="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."total-e-cpu-count"' \
+    --raw-output
+)"
+SERVICE_RESTORE_NODE_COUNT="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."node-count"' \
+    --raw-output
+)"
+SERVICE_RESTORE_BASTION_STATE="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+
+upsert_cli_env SERVICE_RESTORE_ENABLED_ECPU_COUNT "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" &gt;/dev/null
+upsert_cli_env SERVICE_RESTORE_TOTAL_ECPU_COUNT "$SERVICE_RESTORE_TOTAL_ECPU_COUNT" &gt;/dev/null
+upsert_cli_env SERVICE_RESTORE_NODE_COUNT "$SERVICE_RESTORE_NODE_COUNT" &gt;/dev/null
+upsert_cli_env SERVICE_RESTORE_BASTION_STATE "$SERVICE_RESTORE_BASTION_STATE" &gt;/dev/null
+
+clear
+printf '%-36s | %s\n' \
+  "FIELD" "VALUE" \
+  "------------------------------------" "-----" \
+  "SERVICE_RESTORE_ENABLED_ECPU_COUNT" "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" \
+  "SERVICE_RESTORE_TOTAL_ECPU_COUNT" "$SERVICE_RESTORE_TOTAL_ECPU_COUNT" \
+  "SERVICE_RESTORE_NODE_COUNT" "$SERVICE_RESTORE_NODE_COUNT" \
+  "SERVICE_RESTORE_BASTION_STATE" "$SERVICE_RESTORE_BASTION_STATE"
+printf '\n%s\n' "wb14_card03"
+}
+
+wb14_card03</code></pre>
+</div>
+<h3>OUTPUT 03 - Expected restore value capture</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the values saved for later scale-up or restart.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                                | VALUE
+------------------------------------ | -----
+SERVICE_RESTORE_ENABLED_ECPU_COUNT   | 16
+SERVICE_RESTORE_TOTAL_ECPU_COUNT     | 24
+SERVICE_RESTORE_NODE_COUNT           | 2
+SERVICE_RESTORE_BASTION_STATE        | RUNNING
+
+wb14_card03</code></pre>
+</div>
+      </section><section id="bash-04-downscale-enabled-ecpus-to-zero" class="article-section">
+        <h2>BASH 04 - Downscale enabled ECPUs to zero</h2>
+        <h3>BASH 04 - Downscale enabled ECPUs to zero</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Update VMCluster-01 so enabled ECPUs are set to <code>0</code> for the service shutdown window.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+
+wb14_card04() {
+DOWNSCALE_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-downscale-ecpu-response.json"
+DOWNSCALE_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-downscale-ecpu-error.txt"
+DOWNSCALE_TARGET_ENABLED_ECPUS="${DOWNSCALE_TARGET_ENABLED_ECPUS:-0}"
+
+CLUSTER_STATE="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+CURRENT_ENABLED_ECPUS="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."enabled-e-cpu-count"' \
+    --raw-output
+)"
+
+if [ "$CLUSTER_STATE" != "AVAILABLE" ]; then
+  clear
+  printf '\n%s\n%s\n%s\n\n' \
+    "STOP: VM cluster is not AVAILABLE." \
+    "Current state: $CLUSTER_STATE" \
+    "Action: wait for the cluster operation to finish, then rerun this card." &gt;&amp;2
+  return 1
+fi
+
+if [ "$CURRENT_ENABLED_ECPUS" = "$DOWNSCALE_TARGET_ENABLED_ECPUS" ]; then
+  DOWNSCALE_ACTION="SKIPPED_ALREADY_AT_TARGET"
+  DOWNSCALE_STATUS="0"
+else
+  clear
+  printf '%s\n%s\n%s\n' \
+    "Confirm VM cluster downscale." \
+    "Current enabled ECPUs: $CURRENT_ENABLED_ECPUS" \
+    "Target enabled ECPUs: $DOWNSCALE_TARGET_ENABLED_ECPUS"
+  printf 'Continue with VM cluster downscale? [y/N]: '
+  IFS= read -r CONFIRM_DOWNSCALE
+  case "$CONFIRM_DOWNSCALE" in
+    y|Y|yes|YES) ;;
+    *)
+      clear
+      printf '%s\n\n' "STOP: VM cluster downscale was not confirmed. No change was submitted." &gt;&amp;2
+      return 1
+      ;;
+  esac
+
+  oci db exadb-vm-cluster update \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --enabled-e-cpu-count "$DOWNSCALE_TARGET_ENABLED_ECPUS" \
+    --force \
+    &gt; "$DOWNSCALE_RESPONSE_JSON" \
+    2&gt; "$DOWNSCALE_ERROR_TXT"
+  DOWNSCALE_STATUS=$?
+  DOWNSCALE_ACTION="SUBMITTED"
+fi
+
+if [ "$DOWNSCALE_STATUS" -ne 0 ]; then
+  clear
+  printf '\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: Unable to downscale enabled ECPUs." \
+    "OCI CLI status: $DOWNSCALE_STATUS" \
+    "Error file: $DOWNSCALE_ERROR_TXT" \
+    "The shell prompt is still active; no successful downscale was confirmed." &gt;&amp;2
+  return 1
+fi
+
+if command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1; then
+  upsert_cli_env DOWNSCALE_TARGET_ENABLED_ECPUS "$DOWNSCALE_TARGET_ENABLED_ECPUS" &gt;/dev/null
+fi
+
+clear
+printf '%-31s | %s\n' \
+  "FIELD" "VALUE" \
+  "-------------------------------" "-----" \
+  "DOWNSCALE_ACTION" "$DOWNSCALE_ACTION" \
+  "PREVIOUS_ENABLED_ECPUS" "$CURRENT_ENABLED_ECPUS" \
+  "TARGET_ENABLED_ECPUS" "$DOWNSCALE_TARGET_ENABLED_ECPUS" \
+  "DOWNSCALE_RESPONSE_JSON" "$DOWNSCALE_RESPONSE_JSON" \
+  "DOWNSCALE_ERROR_TXT" "$DOWNSCALE_ERROR_TXT"
+printf '\n%s\n' "wb14_card04"
+}
+
+wb14_card04</code></pre>
+</div>
+<h3>OUTPUT 04 - Expected downscale submission</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the submitted enabled ECPU downscale operation.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                           | VALUE
+------------------------------- | -----
+DOWNSCALE_ACTION                | SUBMITTED
+PREVIOUS_ENABLED_ECPUS          | 16
+TARGET_ENABLED_ECPUS            | 0
+DOWNSCALE_RESPONSE_JSON         | /home/oci/admin/service-downscale-ecpu-response.json
+DOWNSCALE_ERROR_TXT             | /home/oci/admin/service-downscale-ecpu-error.txt
+
+wb14_card04</code></pre>
+</div>
+      </section><section id="bash-05-stop-the-bastion-vm" class="article-section">
+        <h2>BASH 05 - Stop the bastion VM</h2>
+        <h3>BASH 05 - Stop the bastion VM</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Gracefully stop the bastion VM so the approved administration host is not running during the shutdown window.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+
+wb14_card05() {
+BASTION_STOP_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-stop-response.json"
+BASTION_STOP_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-stop-error.txt"
+
+BASTION_STATE="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+
+case "$BASTION_STATE" in
+  STOPPED)
+    BASTION_STOP_ACTION="SKIPPED_ALREADY_STOPPED"
+    BASTION_STOP_STATUS="0"
+    ;;
+  RUNNING)
+    clear
+    printf '%s\n%s\n' \
+      "Confirm bastion VM stop." \
+      "Current state: $BASTION_STATE"
+    printf 'Continue with bastion VM SOFTSTOP? [y/N]: '
+    IFS= read -r CONFIRM_BASTION_STOP
+    case "$CONFIRM_BASTION_STOP" in
+      y|Y|yes|YES) ;;
+      *)
+        clear
+        printf '%s\n\n' "STOP: Bastion VM stop was not confirmed. No change was submitted." &gt;&amp;2
+        return 1
+        ;;
+    esac
+
+    oci compute instance action \
+      --region "$REGION" \
+      --instance-id "$BASTION_VM_OCID" \
+      --action SOFTSTOP \
+      &gt; "$BASTION_STOP_RESPONSE_JSON" \
+      2&gt; "$BASTION_STOP_ERROR_TXT"
+    BASTION_STOP_STATUS=$?
+    BASTION_STOP_ACTION="SOFTSTOP_SUBMITTED"
+    ;;
+  *)
+    clear
+    printf '\n%s\n%s\n%s\n\n' \
+      "STOP: Bastion VM is not in a state this card changes automatically." \
+      "Current state: $BASTION_STATE" \
+      "Action: wait for RUNNING or STOPPED, then rerun this card." &gt;&amp;2
+    return 1
+    ;;
+esac
+
+if [ "$BASTION_STOP_STATUS" -ne 0 ]; then
+  clear
+  printf '\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: Unable to stop the bastion VM." \
+    "OCI CLI status: $BASTION_STOP_STATUS" \
+    "Error file: $BASTION_STOP_ERROR_TXT" \
+    "The shell prompt is still active; the VM stop was not confirmed." &gt;&amp;2
+  return 1
+fi
+
+clear
+printf '%-28s | %s\n' \
+  "FIELD" "VALUE" \
+  "----------------------------" "-----" \
+  "BASTION_PREVIOUS_STATE" "$BASTION_STATE" \
+  "BASTION_STOP_ACTION" "$BASTION_STOP_ACTION" \
+  "BASTION_STOP_RESPONSE_JSON" "$BASTION_STOP_RESPONSE_JSON" \
+  "BASTION_STOP_ERROR_TXT" "$BASTION_STOP_ERROR_TXT"
+printf '\n%s\n' "wb14_card05"
+}
+
+wb14_card05</code></pre>
+</div>
+<h3>OUTPUT 05 - Expected bastion stop submission</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the bastion VM stop action.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                        | VALUE
+---------------------------- | -----
+BASTION_PREVIOUS_STATE       | RUNNING
+BASTION_STOP_ACTION          | SOFTSTOP_SUBMITTED
+BASTION_STOP_RESPONSE_JSON   | /home/oci/admin/service-bastion-stop-response.json
+BASTION_STOP_ERROR_TXT       | /home/oci/admin/service-bastion-stop-error.txt
+
+wb14_card05</code></pre>
+</div>
+      </section><section id="bash-06-validate-the-shutdown-state" class="article-section">
+        <h2>BASH 06 - Validate the shutdown state</h2>
+        <h3>BASH 06 - Validate the shutdown state</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Recheck the VM cluster enabled ECPU count and bastion VM lifecycle state after the downscale and stop actions.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+
+wb14_card06() {
+CLUSTER_DISPLAY_NAME="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."display-name"' \
+    --raw-output
+)"
+CLUSTER_STATE="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+CLUSTER_ENABLED_ECPUS="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."enabled-e-cpu-count"' \
+    --raw-output
+)"
+CLUSTER_TOTAL_ECPUS="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."total-e-cpu-count"' \
+    --raw-output
+)"
+BASTION_DISPLAY_NAME="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data."display-name"' \
+    --raw-output
+)"
+BASTION_STATE="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+
+clear
+printf '%-29s | %s\n' \
+  "FIELD" "VALUE" \
+  "-----------------------------" "-----" \
+  "CLUSTER_DISPLAY_NAME" "$CLUSTER_DISPLAY_NAME" \
+  "CLUSTER_STATE" "$CLUSTER_STATE" \
+  "CLUSTER_ENABLED_ECPUS" "$CLUSTER_ENABLED_ECPUS" \
+  "CLUSTER_TOTAL_ECPUS" "$CLUSTER_TOTAL_ECPUS" \
+  "BASTION_DISPLAY_NAME" "$BASTION_DISPLAY_NAME" \
+  "BASTION_STATE" "$BASTION_STATE"
+printf '\n%s\n' "wb14_card06"
+}
+
+wb14_card06</code></pre>
+</div>
+<h3>OUTPUT 06 - Expected shutdown validation</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the target service shutdown state.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                         | VALUE
+----------------------------- | -----
+CLUSTER_DISPLAY_NAME          | VMCluster-01
+CLUSTER_STATE                 | AVAILABLE
+CLUSTER_ENABLED_ECPUS         | 0
+CLUSTER_TOTAL_ECPUS           | 24
+BASTION_DISPLAY_NAME          | bastion-01
+BASTION_STATE                 | STOPPED
+
+wb14_card06</code></pre>
+</div>
+      </section><section id="bash-07-discover-residual-cost-artifacts" class="article-section">
+        <h2>BASH 07 - Discover residual cost artifacts</h2>
+        <h3>BASH 07 - Discover residual cost artifacts</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Discover remaining artifacts in the assigned compartment and print the cost categories that can still accrue after downscaling enabled ECPUs and stopping the bastion VM.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+
+wb14_card07() {
+SERVICE_ADMIN_DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"
+ARTIFACT_REPORT_SCRIPT="$SERVICE_ADMIN_DIR/service-residual-artifacts-report.sh"
+
+cat &gt; "$ARTIFACT_REPORT_SCRIPT" &lt;&lt;'SCRIPT'
+#!/bin/bash
+set -u
+
+service_residual_artifacts_report() {
+SERVICE_ADMIN_DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"
+ARTIFACT_REPORT_JSON="$SERVICE_ADMIN_DIR/service-residual-artifacts.json"
+
+count_data() {
+  file_path="$1"
+  if [ -s "$file_path" ]; then
+    jq -r '(.data.items // .data // []) | length' "$file_path" 2&gt;/dev/null
+  else
+    printf '0\n'
+  fi
+}
+
+compact_names() {
+  sed '/^$/d' | awk 'BEGIN { value = "" } { if (value == "") value = $0; else value = value ", " $0 } END { if (value == "") print "none discovered"; else print value }'
+}
+
+print_line() {
+  printf '%-38s | %s\n' "$1" "$2"
+}
+
+print_separator() {
+  print_line "--------------------------------------" "--------------------------------------------------------------------------------"
+}
+
+print_wrapped_row() {
+  category="$1"
+  text="$2"
+  printf '%s\n' "$text" \
+  | fold -s -w 80 \
+  | awk -v category="$category" '
+      NR == 1 { printf "%-38s | %s\n", category, $0; next }
+      { printf "%-38s | %s\n", "", $0 }
+    '
+}
+
+CLUSTER_COMPARTMENT_OCID="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."compartment-id"' \
+    --raw-output
+)"
+if [ -z "$CLUSTER_COMPARTMENT_OCID" ] || [ "$CLUSTER_COMPARTMENT_OCID" = "null" ]; then
+  printf '%s\n\n' "STOP: Unable to resolve the VM cluster compartment OCID." &gt;&amp;2
+  return 1
+fi
+
+printf '%s\n' "Discovering Exadata VM clusters..."
+oci db exadb-vm-cluster list \
+  --region "$REGION" \
+  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+  --all \
+  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-exadb-vm-clusters.json" \
+  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-exadb-vm-clusters.json"
+
+printf '%s\n' "Discovering database homes..."
+oci db db-home list \
+  --region "$REGION" \
+  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+  --vm-cluster-id "$VM_CLUSTER_OCID" \
+  --all \
+  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-db-homes.json" \
+  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-db-homes.json"
+
+printf '%s\n' "Discovering Base-Database records..."
+printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-databases.json"
+for DB_HOME_OCID in $(jq -r '.data[]?.id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-db-homes.json"); do
+  DB_HOME_DATABASES_JSON="$SERVICE_ADMIN_DIR/service-artifacts-databases-$DB_HOME_OCID.json"
+  MERGED_DATABASES_JSON="$SERVICE_ADMIN_DIR/service-artifacts-databases-merged.json"
+  oci db database list \
+    --region "$REGION" \
+    --db-home-id "$DB_HOME_OCID" \
+    --all \
+    &gt; "$DB_HOME_DATABASES_JSON" \
+    2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$DB_HOME_DATABASES_JSON"
+  jq -s '{data: ((.[0].data // []) + (.[1].data // []))}' \
+    "$SERVICE_ADMIN_DIR/service-artifacts-databases.json" \
+    "$DB_HOME_DATABASES_JSON" \
+    &gt; "$MERGED_DATABASES_JSON"
+  mv "$MERGED_DATABASES_JSON" "$SERVICE_ADMIN_DIR/service-artifacts-databases.json"
+done
+if [ "$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-databases.json")" = "0" ]; then
+  oci db database list \
+    --region "$REGION" \
+    --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+    --all \
+    &gt; "$SERVICE_ADMIN_DIR/service-artifacts-databases.json" \
+    2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-databases.json"
+fi
+
+printf '%s\n' "Discovering database backups..."
+printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-db-backups.json"
+for DATABASE_OCID in $(jq -r '.data[]?.id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-databases.json"); do
+  DATABASE_BACKUPS_JSON="$SERVICE_ADMIN_DIR/service-artifacts-db-backups-$DATABASE_OCID.json"
+  MERGED_BACKUPS_JSON="$SERVICE_ADMIN_DIR/service-artifacts-db-backups-merged.json"
+  oci db backup list \
+    --region "$REGION" \
+    --database-id "$DATABASE_OCID" \
+    --all \
+    &gt; "$DATABASE_BACKUPS_JSON" \
+    2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$DATABASE_BACKUPS_JSON"
+  jq -s '{data: ((.[0].data // []) + (.[1].data // []))}' \
+    "$SERVICE_ADMIN_DIR/service-artifacts-db-backups.json" \
+    "$DATABASE_BACKUPS_JSON" \
+    &gt; "$MERGED_BACKUPS_JSON"
+  mv "$MERGED_BACKUPS_JSON" "$SERVICE_ADMIN_DIR/service-artifacts-db-backups.json"
+done
+
+printf '%s\n' "Discovering compute instances..."
+oci compute instance list \
+  --region "$REGION" \
+  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+  --all \
+  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-compute-instances.json" \
+  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-compute-instances.json"
+
+printf '%s\n' "Discovering block volumes..."
+oci bv volume list \
+  --region "$REGION" \
+  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+  --all \
+  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-block-volumes.json" \
+  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-block-volumes.json"
+
+printf '%s\n' "Discovering public IPs..."
+oci network public-ip list \
+  --region "$REGION" \
+  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+  --scope REGION \
+  --all \
+  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-public-ips.json" \
+  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-public-ips.json"
+
+printf '%s\n' "Discovering Object Storage buckets..."
+OBJECT_STORAGE_NAMESPACE="$(oci os ns get --region "$REGION" --raw-output 2&gt;/dev/null || printf '')"
+if [ -n "$OBJECT_STORAGE_NAMESPACE" ]; then
+  oci os bucket list \
+    --region "$REGION" \
+    --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+    --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+    --all \
+    &gt; "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json" \
+    2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json"
+  printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json"
+  for BUCKET_NAME in $(jq -r '.data[]?.name // empty' "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json"); do
+    BUCKET_OBJECTS_JSON="$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects-$BUCKET_NAME.json"
+    MERGED_BUCKET_OBJECTS_JSON="$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects-merged.json"
+    oci os object list \
+      --region "$REGION" \
+      --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+      --bucket-name "$BUCKET_NAME" \
+      --all \
+      &gt; "$BUCKET_OBJECTS_JSON" \
+      2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$BUCKET_OBJECTS_JSON"
+    jq -s --arg bucket "$BUCKET_NAME" '
+      {
+        data: (
+          (.[0].data // [])
+          + [.[1].data[]? | . + {bucketName: $bucket}]
+        )
+      }
+    ' "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json" \
+      "$BUCKET_OBJECTS_JSON" \
+      &gt; "$MERGED_BUCKET_OBJECTS_JSON"
+    mv "$MERGED_BUCKET_OBJECTS_JSON" "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json"
+  done
+else
+  printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json"
+  printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json"
+fi
+
+printf '%s\n' "Discovering Vaults..."
+oci kms management vault list \
+  --region "$REGION" \
+  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+  --all \
+  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-vaults.json" \
+  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-vaults.json"
+
+printf '%s\n' "Discovering NAT gateways..."
+oci network nat-gateway list \
+  --region "$REGION" \
+  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+  --all \
+  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-nat-gateways.json" \
+  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-nat-gateways.json"
+
+printf '%s\n' "Discovering log groups..."
+oci logging log-group list \
+  --region "$REGION" \
+  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+  --all \
+  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-log-groups.json" \
+  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-log-groups.json"
+
+printf '%s\n' "Discovering Database Management managed databases..."
+oci database-management managed-database list \
+  --region "$REGION" \
+  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+  --all \
+  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-managed-databases.json" \
+  2&gt;/dev/null || printf '{"data":{"items":[]}}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-managed-databases.json"
+
+printf '%s\n' "Discovering Database Management private endpoints..."
+oci database-management private-endpoint list \
+  --region "$REGION" \
+  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
+  --all \
+  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-private-endpoints.json" \
+  2&gt;/dev/null || printf '{"data":{"items":[]}}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-private-endpoints.json"
+
+EXADB_VM_CLUSTER_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-exadb-vm-clusters.json")"
+DATABASE_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-databases.json")"
+DB_BACKUP_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-db-backups.json")"
+COMPUTE_INSTANCE_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-compute-instances.json")"
+BLOCK_VOLUME_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-block-volumes.json")"
+PUBLIC_IP_COUNT="$(
+  jq -r '
+    [
+      .data[]?
+      | select((."assigned-entity-type" // "") != "NAT_GATEWAY")
+      | select((."display-name" // "") | startswith("IP for NAT gateway") | not)
+    ]
+    | length
+  ' "$SERVICE_ADMIN_DIR/service-artifacts-public-ips.json" 2&gt;/dev/null
+)"
+BUCKET_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json")"
+BUCKET_OBJECT_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json")"
+VAULT_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-vaults.json")"
+NAT_GATEWAY_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-nat-gateways.json")"
+LOG_GROUP_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-log-groups.json")"
+DBMGMT_MANAGED_DATABASE_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-managed-databases.json")"
+DBMGMT_PRIVATE_ENDPOINT_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-private-endpoints.json")"
+
+EXADB_VM_CLUSTER_NAMES="$(jq -r '.data[]? | ."display-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-exadb-vm-clusters.json" | compact_names)"
+DATABASE_NAMES="$(jq -r '.data[]? | ."db-name" // ."db-unique-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-databases.json" | compact_names)"
+DB_BACKUP_NAMES="$(jq -r '.data[]? | ."display-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-db-backups.json" | compact_names)"
+COMPUTE_INSTANCE_NAMES="$(jq -r '.data[]? | ."display-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-compute-instances.json" | compact_names)"
+BLOCK_VOLUME_NAMES="$(jq -r '.data[]? | ."display-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-block-volumes.json" | compact_names)"
+PUBLIC_IP_NAMES="$(
+  jq -r '
+    .data[]?
+    | select((."assigned-entity-type" // "") != "NAT_GATEWAY")
+    | select((."display-name" // "") | startswith("IP for NAT gateway") | not)
+    | ."display-name" // ."ip-address" // .id // empty
+  ' "$SERVICE_ADMIN_DIR/service-artifacts-public-ips.json" | compact_names
+)"
+BUCKET_NAMES="$(
+  jq -r --argjson objects "$(jq -r '.data | length' "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json" 2&gt;/dev/null || printf '0')" '
+    .data[]?
+    | .name // empty
+  ' "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json" | compact_names
+)"
+VAULT_NAMES="$(jq -r '.data[]? | ."display-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-vaults.json" | compact_names)"
+NAT_GATEWAY_NAMES="$(jq -r '.data[]? | ."display-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-nat-gateways.json" | compact_names)"
+LOG_GROUP_NAMES="$(jq -r '.data[]? | ."display-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-log-groups.json" | compact_names)"
+DBMGMT_MANAGED_DATABASE_NAMES="$(jq -r '(.data.items // .data // [])[]? | .name // ."database-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-managed-databases.json" | compact_names)"
+DBMGMT_PRIVATE_ENDPOINT_NAMES="$(jq -r '(.data.items // .data // [])[]? | .name // ."display-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-private-endpoints.json" | compact_names)"
+EXADATA_STORAGE_NAMES="VM clusters: $EXADB_VM_CLUSTER_NAMES; Base-Database: $DATABASE_NAMES"
+BASTION_STORAGE_NAMES="instances: $COMPUTE_INSTANCE_NAMES"
+NETWORK_SERVICE_NAMES="NAT gateways: $NAT_GATEWAY_NAMES; public IPs: $PUBLIC_IP_NAMES"
+OBJECT_STORAGE_NAMES="buckets: $BUCKET_NAMES; objects discovered: $BUCKET_OBJECT_COUNT"
+DATABASE_MANAGEMENT_NAMES="managed databases: $DBMGMT_MANAGED_DATABASE_NAMES; private endpoints: $DBMGMT_PRIVATE_ENDPOINT_NAMES"
+
+cat &gt; "$ARTIFACT_REPORT_JSON" &lt;&lt;REPORT
+{
+  "compartmentId": "$CLUSTER_COMPARTMENT_OCID",
+  "exadbVmClusters": $EXADB_VM_CLUSTER_COUNT,
+  "databases": $DATABASE_COUNT,
+  "databaseBackups": $DB_BACKUP_COUNT,
+  "computeInstances": $COMPUTE_INSTANCE_COUNT,
+  "blockVolumes": $BLOCK_VOLUME_COUNT,
+  "publicIps": $PUBLIC_IP_COUNT,
+  "objectStorageBuckets": $BUCKET_COUNT,
+  "objectStorageObjects": $BUCKET_OBJECT_COUNT,
+  "vaults": $VAULT_COUNT,
+  "natGateways": $NAT_GATEWAY_COUNT,
+  "logGroups": $LOG_GROUP_COUNT,
+  "databaseManagementManagedDatabases": $DBMGMT_MANAGED_DATABASE_COUNT,
+  "databaseManagementPrivateEndpoints": $DBMGMT_PRIVATE_ENDPOINT_COUNT
+}
+REPORT
+
+printf '%-28s | %s\n' \
+  "ARTIFACT" "COUNT" \
+  "----------------------------" "-----" \
+  "Exadata VM clusters" "$EXADB_VM_CLUSTER_COUNT" \
+  "Base-Database" "$DATABASE_COUNT" \
+  "Database backups" "$DB_BACKUP_COUNT" \
+  "Compute instances" "$COMPUTE_INSTANCE_COUNT" \
+  "Block volumes" "$BLOCK_VOLUME_COUNT" \
+  "Public IPs" "$PUBLIC_IP_COUNT" \
+  "Object Storage buckets" "$BUCKET_COUNT" \
+  "Object Storage objects" "$BUCKET_OBJECT_COUNT" \
+  "Vaults" "$VAULT_COUNT" \
+  "NAT gateways" "$NAT_GATEWAY_COUNT" \
+  "Log groups" "$LOG_GROUP_COUNT" \
+  "DB Mgmt managed DBs" "$DBMGMT_MANAGED_DATABASE_COUNT" \
+  "DB Mgmt private endpoints" "$DBMGMT_PRIVATE_ENDPOINT_COUNT" \
+  "Report JSON" "$ARTIFACT_REPORT_JSON"
+printf '\n'
+print_line "COST_CATEGORY" "STILL_CHARGED_WHEN_PAUSED"
+print_separator
+print_wrapped_row "Exadata storage" "Yes - allocated database, sparse, smart, or VM file system storage can remain billable."
+print_wrapped_row "" "Artifacts: $EXADATA_STORAGE_NAMES"
+print_separator
+print_wrapped_row "Database backups" "Yes - retained backups, Recovery Service, or Object Storage copies can remain billable."
+print_wrapped_row "" "Artifacts: $DB_BACKUP_NAMES"
+print_separator
+print_wrapped_row "Bastion boot volume" "Yes - stopped compute keeps boot volume storage until the VM or boot volume is deleted."
+print_wrapped_row "" "Artifacts: $BASTION_STORAGE_NAMES"
+print_separator
+print_wrapped_row "Bastion block volumes" "Yes - any attached or detached block volumes continue as allocated storage."
+print_wrapped_row "" "Artifacts: $BLOCK_VOLUME_NAMES"
+print_separator
+print_wrapped_row "Reserve Public IPv4" "Yes - reserved or billable public IPv4 resources can continue to charge."
+print_wrapped_row "" "Artifacts: $PUBLIC_IP_NAMES"
+print_separator
+print_wrapped_row "Object Storage" "Yes - buckets and objects remain charged until deleted or lifecycle-expired."
+print_wrapped_row "" "Artifacts: $OBJECT_STORAGE_NAMES"
+print_separator
+print_wrapped_row "Vault" "Maybe - DEFAULT software keys and secrets fit this workbook cost model; VIRTUAL_PRIVATE Vault can have fixed charges."
+print_wrapped_row "" "Artifacts: $VAULT_NAMES"
+print_separator
+print_wrapped_row "Observability" "Maybe - Logging, VCN Flow Logs, Database Management, Operations Insights, and retained telemetry can charge."
+print_wrapped_row "" "Artifacts: $LOG_GROUP_NAMES"
+print_separator
+print_wrapped_row "Database Management" "Maybe - Database Management for Oracle Cloud Databases is metered by ECPU or OCPU hour; private endpoints are supporting artifacts to verify against the current price list."
+print_wrapped_row "" "Artifacts: $DATABASE_MANAGEMENT_NAMES"
+print_separator
+print_wrapped_row "Network services" "Maybe - NAT Gateways, Load Balancers, private endpoints, and data transfer can charge if provisioned or used."
+print_wrapped_row "" "Artifacts: $NETWORK_SERVICE_NAMES"
+print_separator
+print_wrapped_row "Commitments" "Maybe - Universal Credits, BYOL, marketplace, support, and contract terms still apply."
+print_separator
+printf '\n%s\n' "wb14_card07"
+}
+
+service_residual_artifacts_report
+SCRIPT
+
+chmod +x "$ARTIFACT_REPORT_SCRIPT"
+clear
+"$ARTIFACT_REPORT_SCRIPT"
+}
+
+wb14_card07</code></pre>
+</div>
+<h3>OUTPUT 07 - Expected residual artifact and cost checklist</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review discovered artifact counts and the resource categories that can still be charged after the service shutdown.</span>
+  </div>
+  <pre class="code-scroll"><code>ARTIFACT                     | COUNT
+---------------------------- | -----
+Exadata VM clusters          | 1
+Base-Database                | 1
+Database backups             | 1
+Compute instances            | 1
+Block volumes                | 0
+Public IPs                   | 0
+Object Storage buckets       | 1
+Object Storage objects       | 3
+Vaults                       | 1
+NAT gateways                 | 1
+Log groups                   | 0
+DB Mgmt managed DBs          | 2
+DB Mgmt private endpoints    | 1
+Report JSON                  | /home/oci/admin/service-residual-artifacts.json
+
+COST_CATEGORY                          | STILL_CHARGED_WHEN_PAUSED
+-------------------------------------- | --------------------------------------------------------------------------------
+Exadata storage                        | Yes - allocated database, sparse, smart, or VM file system storage can remain
+                                       | billable.
+                                       | Artifacts: VM clusters: VMCluster-01; Base-Database: CDB01
+-------------------------------------- | --------------------------------------------------------------------------------
+Database backups                       | Yes - retained backups, Recovery Service, or Object Storage copies can remain
+                                       | billable.
+                                       | Artifacts: CDB01-initial-full-&lt;timestamp&gt;
+-------------------------------------- | --------------------------------------------------------------------------------
+Bastion boot volume                    | Yes - stopped compute keeps boot volume storage until the VM or boot volume is
+                                       | deleted.
+                                       | Artifacts: instances: bastion-01
+-------------------------------------- | --------------------------------------------------------------------------------
+Bastion block volumes                  | Yes - any attached or detached block volumes continue as allocated storage.
+                                       | Artifacts: none discovered
+-------------------------------------- | --------------------------------------------------------------------------------
+Reserve Public IPv4                    | Yes - reserved or billable public IPv4 resources can continue to charge.
+                                       | Artifacts: none discovered
+-------------------------------------- | --------------------------------------------------------------------------------
+Object Storage                         | Yes - buckets and objects remain charged until deleted or lifecycle-expired.
+                                       | Artifacts: buckets: &lt;bucket_name&gt;; objects discovered: 3
+-------------------------------------- | --------------------------------------------------------------------------------
+Vault                                  | Maybe - DEFAULT software keys and secrets fit this workbook cost model;
+                                       | VIRTUAL_PRIVATE Vault can have fixed charges.
+                                       | Artifacts: Vault-01
+-------------------------------------- | --------------------------------------------------------------------------------
+Observability                          | Maybe - Logging, VCN Flow Logs, Database Management, Operations Insights, and
+                                       | retained telemetry can charge.
+                                       | Artifacts: &lt;log_group_name&gt;
+-------------------------------------- | --------------------------------------------------------------------------------
+Database Management                    | Maybe - Database Management for Oracle Cloud Databases is metered by ECPU or
+                                       | OCPU hour; private endpoints are supporting artifacts to verify against the
+                                       | current price list.
+                                       | Artifacts: managed databases: CDB01, PDB01; private endpoints: dbmgmt_pe_exadata
+-------------------------------------- | --------------------------------------------------------------------------------
+Network services                       | Maybe - NAT Gateways, Load Balancers, private endpoints, and data transfer can
+                                       | charge if provisioned or used.
+                                       | Artifacts: NAT gateways: &lt;nat_gateway_name&gt;; public IPs: none discovered
+-------------------------------------- | --------------------------------------------------------------------------------
+Commitments                            | Maybe - Universal Credits, BYOL, marketplace, support, and contract terms still
+                                       | apply.
+-------------------------------------- | --------------------------------------------------------------------------------
+
+wb14_card07</code></pre>
+</div>
+      </section><section id="start-services-after-the-shutdown-window" class="article-section">
+        <h2>Start services after the shutdown window</h2>
+        <p>When the service window reopens, reverse the shutdown in a controlled change window. Start the bastion VM so administrators can connect, restore the saved Exadata Exascale enabled ECPU count, then validate database, listener, backup, and Database Management health before releasing the environment to users.</p>
+      </section><section id="bash-08-start-the-bastion-vm" class="article-section">
+        <h2>BASH 08 - Start the bastion VM</h2>
+        <h3>BASH 08 - Start the bastion VM</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Start the bastion VM when the service window reopens.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+
+wb14_card08() {
+BASTION_START_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-start-response.json"
+BASTION_START_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-start-error.txt"
+
+BASTION_STATE="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+
+case "$BASTION_STATE" in
+  RUNNING)
+    BASTION_START_ACTION="SKIPPED_ALREADY_RUNNING"
+    BASTION_START_STATUS="0"
+    ;;
+  STOPPED)
+    oci compute instance action \
+      --region "$REGION" \
+      --instance-id "$BASTION_VM_OCID" \
+      --action START \
+      &gt; "$BASTION_START_RESPONSE_JSON" \
+      2&gt; "$BASTION_START_ERROR_TXT"
+    BASTION_START_STATUS=$?
+    BASTION_START_ACTION="START_SUBMITTED"
+    ;;
+  *)
+    clear
+    printf '\n%s\n%s\n%s\n\n' \
+      "STOP: Bastion VM is not in a state this card changes automatically." \
+      "Current state: $BASTION_STATE" \
+      "Action: wait for STOPPED or RUNNING, then rerun this card." &gt;&amp;2
+    return 1
+    ;;
+esac
+
+if [ "$BASTION_START_STATUS" -ne 0 ]; then
+  clear
+  printf '\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: Unable to start the bastion VM." \
+    "OCI CLI status: $BASTION_START_STATUS" \
+    "Error file: $BASTION_START_ERROR_TXT" \
+    "The shell prompt is still active; the VM start was not confirmed." &gt;&amp;2
+  return 1
+fi
+
+clear
+printf '%-29s | %s\n' \
+  "FIELD" "VALUE" \
+  "-----------------------------" "-----" \
+  "BASTION_PREVIOUS_STATE" "$BASTION_STATE" \
+  "BASTION_START_ACTION" "$BASTION_START_ACTION" \
+  "BASTION_START_RESPONSE_JSON" "$BASTION_START_RESPONSE_JSON" \
+  "BASTION_START_ERROR_TXT" "$BASTION_START_ERROR_TXT"
+printf '\n%s\n' "wb14_card08"
+}
+
+wb14_card08</code></pre>
+</div>
+<h3>OUTPUT 08 - Expected bastion start submission</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the bastion VM start action.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                         | VALUE
+----------------------------- | -----
+BASTION_PREVIOUS_STATE        | STOPPED
+BASTION_START_ACTION          | START_SUBMITTED
+BASTION_START_RESPONSE_JSON   | /home/oci/admin/service-bastion-start-response.json
+BASTION_START_ERROR_TXT       | /home/oci/admin/service-bastion-start-error.txt
+
+wb14_card08</code></pre>
+</div>
+      </section><section id="bash-09-restore-exadata-exascale-enabled-ecpus" class="article-section">
+        <h2>BASH 09 - Restore Exadata Exascale enabled ECPUs</h2>
+        <h3>BASH 09 - Restore Exadata Exascale enabled ECPUs</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Restore the VM cluster enabled ECPU count saved before the shutdown.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+
+wb14_card09() {
+RESTORE_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-restore-ecpu-response.json"
+RESTORE_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-restore-ecpu-error.txt"
+
+if [ -z "${SERVICE_RESTORE_ENABLED_ECPU_COUNT:-}" ]; then
+  clear
+  printf '\n%s\n%s\n\n' \
+    "STOP: SERVICE_RESTORE_ENABLED_ECPU_COUNT is not loaded." \
+    "Action: run BASH 03 before shutdown, or set the approved enabled ECPU count in ~/admin/cli.env." &gt;&amp;2
+  return 1
+fi
+
+CLUSTER_STATE="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+CURRENT_ENABLED_ECPUS="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."enabled-e-cpu-count"' \
+    --raw-output
+)"
+
+if [ "$CLUSTER_STATE" != "AVAILABLE" ]; then
+  clear
+  printf '\n%s\n%s\n%s\n\n' \
+    "STOP: VM cluster is not AVAILABLE." \
+    "Current state: $CLUSTER_STATE" \
+    "Action: wait for the cluster operation to finish, then rerun this card." &gt;&amp;2
+  return 1
+fi
+
+if [ "$CURRENT_ENABLED_ECPUS" = "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" ]; then
+  RESTORE_ACTION="SKIPPED_ALREADY_AT_TARGET"
+  RESTORE_STATUS="0"
+else
+  oci db exadb-vm-cluster update \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --enabled-e-cpu-count "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" \
+    --force \
+    &gt; "$RESTORE_RESPONSE_JSON" \
+    2&gt; "$RESTORE_ERROR_TXT"
+  RESTORE_STATUS=$?
+  RESTORE_ACTION="SUBMITTED"
+fi
+
+if [ "$RESTORE_STATUS" -ne 0 ]; then
+  clear
+  printf '\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: Unable to restore enabled ECPUs." \
+    "OCI CLI status: $RESTORE_STATUS" \
+    "Error file: $RESTORE_ERROR_TXT" \
+    "The shell prompt is still active; no successful restore was confirmed." &gt;&amp;2
+  return 1
+fi
+
+clear
+printf '%-32s | %s\n' \
+  "FIELD" "VALUE" \
+  "--------------------------------" "-----" \
+  "RESTORE_ACTION" "$RESTORE_ACTION" \
+  "PREVIOUS_ENABLED_ECPUS" "$CURRENT_ENABLED_ECPUS" \
+  "TARGET_ENABLED_ECPUS" "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" \
+  "RESTORE_RESPONSE_JSON" "$RESTORE_RESPONSE_JSON" \
+  "RESTORE_ERROR_TXT" "$RESTORE_ERROR_TXT"
+printf '\n%s\n' "wb14_card09"
+}
+
+wb14_card09</code></pre>
+</div>
+<h3>OUTPUT 09 - Expected Exadata enabled ECPU restore</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the restore operation that starts Exadata Exascale database compute capacity.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                            | VALUE
+-------------------------------- | -----
+RESTORE_ACTION                   | SUBMITTED
+PREVIOUS_ENABLED_ECPUS           | 0
+TARGET_ENABLED_ECPUS             | 16
+RESTORE_RESPONSE_JSON            | /home/oci/admin/service-restore-ecpu-response.json
+RESTORE_ERROR_TXT                | /home/oci/admin/service-restore-ecpu-error.txt
+
+wb14_card09</code></pre>
+</div>
+      </section><section id="bash-10-validate-started-services" class="article-section">
+        <h2>BASH 10 - Validate started services</h2>
+        <h3>BASH 10 - Validate started services</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Recheck the bastion VM and Exadata Exascale VM cluster after the start actions.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+
+wb14_card10() {
+CLUSTER_DISPLAY_NAME="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."display-name"' \
+    --raw-output
+)"
+CLUSTER_STATE="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+CLUSTER_ENABLED_ECPUS="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."enabled-e-cpu-count"' \
+    --raw-output
+)"
+CLUSTER_TOTAL_ECPUS="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."total-e-cpu-count"' \
+    --raw-output
+)"
+BASTION_DISPLAY_NAME="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data."display-name"' \
+    --raw-output
+)"
+BASTION_STATE="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+
+clear
+printf '%-29s | %s\n' \
+  "FIELD" "VALUE" \
+  "-----------------------------" "-----" \
+  "CLUSTER_DISPLAY_NAME" "$CLUSTER_DISPLAY_NAME" \
+  "CLUSTER_STATE" "$CLUSTER_STATE" \
+  "CLUSTER_ENABLED_ECPUS" "$CLUSTER_ENABLED_ECPUS" \
+  "CLUSTER_TOTAL_ECPUS" "$CLUSTER_TOTAL_ECPUS" \
+  "BASTION_DISPLAY_NAME" "$BASTION_DISPLAY_NAME" \
+  "BASTION_STATE" "$BASTION_STATE"
+printf '\n%s\n' "wb14_card10"
+}
+
+wb14_card10</code></pre>
+</div>
+<h3>OUTPUT 10 - Expected started service validation</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the target service started state.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                         | VALUE
+----------------------------- | -----
+CLUSTER_DISPLAY_NAME          | VMCluster-01
+CLUSTER_STATE                 | AVAILABLE
+CLUSTER_ENABLED_ECPUS         | 16
+CLUSTER_TOTAL_ECPUS           | 24
+BASTION_DISPLAY_NAME          | bastion-01
+BASTION_STATE                 | RUNNING
+
+wb14_card10</code></pre>
+</div>
+      </section><section id="oracle-documentation-references" class="article-section">
+        <h2>Oracle documentation references</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Area</th>
+<th scope="col">Oracle reference</th>
+<th scope="col">Purpose</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Exadata Exascale VM cluster update CLI</td>
+<td><a href="https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/db/exadb-vm-cluster/update.html" target="_blank" rel="noopener">OCI CLI db exadb-vm-cluster update</a></td>
+<td>Documents updating an Exadata VM cluster on Exascale Infrastructure and the <code>--enabled-e-cpu-count</code> option.</td>
+</tr>
+<tr>
+<td>Compute instance lifecycle action CLI</td>
+<td><a href="https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/compute/instance/action.html" target="_blank" rel="noopener">OCI CLI compute instance action</a></td>
+<td>Documents <code>START</code>, <code>STOP</code>, <code>SOFTSTOP</code>, and related instance actions.</td>
+</tr>
+<tr>
+<td>OCI Compute stop and start</td>
+<td><a href="https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/restartinginstance.htm" target="_blank" rel="noopener">Stopping, Starting, or Restarting an Instance</a></td>
+<td>Provides the instance lifecycle operation context.</td>
+</tr>
+<tr>
+<td>OCI pricing</td>
+<td><a href="https://www.oracle.com/cloud/price-list/" target="_blank" rel="noopener">Oracle Cloud Price List</a></td>
+<td>Current SKU-level price list for validating which resources still accrue cost.</td>
+</tr>
+<tr>
+<td>Cost estimate</td>
+<td><a href="https://www.oracle.com/cloud/costestimator/" target="_blank" rel="noopener">Oracle Cloud Cost Estimator</a></td>
+<td>Planning tool for before-and-after cost estimates.</td>
+</tr>
+</tbody></table></div>
+      </section>
+      <section id="chapter-navigation" class="article-section">
+        <h2>Chapter navigation</h2>
+        <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../13-oci-database-management/index.html"><span class="nav-card-label">Previous</span><strong>13. OCI Database Management</strong></a><a class="chapter-link nav-card" href="../15-recover-variables/index.html"><span class="nav-card-label">Next</span><strong>15. Recover Variables</strong></a>
+      </nav>
+        <div class="two-up">
+          <a class="content-card link-card" href="../index.html#documentation"><strong>Series documentation</strong></a>
+          <a class="content-card link-card" href="../index.html#glossary"><strong>Series glossary</strong></a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer class="site-footer">
+    <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+  </footer>
+  <button class="back-top" type="button" aria-label="Back to top">Back to top</button>
+  <script src="../shared-guide-set.js"></script>
+  <script src="../assets/workbook.js"></script>
+</body>
+</html>

@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bastion VM Creation | OCI PoC RunBook</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/workbook.css">
+</head>
+<body class="workbook-chapter" data-guide-key="07-bastion-vm-creation" data-guide-scope="nested">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">OCI</span>
+        <span class="brand-text">
+          <span class="brand-title" data-series-brand-title>OCI PoC RunBook</span>
+          <span class="brand-subtitle" data-series-brand-subtitle>Workbook</span>
+        </span>
+      </a>
+      <div class="top-actions">
+        <a class="top-link" href="../index.html#documentation">Documentation</a>
+        <a class="top-link" href="../index.html#glossary">Glossary</a>
+        <button class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+      </div>
+    </div>
+  </header>
+  <div id="top"></div>
+  <section class="hero hero-compact">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Chapter 07</p>
+        <h1>Bastion VM Creation</h1>
+        <p class="subtitle">This section creates a bastion VM in the assigned PoC compartment through ADMIN_COMPARTMENT_OCID using the approved admin subnet and bastion NSG. The VM is the controlled administration host for SSH, SQL*Plus, SQL Loader, RMAN client utilities, JDBC testing, and Java-based database tools.</p>
+        <div class="hero-meta">
+          <span>Last updated July 6, 2026</span>
+        </div>
+        <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+  <div class="page-grid">
+    <nav class="toc" aria-label="Table of contents">
+      <p>Table of contents</p>
+      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#required-inputs">Required inputs</a></li><li><a href="#set-bastion-inputs">Set bastion inputs</a></li><li><a href="#create-the-oracle-linux-9-bastion-vm">Create the Oracle Linux 9 bastion VM</a></li><li><a href="#upload-ssh-files-to-object-storage">Upload SSH files to Object Storage</a></li><li><a href="#ssh-connection">SSH connection</a></li><li><a href="#install-sql-client-packages-for-dba-and-development-work">Install SQL client packages for DBA and development work</a></li><li><a href="#install-latest-jdk">Install latest JDK</a></li><li><a href="#install-security-patches">Install security patches</a></li></ol>
+    </nav>
+    <main id="main" class="article">
+      <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../06-exadata-environment-initialization/index.html"><span class="nav-card-label">Previous</span><strong>06. Exadata Environment Initialization</strong></a><a class="chapter-link nav-card" href="../08-create-exadata-cluster/index.html"><span class="nav-card-label">Next</span><strong>08. Create Exadata Cluster</strong></a>
+      </nav>
+      <section id="section-purpose" class="article-section">
+        <h2>Section purpose</h2>
+        <div class="note-box">This section creates a bastion VM in the assigned PoC compartment through ADMIN_COMPARTMENT_OCID using the approved admin subnet and bastion NSG. The VM is the controlled administration host for SSH, SQL*Plus, SQL Loader, RMAN client utilities, JDBC testing, and Java-based database tools.</div>
+      </section><section id="required-inputs" class="article-section">
+        <h2>Required inputs</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Variable</th>
+<th scope="col">Expected value</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>ADMIN_COMPARTMENT_OCID</code></td>
+<td>Assigned PoC compartment alias for administration resources.</td>
+</tr>
+<tr>
+<td><code>SUBNET_ADMIN_OCID</code></td>
+<td>Admin subnet OCID.</td>
+</tr>
+<tr>
+<td><code>NSG_BASTION_OCID</code></td>
+<td>Bastion/admin NSG OCID.</td>
+</tr>
+<tr>
+<td><code>AVAILABILITY_DOMAIN</code></td>
+<td>Target availability domain for the VM. This chapter resolves the tenancy-specific AD1 name.</td>
+</tr>
+<tr>
+<td><code>BASTION_SHAPE</code></td>
+<td>Compute shape approved for admin tooling, for example <code>VM.Standard.E5.Flex</code>.</td>
+</tr>
+<tr>
+<td><code>BASTION_OCPUS</code></td>
+<td>Flex OCPU count for the bastion VM.</td>
+</tr>
+<tr>
+<td><code>BASTION_MEMORY_GBS</code></td>
+<td>Flex memory for the bastion VM.</td>
+</tr>
+<tr>
+<td><code>OL9_MARKETPLACE_IMAGE_OCID</code></td>
+<td>Oracle Linux 9 image OCID. This chapter resolves the newest Oracle Linux 9 platform image compatible with the bastion shape in the region loaded from <code>cli.env</code>.</td>
+</tr>
+<tr>
+<td><code>SSH_PUBLIC_KEY_FILE</code></td>
+<td>Public RSA SSH key file used for the opc user. This follows Oracle's documented OpenSSH RSA example for OCI Linux instances.</td>
+</tr>
+</tbody></table></div>
+      </section><section id="set-bastion-inputs" class="article-section">
+        <h2>Set bastion inputs</h2>
+        <p>The command below resolves the newest Oracle Linux 9 platform image compatible with <code>BASTION_SHAPE</code> in the region loaded from <code>~/workbook/cli.env</code>. Filtering by shape prevents selecting GPU or other shape-incompatible images.</p>
+<p>For SSH keys, OCI documents that OCI Console-generated Linux instance keys are RSA OpenSSH key pairs. Oracle's manual <code>ssh-keygen</code> example uses <code>ssh-keygen -t rsa -N "" -b 2048 -C "&lt;key_comment&gt;"</code>, so this workbook mirrors that format.</p>
+<p>References:</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Topic</th>
+<th scope="col">Source</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>OCI-generated Linux instance keys are RSA key pairs</td>
+<td><a href="https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/launchinginstance.htm#Add_SSH_Keys" target="_blank" rel="noopener">Creating an Instance - Add SSH Keys</a></td>
+</tr>
+<tr>
+<td>Shape-compatible platform image lookup</td>
+<td><a href="https://docs.oracle.com/en-us/iaas/api/#/en/iaas/20160918/Image/ListImages" target="_blank" rel="noopener">ListImages API</a></td>
+</tr>
+<tr>
+<td>IMDSv2 requirement for instance metadata</td>
+<td><a href="https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/launchinginstance.htm#advanced-options" target="_blank" rel="noopener">Creating an Instance - Advanced Options</a></td>
+</tr>
+<tr>
+<td>Oracle OpenSSH RSA <code>ssh-keygen</code> example</td>
+<td><a href="https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/managingkeypairs.htm#Creating_an_OpenSSH_Key_Pair_with_ssh-keygen" target="_blank" rel="noopener">Managing Key Pairs on Linux Instances</a></td>
+</tr>
+</tbody></table></div>
+<h3>BASH 01 - Set bastion inputs</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create or verify the workbook FIPS-compatible RSA SSH key pair, resolve AD1, and set a shape-compatible Oracle Linux 9 image OCID.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb07_card01() {
+
+WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+SSH_PRIVATE_KEY_FILE="${WORKBOOK_DIR}/bastion-01_rsa"
+SSH_PUBLIC_KEY_FILE="${SSH_PRIVATE_KEY_FILE}.pub"
+BASTION_SHAPE="${BASTION_SHAPE:-VM.Standard.E5.Flex}"
+
+if [ ! -s "$SSH_PRIVATE_KEY_FILE" ]; then
+  ssh-keygen -t rsa -N "" -b 2048 -C "bastion-01 key" -f "$SSH_PRIVATE_KEY_FILE"
+elif [ ! -s "$SSH_PUBLIC_KEY_FILE" ]; then
+  ssh-keygen -y -f "$SSH_PRIVATE_KEY_FILE" &gt; "$SSH_PUBLIC_KEY_FILE"
+else
+  printf 'Reusing existing RSA key pair: %s\n' "$SSH_PRIVATE_KEY_FILE"
+fi
+
+chmod 600 "$SSH_PRIVATE_KEY_FILE"
+chmod 644 "$SSH_PUBLIC_KEY_FILE"
+
+AVAILABILITY_DOMAIN="$(
+  oci iam availability-domain list \
+    --region "$REGION" \
+    --compartment-id "$TENANCY_ID" \
+    --query "data[?contains(name, 'AD-1')].name | [0]" \
+    --raw-output
+)"
+
+OL9_MARKETPLACE_IMAGE_OCID="$(
+  oci compute image list \
+    --region "$REGION" \
+    --compartment-id "$TENANCY_ID" \
+    --operating-system "Oracle Linux" \
+    --shape "$BASTION_SHAPE" \
+    --sort-by TIMECREATED \
+    --sort-order DESC \
+    --query 'data[?contains("display-name", `Oracle-Linux-9`)] | [0].id' \
+    --raw-output
+)"
+
+for required_value in AVAILABILITY_DOMAIN OL9_MARKETPLACE_IMAGE_OCID SSH_PUBLIC_KEY_FILE SSH_PRIVATE_KEY_FILE; do
+  if [ -z "${!required_value}" ] || [ "${!required_value}" = "null" ]; then
+    printf 'Unable to resolve %s\n' "$required_value" &gt;&amp;2
+    return 1
+  fi
+done
+
+upsert_cli_env AVAILABILITY_DOMAIN "$AVAILABILITY_DOMAIN" &gt;/dev/null
+upsert_cli_env BASTION_SHAPE "$BASTION_SHAPE" &gt;/dev/null
+upsert_cli_env OL9_MARKETPLACE_IMAGE_OCID "$OL9_MARKETPLACE_IMAGE_OCID" &gt;/dev/null
+upsert_cli_env SSH_PRIVATE_KEY_FILE "$SSH_PRIVATE_KEY_FILE" &gt;/dev/null
+upsert_cli_env SSH_PUBLIC_KEY_FILE "$SSH_PUBLIC_KEY_FILE" &gt;/dev/null
+
+printf 'AVAILABILITY_DOMAIN=%s\n' "$AVAILABILITY_DOMAIN"
+printf 'BASTION_SHAPE=%s\n' "$BASTION_SHAPE"
+printf 'OL9_MARKETPLACE_IMAGE_OCID=%s\n' "$OL9_MARKETPLACE_IMAGE_OCID"
+printf 'SSH_PUBLIC_KEY_FILE=%s\n' "$SSH_PUBLIC_KEY_FILE"
+}
+
+wb07_card01</code></pre>
+</div>
+      </section><section id="create-the-oracle-linux-9-bastion-vm" class="article-section">
+        <h2>Create the Oracle Linux 9 bastion VM</h2>
+        <p>This launch command requires Instance Metadata Service Version 2 by setting <code>--instance-options '{"areLegacyImdsEndpointsDisabled":true}'</code>. Do not omit that option in tenancies where IMDSv1 is disabled.</p>
+<h3>BASH 02 - Create the Oracle Linux 9 bastion VM</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the bastion VM in the assigned PoC compartment through ADMIN_COMPARTMENT_OCID and save the instance OCID.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb07_card02() {
+
+: "${AVAILABILITY_DOMAIN:?Set AVAILABILITY_DOMAIN in ~/workbook/cli.env}"
+: "${OL9_MARKETPLACE_IMAGE_OCID:?Set OL9_MARKETPLACE_IMAGE_OCID in ~/workbook/cli.env}"
+: "${SSH_PUBLIC_KEY_FILE:?Set SSH_PUBLIC_KEY_FILE in ~/workbook/cli.env}"
+
+BASTION_DISPLAY_NAME="bastion-01"
+BASTION_SHAPE="${BASTION_SHAPE:-VM.Standard.E5.Flex}"
+BASTION_OCPUS="${BASTION_OCPUS:-1}"
+BASTION_MEMORY_GBS="${BASTION_MEMORY_GBS:-16}"
+
+BASTION_VM_OCID="$(
+  oci compute instance launch \
+    --region "$REGION" \
+    --availability-domain "$AVAILABILITY_DOMAIN" \
+    --compartment-id "$ADMIN_COMPARTMENT_OCID" \
+    --display-name "$BASTION_DISPLAY_NAME" \
+    --image-id "$OL9_MARKETPLACE_IMAGE_OCID" \
+    --instance-options '{"areLegacyImdsEndpointsDisabled":true}' \
+    --shape "$BASTION_SHAPE" \
+    --shape-config "{\"ocpus\":$BASTION_OCPUS,\"memoryInGBs\":$BASTION_MEMORY_GBS}" \
+    --subnet-id "$SUBNET_ADMIN_OCID" \
+    --nsg-ids "[\"$NSG_BASTION_OCID\"]" \
+    --ssh-authorized-keys-file "$SSH_PUBLIC_KEY_FILE" \
+    --assign-public-ip true \
+    --wait-for-state RUNNING \
+    --query 'data.id' \
+    --raw-output
+)"
+
+upsert_cli_env BASTION_VM_OCID "$BASTION_VM_OCID" &gt;/dev/null
+printf 'BASTION_VM_OCID=%s\n' "$BASTION_VM_OCID"
+}
+
+wb07_card02</code></pre>
+</div>
+      </section><section id="upload-ssh-files-to-object-storage" class="article-section">
+        <h2>Upload SSH files to Object Storage</h2>
+        <p>This step creates a private Object Storage bucket in the assigned PoC compartment through ADMIN_COMPARTMENT_OCID and uploads the bastion SSH private and public key files. Treat the private key object as sensitive material and restrict bucket access with IAM policies.</p>
+<h3>BASH 03 - Upload SSH files</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the compartment-named SSH key bucket and upload the bastion key files.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb07_card03() {
+
+ADMIN_BUCKET_NAME="${REGION}-${POC_PARENT_COMPARTMENT_NAME}-${POC_COMPARTMENT_NAME}"
+OBJECT_STORAGE_NAMESPACE="$(
+  oci os ns get \
+    --region "$REGION" \
+    --query 'data' \
+    --raw-output
+)"
+
+if ! oci os bucket get \
+  --region "$REGION" \
+  --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+  --bucket-name "$ADMIN_BUCKET_NAME" &gt;/dev/null 2&gt;&amp;1; then
+  oci os bucket create \
+    --region "$REGION" \
+    --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+    --compartment-id "$ADMIN_COMPARTMENT_OCID" \
+    --name "$ADMIN_BUCKET_NAME" \
+    --public-access-type NoPublicAccess &gt;/dev/null
+fi
+
+oci os object put \
+  --region "$REGION" \
+  --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+  --bucket-name "$ADMIN_BUCKET_NAME" \
+  --name "$(basename "$SSH_PRIVATE_KEY_FILE")" \
+  --file "$SSH_PRIVATE_KEY_FILE" \
+  --force
+
+oci os object put \
+  --region "$REGION" \
+  --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+  --bucket-name "$ADMIN_BUCKET_NAME" \
+  --name "$(basename "$SSH_PUBLIC_KEY_FILE")" \
+  --file "$SSH_PUBLIC_KEY_FILE" \
+  --force
+
+upsert_cli_env ADMIN_BUCKET_NAME "$ADMIN_BUCKET_NAME" &gt;/dev/null
+printf 'ADMIN_BUCKET_NAME=%s\n' "$ADMIN_BUCKET_NAME"
+}
+
+wb07_card03</code></pre>
+</div>
+      </section><section id="ssh-connection" class="article-section">
+        <h2>SSH connection</h2>
+        <h3>BASH 04 - SSH connection</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Resolve the bastion public IP and open an SSH session as opc.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb07_card04() {
+
+BASTION_VNIC_ID="$(
+  oci compute instance list-vnics \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data[0].id' \
+    --raw-output
+)"
+
+BASTION_PUBLIC_IP="$(
+  oci network vnic get \
+    --vnic-id "$BASTION_VNIC_ID" \
+    --query 'data."public-ip"' \
+    --raw-output
+)"
+
+upsert_cli_env BASTION_PUBLIC_IP "$BASTION_PUBLIC_IP" &gt;/dev/null
+ssh -i "$SSH_PRIVATE_KEY_FILE" opc@"$BASTION_PUBLIC_IP"
+}
+
+wb07_card04</code></pre>
+</div>
+<h3>OUTPUT 04 - Expected first SSH connection prompt</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the bastion SSH session opens and the shell prompt changes to the opc user on bastion-01.</span>
+  </div>
+  <pre class="code-scroll"><code>$ ssh -i "$SSH_PRIVATE_KEY_FILE" opc@"$BASTION_PUBLIC_IP"
+The authenticity of host '&lt;bastion_public_ip&gt; (&lt;bastion_public_ip&gt;)' can't be established.
+ECDSA key fingerprint is SHA256:&lt;host_key_fingerprint&gt;.
+Are you sure you want to continue connecting (yes/no/[fingerprint])? yes
+Warning: Permanently added '&lt;bastion_public_ip&gt;' (ECDSA) to the list of known hosts.
+[opc@bastion-01 ~]$</code></pre>
+</div>
+      </section><section id="install-sql-client-packages-for-dba-and-development-work" class="article-section">
+        <h2>Install SQL client packages for DBA and development work</h2>
+        <p>Oracle's approved Oracle Linux 9 Instant Client repository uses versioned package names. Install the latest packages available from the enabled repository instead of installing RPMs from direct URLs.</p>
+<p>Reference:</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Topic</th>
+<th scope="col">Source</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Oracle Instant Client OL9 repository package names</td>
+<td><a href="https://yum.oracle.com/repo/OracleLinux/OL9/oracle/instantclient/x86_64/" target="_blank" rel="noopener">Oracle Instant Client repository for Oracle Linux 9</a></td>
+</tr>
+</tbody></table></div>
+<h3>BASH 05 - Install SQL client packages</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Install Oracle Instant Client SQL, DBA, development, and JDBC packages on Oracle Linux 9.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>wb07_card05() {
+sudo dnf install -y oracle-instantclient-release-26ai-el9
+sudo dnf install -y libaio nmap nfs-utils
+
+sudo dnf install -y --allowerasing \
+  oracle-instantclient-basic \
+  oracle-instantclient-devel \
+  oracle-instantclient-jdbc \
+  oracle-instantclient-odbc \
+  oracle-instantclient-sqlplus \
+  oracle-instantclient-tools
+
+SQLPLUS_BIN_DIR="/usr/lib/oracle/23/client64/bin"
+PATH="$PATH:$SQLPLUS_BIN_DIR"
+export PATH
+
+if ! grep -q "$SQLPLUS_BIN_DIR" ~/.bash_profile 2&gt;/dev/null; then
+  printf 'export PATH=$PATH:%s\n' "$SQLPLUS_BIN_DIR" &gt;&gt; ~/.bash_profile
+fi
+
+clear
+printf '%-28s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "----------------------------" "-----" \
+  "SQLPLUS_BIN_DIR" "$SQLPLUS_BIN_DIR"
+sqlplus -v
+expdp -help | sed -n '1,3p'
+impdp -help | sed -n '1,3p'
+}
+
+wb07_card05</code></pre>
+</div>
+<h3>OUTPUT 05 - Expected SQL client checks</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the SQL client tools return version or help text.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                     | VALUE
+---------------------------- | -----
+SQLPLUS_BIN_DIR              | &lt;instant_client_bin_directory&gt;
+
+SQL*Plus: Release 26.&lt;version&gt; - Production
+Version 26.&lt;version&gt;
+
+Export: Release 26.&lt;version&gt; - Production on &lt;date&gt;
+Version 26.&lt;version&gt;
+
+Import: Release 26.&lt;version&gt; - Production on &lt;date&gt;
+Version 26.&lt;version&gt;</code></pre>
+</div>
+      </section><section id="install-latest-jdk" class="article-section">
+        <h2>Install latest JDK</h2>
+        <h3>BASH 06 - Install latest JDK</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Install the latest Oracle JDK package exposed by the configured Oracle Linux 9 repositories.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>sudo dnf install -y jdk
+java -version
+javac -version</code></pre>
+</div>
+      </section><section id="install-security-patches" class="article-section">
+        <h2>Install security patches</h2>
+        <h3>BASH 07 - Install security patches</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Apply available security updates to the bastion VM packages.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>sudo dnf update-minimal --security -y
+sudo dnf needs-restarting -r || true</code></pre>
+</div>
+<h3>OUTPUT 07 - Expected reboot-required check</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm whether a reboot is required after applying security updates.</span>
+  </div>
+  <pre class="code-scroll"><code>Core libraries or services have been updated since boot-up:
+  * kernel
+  * kernel-uek
+  * kernel-uek-core
+  * systemd
+
+Reboot is required to fully utilize these updates.
+More information: man needs-restarting</code></pre>
+</div>
+<h3>BASH 08 - Reboot bastion VM</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Reboot the bastion VM when security updates require a restart.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>sudo reboot</code></pre>
+</div>
+      </section>
+      <section id="chapter-navigation" class="article-section">
+        <h2>Chapter navigation</h2>
+        <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../06-exadata-environment-initialization/index.html"><span class="nav-card-label">Previous</span><strong>06. Exadata Environment Initialization</strong></a><a class="chapter-link nav-card" href="../08-create-exadata-cluster/index.html"><span class="nav-card-label">Next</span><strong>08. Create Exadata Cluster</strong></a>
+      </nav>
+        <div class="two-up">
+          <a class="content-card link-card" href="../index.html#documentation"><strong>Series documentation</strong></a>
+          <a class="content-card link-card" href="../index.html#glossary"><strong>Series glossary</strong></a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer class="site-footer">
+    <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+  </footer>
+  <button class="back-top" type="button" aria-label="Back to top">Back to top</button>
+  <script src="../shared-guide-set.js"></script>
+  <script src="../assets/workbook.js"></script>
+</body>
+</html>

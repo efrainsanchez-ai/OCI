@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OCI PoC RunBook | OCI PoC RunBook</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="assets/workbook.css">
+</head>
+<body class="workbook-root" data-guide-key="root" data-guide-scope="root">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-mark" aria-hidden="true">OCI</span>
+        <span class="brand-text">
+          <span class="brand-title" data-series-brand-title>OCI PoC RunBook</span>
+          <span class="brand-subtitle" data-series-brand-subtitle>Workbook</span>
+        </span>
+      </a>
+      <div class="top-actions">
+        <a class="top-link" href="index.html#documentation">Documentation</a>
+        <a class="top-link" href="index.html#glossary">Glossary</a>
+        <button class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+      </div>
+    </div>
+  </header>
+  <div id="top"></div>
+  <section class="hero">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Oracle Cloud Infrastructure workbook</p>
+        <h1>OCI PoC RunBook</h1>
+        <p class="subtitle">A complete PoC implementation runbook for the assigned Partner child compartment. It starts with the VCN, subnet, route, security, bastion-access, and service-access baseline, then continues through Exadata deployment, database creation, automatic backups, credential secrets, and OCI Database Management.</p>
+        <div class="hero-meta">
+          <span>Last updated July 6, 2026</span>
+        </div>
+        <aside class="disclaimer expanded">
+          <h2>Educational use and validation required</h2>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </aside>
+      </div>
+      <aside class="hero-visual" aria-label="Latest guide coverage">
+        <p class="visual-caption">Latest guide coverage</p>
+        <ul class="hero-highlights">
+          <li class="highlight">Single assigned PoC compartment under Partner, with Partner/LAD-01 as the default example.</li>
+          <li class="highlight">Network baseline chapters feed the Exadata implementation sequence.</li>
+          <li class="highlight">Runbook chapters cover bastion VM, Exadata cluster, CDB, backups, secrets, and Database Management.</li>
+          <li class="highlight">The same single-compartment aliases are reused end to end.</li>
+        </ul>
+      </aside>
+    </div>
+  </section>
+  <div class="page-grid">
+    <nav class="toc" aria-label="Table of contents">
+      <p>Table of contents</p>
+      <ol><li><a href="#navigate">Navigate the workbook</a></li><li><a href="#implementation-map">Implementation map</a></li><li><a href="#documentation">Oracle Official Documentation</a></li><li><a href="#glossary">Glossary</a></li></ol>
+    </nav>
+    <main id="main" class="article">
+      <section id="navigate" class="article-section">
+        <h2>Navigate the workbook</h2>
+        <p>Open each chapter as a self-contained HTML page. The chapter sequence supports a full implementation, but every chapter can also be edited and reviewed independently.</p>
+        <nav class="related-links root-links" data-guide-cards data-guide-variant="root" data-guide-scope="root" aria-label="Workbook chapters">
+          <a class="related-link" href="00-oci-poc-runbook/index.html">
+  <strong>00. OCI PoC RunBook</strong>
+</a>
+<a class="related-link" href="01-scope-and-design-principles/index.html">
+  <strong>01. Scope and Design Principles</strong>
+</a>
+<a class="related-link" href="02-target-oci-network-architecture/index.html">
+  <strong>02. Target OCI Network Architecture</strong>
+</a>
+<a class="related-link" href="03-addressing-naming-and-dns/index.html">
+  <strong>03. Addressing, Naming, and DNS</strong>
+</a>
+<a class="related-link" href="04-bastion-and-administrator-access/index.html">
+  <strong>04. Bastion and Administrator Access</strong>
+</a>
+<a class="related-link" href="05-Network/index.html">
+  <strong>05. Network</strong>
+</a>
+<a class="related-link" href="06-exadata-environment-initialization/index.html">
+  <strong>06. Exadata Environment Initialization</strong>
+</a>
+<a class="related-link" href="07-bastion-vm-creation/index.html">
+  <strong>07. Bastion VM Creation</strong>
+</a>
+<a class="related-link" href="08-create-exadata-cluster/index.html">
+  <strong>08. Create Exadata Cluster</strong>
+</a>
+<a class="related-link" href="09-upscale-the-cluster-to-two-nodes/index.html">
+  <strong>09. Upscale the Cluster to Two Nodes</strong>
+</a>
+<a class="related-link" href="10-create-container-database/index.html">
+  <strong>10. Create Container Database</strong>
+</a>
+<a class="related-link" href="11-enable-automatic-backups/index.html">
+  <strong>11. Enable Automatic Backups</strong>
+</a>
+<a class="related-link" href="12-create-database-credential-secrets/index.html">
+  <strong>12. Create Database Credential Secrets</strong>
+</a>
+<a class="related-link" href="13-oci-database-management/index.html">
+  <strong>13. OCI Database Management</strong>
+</a>
+<a class="related-link" href="14-stop-and-start-services/index.html">
+  <strong>14. Stop and Start Services</strong>
+</a>
+<a class="related-link" href="15-recover-variables/index.html">
+  <strong>15. Recover Variables</strong>
+</a>
+        </nav>
+      </section>
+      <section id="implementation-map" class="article-section">
+        <h2>Implementation map</h2>
+        <p>The workbook is organized around the operational path from design through deployment readiness.</p>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Phase</th>
+<th scope="col">Chapters</th>
+<th scope="col">Focus</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Plan</td>
+<td><code>00-04</code></td>
+<td>Purpose, scope, target architecture, addressing, naming, DNS, and administrator access choices.</td>
+</tr>
+<tr>
+<td>Network implement</td>
+<td><code>05</code></td>
+<td>Run the consolidated OCI CLI flow in the default Partner/LAD-01 compartment, or the assigned Partner child compartment for the deployment.</td>
+</tr>
+<tr>
+<td>Exadata implement</td>
+<td><code>06-13</code></td>
+<td>Reuse the prepared network baseline and single-compartment aliases to create the bastion VM, Exadata cluster, CDB, backups, credential secrets, and Database Management setup.</td>
+</tr>
+</tbody></table></div>
+      </section>
+      <section id="documentation" class="article-section">
+        <h2>Oracle Official Documentation</h2>
+        <p>These reader-facing Oracle references support the implementation choices and validation checks in the workbook.</p>
+        <div class="documentation-grid">
+          <div class="documentation-group"><h3>Exadata Exascale Readiness</h3><ul class="reference-list"><li><a href="https://docs.oracle.com/en-us/iaas/exadb-xs/doc/preparing-for-exadb-xs-deployment.html" target="_blank" rel="noopener">Preparing for Oracle Exadata Database Service on Exascale Infrastructure</a><span>VCN, client subnet, backup subnet, private subnet, Service Gateway, and DNS planning.</span></li></ul></div><div class="documentation-group"><h3>OCI Networking Security</h3><ul class="reference-list"><li><a href="https://docs.oracle.com/en-us/iaas/Content/Security/Reference/networking_security.htm" target="_blank" rel="noopener">Securing Networking: VCN, Load Balancers, and DNS</a><span>Security posture for VCNs, public and private subnets, route rules, and DNS.</span></li><li><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/networksecuritygroups.htm" target="_blank" rel="noopener">Network Security Groups</a><span>NSG concepts and component-level security rule design.</span></li><li><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/securityrules.htm" target="_blank" rel="noopener">Security Rules</a><span>Stateful and stateless rule behavior for NSGs and security lists.</span></li><li><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/securitylists.htm" target="_blank" rel="noopener">Security Lists</a><span>Security-list guardrails and default security-list review.</span></li></ul></div><div class="documentation-group"><h3>Routing and Private Service Access</h3><ul class="reference-list"><li><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingroutetables.htm" target="_blank" rel="noopener">VCN Route Tables</a><span>Route table design and custom route table management.</span></li><li><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingroutetables_topic-working.htm" target="_blank" rel="noopener">Working with VCN Route Tables and Route Rules</a><span>Route targets including DRG, Internet Gateway, NAT Gateway, and Service Gateway.</span></li><li><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/servicegateway.htm" target="_blank" rel="noopener">Service Gateway</a><span>Private access from a VCN to supported Oracle Services Network services.</span></li></ul></div><div class="documentation-group"><h3>Operations, Bastion, and Governance</h3><ul class="reference-list"><li><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/vcn-flow-logs.htm" target="_blank" rel="noopener">VCN Flow Logs</a><span>Flow log enablement for network troubleshooting and security investigation.</span></li><li><a href="https://docs.oracle.com/en/solutions/use-bastion-service/index.html" target="_blank" rel="noopener">Use OCI Bastion Service</a><span>Managed, audited private administrator access pattern.</span></li><li><a href="https://docs.oracle.com/en-us/iaas/Content/Bastion/Concepts/bastionoverview.htm" target="_blank" rel="noopener">Bastion Overview</a><span>OCI Bastion service behavior and session model.</span></li><li><a href="https://docs.oracle.com/en/solutions/cis-oci-benchmark/index.html" target="_blank" rel="noopener">CIS OCI Benchmark Landing Zone</a><span>Compartment, security, Cloud Guard, and landing-zone posture.</span></li><li><a href="https://docs.oracle.com/en-us/iaas/Content/zero-trust-packet-routing/overview.htm" target="_blank" rel="noopener">OCI Zero Trust Packet Routing Overview</a><span>Optional ZPR overlay and security-attribute caution.</span></li></ul></div><div class="documentation-group"><h3>Secrets and Key Management</h3><ul class="reference-list"><li><a href="https://docs.oracle.com/en-us/iaas/Content/KeyManagement/Concepts/keyoverview.htm" target="_blank" rel="noopener">OCI Vault and Key Management Overview</a><span>Vault and key management context for private service access.</span></li><li><a href="https://docs.oracle.com/en-us/iaas/Content/KeyManagement/Tasks/managingsecrets.htm" target="_blank" rel="noopener">Managing Secrets</a><span>Secret management context for target database and application deployments.</span></li></ul></div>
+        </div>
+      </section>
+      <section id="glossary" class="article-section">
+        <h2>Glossary</h2>
+        <p>Terms are limited to concepts, products, services, and controls used in this workbook.</p>
+        <div class="glossary-block"><h3>Network Baseline</h3><div class="glossary-grid"><article class="glossary-term"><h4>VCN</h4><p>A Virtual Cloud Network that provides the private network boundary for OCI resources.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingVCNs.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>CIDR</h4><p>The IP address range assigned to the VCN, subnet, or routed network segment.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingVCNs.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>Subnet</h4><p>A subdivision of the VCN used to isolate resource roles, routing, and public or private posture.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingVCNs.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>DNS label</h4><p>The VCN or subnet label used to form internal OCI hostnames under oraclevcn.com.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/dns.htm" target="_blank" rel="noopener">Oracle reference</a></article></div></div><div class="glossary-block"><h3>Routing and Gateways</h3><div class="glossary-grid"><article class="glossary-term"><h4>Service Gateway</h4><p>An OCI gateway that lets private resources reach supported Oracle services without public internet traversal.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/servicegateway.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>Internet Gateway</h4><p>The route target used by public subnets that require internet ingress or egress.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingIGs.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>NAT Gateway</h4><p>An outbound-only gateway for private resources that must reach public endpoints not available through Service Gateway.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/NATgateway.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>DRG</h4><p>A Dynamic Routing Gateway that connects the VCN to on-premises, hub, VPN, FastConnect, or peered networks.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/managingDRGs.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>Oracle Services Network</h4><p>The Oracle service address space used by Service Gateway route rules for private service access.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Tasks/servicegateway.htm" target="_blank" rel="noopener">Oracle reference</a></article></div></div><div class="glossary-block"><h3>Security and Operations</h3><div class="glossary-grid"><article class="glossary-term"><h4>NSG</h4><p>A Network Security Group that applies security rules to selected VNICs instead of every resource in a subnet.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/networksecuritygroups.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>Security list</h4><p>A subnet-level security rule set used here as a guardrail while NSGs remain the primary control.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/securitylists.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>OCI Bastion</h4><p>A managed service for time-bound, audited private access to resources without persistent public jump hosts.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Bastion/Concepts/bastionoverview.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>VCN Flow Logs</h4><p>OCI logs that record accepted and rejected network flows for selected VNICs or subnets.</p><a href="https://docs.oracle.com/en-us/iaas/Content/Network/Concepts/vcn-flow-logs.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>Cloud Guard</h4><p>OCI security posture service used to monitor risky changes such as public exposure or overly broad ingress.</p><a href="https://docs.oracle.com/en-us/iaas/cloud-guard/home.htm" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>Zero Trust Packet Routing</h4><p>An optional OCI network policy overlay based on security attributes and ZPR policies.</p><a href="https://docs.oracle.com/en-us/iaas/Content/zero-trust-packet-routing/overview.htm" target="_blank" rel="noopener">Oracle reference</a></article></div></div><div class="glossary-block"><h3>Exadata Readiness</h3><div class="glossary-grid"><article class="glossary-term"><h4>ExaDB-XS</h4><p>Oracle Exadata Database Service on Exascale Infrastructure, the target that will consume this network baseline.</p><a href="https://docs.oracle.com/en-us/iaas/exadb-xs/doc/preparing-for-exadb-xs-deployment.html" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>SCAN</h4><p>Single Client Access Name, a database client connection abstraction that depends on correct network and DNS planning.</p><a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/rilin/about-scan.html" target="_blank" rel="noopener">Oracle reference</a></article><article class="glossary-term"><h4>TCPS</h4><p>Encrypted Oracle Net connectivity commonly associated with production listener hardening on port 2484.</p><a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/netag/configuring-secure-sockets-layer-authentication.html" target="_blank" rel="noopener">Oracle reference</a></article></div></div>
+      </section>
+    </main>
+  </div>
+  <footer class="site-footer">
+    <p><strong>Educational use and validation required.</strong> This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+  </footer>
+  <button class="back-top" type="button" aria-label="Back to top">Back to top</button>
+  <script src="shared-guide-set.js"></script>
+  <script src="assets/workbook.js"></script>
+</body>
+</html>
