@@ -1287,6 +1287,30 @@ Connection to &lt;bastion_public_ip&gt; closed.</code></pre>
   </div>
   <pre class="code-scroll"><code>~/keys/connect-cluster-first-node.sh opc</code></pre>
 </div>
+<p>From Cloud Shell, connect directly to the first cluster node through the bastion as <code>oracle</code> by default:</p>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for Reusable connection commands.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet
+ssh -tt -i "$HOME/keys/$(basename "$SSH_PRIVATE_KEY_FILE")" "${BASTION_SSH_USER:-opc}@${BASTION_PUBLIC_IP}" "~/keys/connect-cluster-first-node.sh"</code></pre>
+</div>
+<p>From Cloud Shell, connect directly to the first cluster node through the bastion as <code>opc</code>:</p>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for Reusable connection commands.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet
+ssh -tt -i "$HOME/keys/$(basename "$SSH_PRIVATE_KEY_FILE")" "${BASTION_SSH_USER:-opc}@${BASTION_PUBLIC_IP}" "~/keys/connect-cluster-first-node.sh opc"</code></pre>
+</div>
       </section><section id="bash-13-allow-ssh-to-the-bastion-nsg" class="article-section">
         <h2>BASH 13 - Allow SSH to the bastion NSG</h2>
         <p>To tighten bastion access, add a single IPv4 address as a <code>/32</code> SSH ingress rule on the bastion network security group. This card creates the reusable script <code>~/workbook/allow-bastion-ssh-source.sh</code>, resolves the current Cloud Shell public IP by default, and calls the reusable script with that IP address. To allow a different source, pass the IP address as the first parameter, for example <code>wb10_card13 203.0.113.10</code>. This workbook uses <code>NSG_BASTION_OCID</code> for bastion access control, so the reusable script updates the bastion NSG used by the VM. It adds the <code>/32</code> rule when missing; it does not remove broader existing rules automatically.</p>
