@@ -1,0 +1,545 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Target OCI Network Architecture | OCI PoC RunBook</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/workbook.css">
+</head>
+<body class="workbook-chapter" data-guide-key="02-target-oci-network-architecture" data-guide-scope="nested">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">OCI</span>
+        <span class="brand-text">
+          <span class="brand-title" data-series-brand-title>OCI PoC RunBook</span>
+          <span class="brand-subtitle" data-series-brand-subtitle>Workbook</span>
+        </span>
+      </a>
+      <div class="top-actions">
+        <a class="top-link" href="../index.html#documentation">Documentation</a>
+        <a class="top-link" href="../index.html#glossary">Glossary</a>
+        <button class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+      </div>
+    </div>
+  </header>
+  <div id="top"></div>
+  <section class="hero hero-compact">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Chapter 02</p>
+        <h1>Target OCI Network Architecture</h1>
+        <p class="subtitle">This chapter defines the target OCI VCN architecture and traffic flows for the Exadata-ready networking baseline. It is written as a network design chapter, not as an Exadata deployment chapter.</p>
+        <div class="hero-meta">
+          <span>Last updated July 6, 2026</span>
+        </div>
+        <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+  <div class="page-grid">
+    <nav class="toc" aria-label="Table of contents">
+      <p>Table of contents</p>
+      <ol><li><a href="#chapter-purpose">Chapter Purpose</a></li><li><a href="#logical-architecture">Logical Architecture</a></li><li><a href="#network-zones">Network Zones</a></li><li><a href="#target-traffic-flows">Target Traffic Flows</a></li><li><a href="#high-level-resource-inventory">High-Level Resource Inventory</a></li><li><a href="#exadata-deployment-inputs">Exadata Deployment Inputs</a></li><li><a href="#acceptance-criteria">Acceptance Criteria</a></li></ol>
+    </nav>
+    <main id="main" class="article">
+      <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../01-scope-and-design-principles/index.html"><span class="nav-card-label">Previous</span><strong>01. Scope and Design Principles</strong></a><a class="chapter-link nav-card" href="../03-addressing-naming-and-dns/index.html"><span class="nav-card-label">Next</span><strong>03. Addressing, Naming, and DNS</strong></a>
+      </nav>
+      <section id="chapter-purpose" class="article-section">
+        <h2>Chapter Purpose</h2>
+        <div class="note-box">This chapter defines the target OCI VCN architecture and traffic flows for the Exadata-ready networking baseline. It is written as a network design chapter, not as an Exadata deployment chapter.</div>
+      </section><section id="logical-architecture" class="article-section">
+        <h2>Logical Architecture</h2>
+        <div class="architecture-infographic" aria-label="Logical OCI network architecture infographic">
+  <div class="architecture-stage architecture-stage-external">
+    <p class="visual-caption">Entry points</p>
+    <div class="architecture-node node-admin">
+      <span class="node-icon" aria-hidden="true">ADM</span>
+      <strong>Administrator workstation</strong>
+      <span>SSH or Bastion session</span>
+    </div>
+    <div class="architecture-node node-internet">
+      <span class="node-icon" aria-hidden="true">WWW</span>
+      <strong>Internet users</strong>
+      <span>HTTPS 443</span>
+    </div>
+    <div class="architecture-node node-hybrid">
+      <span class="node-icon" aria-hidden="true">HYB</span>
+      <strong>On-premises or hub network</strong>
+      <span>FastConnect or Site-to-Site VPN</span>
+    </div>
+  </div>
+
+  <div class="architecture-stage architecture-stage-vcn">
+    <div class="stage-header">
+      <p class="visual-caption">Private VCN zones</p>
+      <span>Database paths stay private; public ingress terminates at the load balancer.</span>
+    </div>
+    <div class="architecture-grid">
+      <div class="architecture-node node-bastion">
+        <span class="node-icon" aria-hidden="true">BST</span>
+        <strong>OCI Bastion or approved jump host</strong>
+        <span>Private TCP 22 path</span>
+      </div>
+      <div class="architecture-node node-lb">
+        <span class="node-icon" aria-hidden="true">LB</span>
+        <strong>Public load balancer subnet</strong>
+        <span>HTTPS to application tier</span>
+      </div>
+      <div class="architecture-node node-drg">
+        <span class="node-icon" aria-hidden="true">DRG</span>
+        <strong>DRG optional</strong>
+        <span>Hybrid routing to private subnets</span>
+      </div>
+      <div class="architecture-node node-apps">
+        <span class="node-icon" aria-hidden="true">APP</span>
+        <strong>Applications subnet</strong>
+        <span>ORDS, APEX, middleware, AI agents</span>
+      </div>
+      <div class="architecture-node node-dbtools">
+        <span class="node-icon" aria-hidden="true">SQL</span>
+        <strong>Database Tools private endpoint subnet</strong>
+        <span>SQL*Net TCP 1521</span>
+      </div>
+      <div class="architecture-node node-client">
+        <span class="node-icon" aria-hidden="true">EXA</span>
+        <strong>Target Exadata client subnet</strong>
+        <span>SCAN, VIP, listener, application SQL*Net</span>
+      </div>
+      <div class="architecture-node node-backup">
+        <span class="node-icon" aria-hidden="true">BKP</span>
+        <strong>Target Exadata backup subnet</strong>
+        <span>Backup and recovery network</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="architecture-stage architecture-stage-services">
+    <p class="visual-caption">Controlled egress</p>
+    <div class="architecture-node node-sgw">
+      <span class="node-icon" aria-hidden="true">SGW</span>
+      <strong>Service Gateway</strong>
+      <span>TCP 443 to Oracle Services Network</span>
+    </div>
+    <div class="architecture-node node-nat">
+      <span class="node-icon" aria-hidden="true">NAT</span>
+      <strong>NAT Gateway optional</strong>
+      <span>Outbound-only public endpoints</span>
+    </div>
+  </div>
+
+  <div class="flow-label flow-admin">SSH / Bastion</div>
+  <div class="flow-label flow-web">HTTPS 443</div>
+  <div class="flow-label flow-sql">SQL*Net TCP 1521</div>
+  <div class="flow-label flow-services">TCP 443 services</div>
+  <div class="flow-label flow-hybrid">Hybrid private routes</div>
+</div>
+      </section><section id="network-zones" class="article-section">
+        <h2>Network Zones</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Zone</th>
+<th scope="col">Subnet</th>
+<th scope="col" class="align-right">CIDR</th>
+<th scope="col">Public IPs allowed?</th>
+<th scope="col">Primary route target</th>
+<th scope="col">Purpose</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Administrator access</td>
+<td><code>subnet-admin</code></td>
+<td class="align-right"><code>10.0.0.0/24</code></td>
+<td>Yes for approved admin hosts</td>
+<td>Internet Gateway for the admin subnet path</td>
+<td>Bastion endpoint, jump host, or approved admin utility hosts</td>
+</tr>
+<tr>
+<td>Database client</td>
+<td><code>subnet-dbclient</code></td>
+<td class="align-right"><code>10.0.1.0/24</code></td>
+<td>No</td>
+<td>Service Gateway, NAT Gateway, optional DRG</td>
+<td>Target Exadata client network for SCAN, VIP, listener, tooling, app SQL*Net</td>
+</tr>
+<tr>
+<td>Database backup</td>
+<td><code>subnet-db-backup</code></td>
+<td class="align-right"><code>10.0.2.0/24</code></td>
+<td>No</td>
+<td>Service Gateway, NAT Gateway</td>
+<td>Target Exadata backup and recovery network</td>
+</tr>
+<tr>
+<td>Database tooling</td>
+<td><code>subnet-dbtools</code></td>
+<td class="align-right"><code>10.0.3.0/28</code></td>
+<td>No</td>
+<td>Service Gateway, NAT Gateway</td>
+<td>Database Tools private endpoint</td>
+</tr>
+<tr>
+<td>Public ingress</td>
+<td><code>subnet-public-lb</code></td>
+<td class="align-right"><code>10.0.10.0/24</code></td>
+<td>Yes, load balancers only</td>
+<td>Internet Gateway</td>
+<td>Public HTTPS entry point to applications</td>
+</tr>
+<tr>
+<td>Application private</td>
+<td><code>subnet-applications</code></td>
+<td class="align-right"><code>10.0.11.0/24</code></td>
+<td>No</td>
+<td>Service Gateway, NAT Gateway, optional DRG</td>
+<td>ORDS, APEX, middleware, AI agents, app services</td>
+</tr>
+</tbody></table></div>
+      </section><section id="target-traffic-flows" class="article-section">
+        <h2>Target Traffic Flows</h2>
+        <h3>4.1 Administrator SSH</h3>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Item</th>
+<th scope="col">Value</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Source</td>
+<td>OCI Bastion service, approved jump host, or approved administrator CIDRs</td>
+</tr>
+<tr>
+<td>Destination</td>
+<td>Target Exadata VM node private client IPs or administrative private hosts</td>
+</tr>
+<tr>
+<td>Protocol</td>
+<td>TCP</td>
+</tr>
+<tr>
+<td>Port</td>
+<td><code>22</code></td>
+</tr>
+<tr>
+<td>Control</td>
+<td><code>nsg-bastion-admin</code> to <code>nsg-exadata-client</code>, least privilege</td>
+</tr>
+<tr>
+<td>Rule</td>
+<td>Do not expose Exadata SSH to <code>0.0.0.0/0</code>.</td>
+</tr>
+</tbody></table></div>
+<h3>4.2 Application database traffic</h3>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Item</th>
+<th scope="col">Value</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Source</td>
+<td><code>nsg-applications</code> and approved hybrid app CIDRs</td>
+</tr>
+<tr>
+<td>Destination</td>
+<td><code>nsg-exadata-client</code></td>
+</tr>
+<tr>
+<td>Protocol</td>
+<td>TCP</td>
+</tr>
+<tr>
+<td>Port</td>
+<td>TCP <code>1521</code> over private subnets for this guide. For production TCPS on <code>2484</code>, <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/netag/configuring-secure-sockets-layer-authentication.html" target="_blank" rel="noopener">click here</a>.</td>
+</tr>
+<tr>
+<td>Target</td>
+<td>SCAN listener and RAC database service, not node-specific SID</td>
+</tr>
+<tr>
+<td>Rule</td>
+<td>Public load balancer must never forward directly to database listener ports.</td>
+</tr>
+</tbody></table></div>
+<h3>4.3 Database Tools traffic</h3>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Item</th>
+<th scope="col">Value</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Source</td>
+<td><code>nsg-dbtools-endpoint</code></td>
+</tr>
+<tr>
+<td>Destination</td>
+<td><code>nsg-exadata-client</code></td>
+</tr>
+<tr>
+<td>Protocol</td>
+<td>TCP</td>
+</tr>
+<tr>
+<td>Port</td>
+<td>TCP <code>1521</code> over private subnets for this guide. For production TCPS on <code>2484</code>, <a href="https://docs.oracle.com/en/database/oracle/oracle-database/26/netag/configuring-secure-sockets-layer-authentication.html" target="_blank" rel="noopener">click here</a>.</td>
+</tr>
+<tr>
+<td>Rule</td>
+<td>Database Tools access is private only.</td>
+</tr>
+</tbody></table></div>
+<h3>4.4 Backup and recovery traffic</h3>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Item</th>
+<th scope="col">Value</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Source</td>
+<td>Target Exadata backup subnet</td>
+</tr>
+<tr>
+<td>Destination</td>
+<td>Oracle Services Network through Service Gateway</td>
+</tr>
+<tr>
+<td>Protocol</td>
+<td>TCP</td>
+</tr>
+<tr>
+<td>Port</td>
+<td><code>443</code></td>
+</tr>
+<tr>
+<td>Rule</td>
+<td>Backup path must not require public IP addresses.</td>
+</tr>
+</tbody></table></div>
+<h3>4.5 OCI service traffic</h3>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Item</th>
+<th scope="col">Value</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Source</td>
+<td>Private subnets that require OCI APIs</td>
+</tr>
+<tr>
+<td>Destination</td>
+<td>Oracle Services Network through Service Gateway</td>
+</tr>
+<tr>
+<td>Protocol</td>
+<td>TCP</td>
+</tr>
+<tr>
+<td>Port</td>
+<td><code>443</code></td>
+</tr>
+<tr>
+<td>Use cases</td>
+<td>Object Storage, Autonomous Recovery Service paths, YUM repositories, IAM, Vault, Monitoring, Events, Logging</td>
+</tr>
+</tbody></table></div>
+<h3>4.6 Outbound public traffic</h3>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Item</th>
+<th scope="col">Value</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Source</td>
+<td>Private subnets with approved outbound dependencies</td>
+</tr>
+<tr>
+<td>Destination</td>
+<td>Public internet endpoints not supported by Service Gateway</td>
+</tr>
+<tr>
+<td>Protocol</td>
+<td>Approved ports only</td>
+</tr>
+<tr>
+<td>Target</td>
+<td><code>gw-nat</code></td>
+</tr>
+<tr>
+<td>Rule</td>
+<td>NAT Gateway is outbound-only and must not be used to justify inbound public database exposure.</td>
+</tr>
+</tbody></table></div>
+      </section><section id="high-level-resource-inventory" class="article-section">
+        <h2>High-Level Resource Inventory</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Resource type</th>
+<th scope="col">Recommended name</th>
+<th scope="col">Required?</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>VCN</td>
+<td><code>VCN-&lt;compartment-name&gt;</code> by default, for example <code>VCN-LAD-01</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Internet Gateway</td>
+<td><code>gw-internet</code></td>
+<td>Yes, for admin and public load balancer subnets</td>
+</tr>
+<tr>
+<td>Service Gateway</td>
+<td><code>gw-service</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>NAT Gateway</td>
+<td><code>gw-nat</code></td>
+<td>Yes for this runbook</td>
+</tr>
+<tr>
+<td>Dynamic Routing Gateway</td>
+<td><code>dynamic-routing-gateway</code></td>
+<td>Optional; required for hybrid connectivity</td>
+</tr>
+<tr>
+<td>Route table</td>
+<td><code>rt-public</code></td>
+<td>Yes, shared by public subnets</td>
+</tr>
+<tr>
+<td>Route table</td>
+<td><code>rt-private</code></td>
+<td>Yes, shared by private subnets</td>
+</tr>
+<tr>
+<td>NSG</td>
+<td><code>nsg-exadata-client</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>NSG</td>
+<td><code>nsg-applications</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>NSG</td>
+<td><code>nsg-dbtools-endpoint</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>NSG</td>
+<td><code>nsg-bastion-admin</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>NSG</td>
+<td><code>nsg-public-lb</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Security list</td>
+<td><code>sl-backup</code></td>
+<td>Yes, for backup subnet access</td>
+</tr>
+</tbody></table></div>
+      </section><section id="exadata-deployment-inputs" class="article-section">
+        <h2>Exadata Deployment Inputs</h2>
+        <p>The PoC implementation team should use this network baseline as follows:</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Exadata deployment input</th>
+<th scope="col">Value from this workbook</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>VCN</td>
+<td><code>VCN-&lt;compartment-name&gt;</code> by default, for example <code>VCN-LAD-01</code></td>
+</tr>
+<tr>
+<td>Client subnet</td>
+<td><code>subnet-dbclient</code>, <code>10.0.1.0/24</code></td>
+</tr>
+<tr>
+<td>Backup subnet</td>
+<td><code>subnet-db-backup</code>, <code>10.0.2.0/24</code></td>
+</tr>
+<tr>
+<td>Client NSG</td>
+<td><code>nsg-exadata-client</code></td>
+</tr>
+<tr>
+<td>Backup access control</td>
+<td><code>sl-backup</code></td>
+</tr>
+<tr>
+<td>Hostname prefix</td>
+<td>Must be compatible with VCN and subnet DNS labels</td>
+</tr>
+<tr>
+<td>SCAN resolution</td>
+<td>Relies on VCN DNS resolver and correct domain labels</td>
+</tr>
+<tr>
+<td>Backup access</td>
+<td>Relies on Service Gateway and backup subnet egress TCP <code>443</code></td>
+</tr>
+<tr>
+<td>Admin access</td>
+<td>Uses OCI Bastion or approved private jump-host path</td>
+</tr>
+</tbody></table></div>
+      </section><section id="acceptance-criteria" class="article-section">
+        <h2>Acceptance Criteria</h2>
+        <p>The architecture is approved when:</p>
+<ul class="article-list">
+<li>Database, application, public ingress, tooling, backup, and administration zones are separated.</li>
+<li>The target Exadata subnets are private and have enough address capacity for scale-out.</li>
+<li>Public ingress is isolated to the load balancer subnet.</li>
+<li>No direct internet route exists for the target Exadata client or backup subnets.</li>
+<li>Route tables and NSGs are aligned to the traffic flows in this chapter.</li>
+</ul>
+      </section>
+      <section id="chapter-navigation" class="article-section">
+        <h2>Chapter navigation</h2>
+        <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../01-scope-and-design-principles/index.html"><span class="nav-card-label">Previous</span><strong>01. Scope and Design Principles</strong></a><a class="chapter-link nav-card" href="../03-addressing-naming-and-dns/index.html"><span class="nav-card-label">Next</span><strong>03. Addressing, Naming, and DNS</strong></a>
+      </nav>
+        <div class="two-up">
+          <a class="content-card link-card" href="../index.html#documentation"><strong>Series documentation</strong></a>
+          <a class="content-card link-card" href="../index.html#glossary"><strong>Series glossary</strong></a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer class="site-footer">
+    <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+  </footer>
+  <button class="back-top" type="button" aria-label="Back to top">Back to top</button>
+  <script src="../shared-guide-set.js"></script>
+  <script src="../assets/workbook.js"></script>
+</body>
+</html>

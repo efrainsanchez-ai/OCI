@@ -1,0 +1,475 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Addressing, Naming, and DNS | OCI PoC RunBook</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/workbook.css">
+</head>
+<body class="workbook-chapter" data-guide-key="03-addressing-naming-and-dns" data-guide-scope="nested">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">OCI</span>
+        <span class="brand-text">
+          <span class="brand-title" data-series-brand-title>OCI PoC RunBook</span>
+          <span class="brand-subtitle" data-series-brand-subtitle>Workbook</span>
+        </span>
+      </a>
+      <div class="top-actions">
+        <a class="top-link" href="../index.html#documentation">Documentation</a>
+        <a class="top-link" href="../index.html#glossary">Glossary</a>
+        <button class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+      </div>
+    </div>
+  </header>
+  <div id="top"></div>
+  <section class="hero hero-compact">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Chapter 03</p>
+        <h1>Addressing, Naming, and DNS</h1>
+        <p class="subtitle">This chapter defines the IP addressing, subnet names, DNS labels, and resolver posture required for an Exadata-ready OCI VCN baseline.</p>
+        <div class="hero-meta">
+          <span>Last updated July 6, 2026</span>
+        </div>
+        <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+  <div class="page-grid">
+    <nav class="toc" aria-label="Table of contents">
+      <p>Table of contents</p>
+      <ol><li><a href="#chapter-purpose">Chapter Purpose</a></li><li><a href="#logical-architecture">Logical Architecture</a></li><li><a href="#cidr-plan">CIDR Plan</a></li><li><a href="#naming-standard">Naming Standard</a></li><li><a href="#dns-label-plan">DNS Label Plan</a></li><li><a href="#dns-resolver-posture">DNS Resolver Posture</a></li><li><a href="#addressing-validation-checklist">Addressing Validation Checklist</a></li></ol>
+    </nav>
+    <main id="main" class="article">
+      <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../02-target-oci-network-architecture/index.html"><span class="nav-card-label">Previous</span><strong>02. Target OCI Network Architecture</strong></a><a class="chapter-link nav-card" href="../04-bastion-and-administrator-access/index.html"><span class="nav-card-label">Next</span><strong>04. Bastion and Administrator Access</strong></a>
+      </nav>
+      <section id="chapter-purpose" class="article-section">
+        <h2>Chapter Purpose</h2>
+        <div class="note-box">This chapter defines the IP addressing, subnet names, DNS labels, and resolver posture required for an Exadata-ready OCI VCN baseline.</div>
+      </section><section id="logical-architecture" class="article-section">
+        <h2>Logical Architecture</h2>
+        <div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Text</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for Logical Architecture.</span>
+  </div>
+  <pre class="code-scroll"><code>VCN: VCN-&lt;compartment-name&gt; default, for example VCN-LAD-01 / 10.0.0.0/16 default / DNS label poc
+  |
+  +-- subnet-admin        10.0.0.0/24   DNS: admin.poc.oraclevcn.com
+  +-- subnet-dbclient     10.0.1.0/24   DNS: client.poc.oraclevcn.com
+  +-- subnet-db-backup    10.0.2.0/24   DNS: backup.poc.oraclevcn.com
+  +-- subnet-dbtools      10.0.3.0/28   DNS: dbtools.poc.oraclevcn.com
+  +-- subnet-public-lb    10.0.10.0/24  DNS: publb.poc.oraclevcn.com
+  +-- subnet-applications 10.0.11.0/24  DNS: apps.poc.oraclevcn.com
+  |
+  +-- Internet and VCN Resolver
+      +-- Optional enterprise DNS forwarding</code></pre>
+</div>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Component used in this workbook</th>
+<th scope="col">Role in the logical architecture</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>VCN-&lt;compartment-name&gt;</code> default, for example <code>VCN-LAD-01</code></td>
+<td>Parent CIDR and DNS domain boundary for all named subnets.</td>
+</tr>
+<tr>
+<td>Six planned subnet CIDRs</td>
+<td>Fixed address blocks for admin, Exadata client, backup, tooling, public load balancer, and application zones.</td>
+</tr>
+<tr>
+<td>DNS labels</td>
+<td>Stable VCN and subnet labels used to derive private DNS names.</td>
+</tr>
+<tr>
+<td>Internet and VCN Resolver</td>
+<td>Default resolver posture for VCN hostnames and Exadata client naming.</td>
+</tr>
+</tbody></table></div>
+      </section><section id="cidr-plan" class="article-section">
+        <h2>CIDR Plan</h2>
+        <h3>2.1 VCN CIDR</h3>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Item</th>
+<th scope="col">Value</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>VCN CIDR</td>
+<td><code>10.0.0.0/16</code> by default; configurable in Chapter 05 through <code>VCN_CIDR</code></td>
+</tr>
+<tr>
+<td>Address count</td>
+<td>65,536 total IPv4 addresses before OCI reservations</td>
+</tr>
+<tr>
+<td>Overlap rule</td>
+<td>Must not overlap with on-premises, hub VCNs, DR VCNs, peered VCNs, or planned landing-zone CIDRs</td>
+</tr>
+</tbody></table></div>
+<p>If you change <code>VCN_CIDR</code> in the implementation runbook, keep the subnet CIDRs in this workbook inside that selected VCN range or adjust the subnet plan before creating the subnets.</p>
+<h3>2.2 Subnet CIDRs</h3>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Subnet</th>
+<th scope="col" class="align-right">CIDR</th>
+<th scope="col">Size rationale</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>subnet-admin</code></td>
+<td class="align-right"><code>10.0.0.0/24</code></td>
+<td>Large enough for bastion endpoint, jump-host exception, and admin utilities</td>
+</tr>
+<tr>
+<td><code>subnet-dbclient</code></td>
+<td class="align-right"><code>10.0.1.0/24</code></td>
+<td>Enough headroom for Exadata client interface IPs, SCAN, VIPs, and planned growth</td>
+</tr>
+<tr>
+<td><code>subnet-db-backup</code></td>
+<td class="align-right"><code>10.0.2.0/24</code></td>
+<td>Enough headroom for backup interfaces and target database nodes</td>
+</tr>
+<tr>
+<td><code>subnet-dbtools</code></td>
+<td class="align-right"><code>10.0.3.0/28</code></td>
+<td>Small private endpoint subnet</td>
+</tr>
+<tr>
+<td><code>subnet-public-lb</code></td>
+<td class="align-right"><code>10.0.10.0/24</code></td>
+<td>Public load balancer subnet with room for LB scaling</td>
+</tr>
+<tr>
+<td><code>subnet-applications</code></td>
+<td class="align-right"><code>10.0.11.0/24</code></td>
+<td>Private application and middleware subnet</td>
+</tr>
+</tbody></table></div>
+<h3>2.3 Reserved Expansion Space</h3>
+<p>Do not consume the rest of <code>10.0.0.0/16</code> without architecture approval. Suggested reserved ranges:</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Reserved CIDR</th>
+<th scope="col">Reserved use</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>10.0.4.0/22</code></td>
+<td>Additional private database tooling, jump services, management endpoints</td>
+</tr>
+<tr>
+<td><code>10.0.12.0/22</code></td>
+<td>Additional application tiers</td>
+</tr>
+<tr>
+<td><code>10.0.20.0/22</code></td>
+<td>Internal load balancers or service mesh</td>
+</tr>
+<tr>
+<td><code>10.0.30.0/22</code></td>
+<td>Observability, logging collectors, security appliances</td>
+</tr>
+<tr>
+<td><code>10.0.40.0/21</code></td>
+<td>Disaster recovery staging or replication utilities</td>
+</tr>
+</tbody></table></div>
+      </section><section id="naming-standard" class="article-section">
+        <h2>Naming Standard</h2>
+        <p>Use lowercase names with hyphens for OCI resources. Use clear role-based names instead of generic names.</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Resource</th>
+<th scope="col">Name</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>VCN</td>
+<td><code>VCN-&lt;compartment-name&gt;</code> default, for example <code>VCN-LAD-01</code></td>
+</tr>
+<tr>
+<td>Internet Gateway</td>
+<td><code>gw-internet</code></td>
+</tr>
+<tr>
+<td>Service Gateway</td>
+<td><code>gw-service</code></td>
+</tr>
+<tr>
+<td>NAT Gateway</td>
+<td><code>gw-nat</code></td>
+</tr>
+<tr>
+<td>DRG</td>
+<td><code>dynamic-routing-gateway</code></td>
+</tr>
+<tr>
+<td>Bastion/admin subnet</td>
+<td><code>subnet-admin</code></td>
+</tr>
+<tr>
+<td>Exadata client subnet</td>
+<td><code>subnet-dbclient</code></td>
+</tr>
+<tr>
+<td>Exadata backup subnet</td>
+<td><code>subnet-db-backup</code></td>
+</tr>
+<tr>
+<td>Database Tools endpoint subnet</td>
+<td><code>subnet-dbtools</code></td>
+</tr>
+<tr>
+<td>Public load balancer subnet</td>
+<td><code>subnet-public-lb</code></td>
+</tr>
+<tr>
+<td>Applications subnet</td>
+<td><code>subnet-applications</code></td>
+</tr>
+<tr>
+<td>Exadata client NSG</td>
+<td><code>nsg-exadata-client</code></td>
+</tr>
+<tr>
+<td>Exadata backup security list</td>
+<td><code>sl-backup</code></td>
+</tr>
+<tr>
+<td>Application NSG</td>
+<td><code>nsg-applications</code></td>
+</tr>
+<tr>
+<td>Database Tools NSG</td>
+<td><code>nsg-dbtools-endpoint</code></td>
+</tr>
+<tr>
+<td>Bastion/admin NSG</td>
+<td><code>nsg-bastion-admin</code></td>
+</tr>
+<tr>
+<td>Public load balancer NSG</td>
+<td><code>nsg-public-lb</code></td>
+</tr>
+</tbody></table></div>
+      </section><section id="dns-label-plan" class="article-section">
+        <h2>DNS Label Plan</h2>
+        <p>DNS labels must be selected before target Exadata provisioning because Exadata node FQDNs and SCAN resolution depend on the VCN and subnet domain labels. OCI appends <code>oraclevcn.com</code> automatically, so the VCN DNS label <code>poc</code> creates the VCN DNS domain <code>poc.oraclevcn.com</code>.</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Resource</th>
+<th scope="col">DNS label</th>
+<th scope="col">Resulting DNS domain</th>
+<th scope="col">Notes</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>VCN</td>
+<td><code>poc</code></td>
+<td><code>poc.oraclevcn.com</code></td>
+<td>Stable VCN DNS label used consistently across PoC environments.</td>
+</tr>
+<tr>
+<td>Bastion/admin subnet</td>
+<td><code>admin</code></td>
+<td><code>admin.poc.oraclevcn.com</code></td>
+<td>Short and aligned to the subnet name.</td>
+</tr>
+<tr>
+<td>Exadata client subnet</td>
+<td><code>client</code></td>
+<td><code>client.poc.oraclevcn.com</code></td>
+<td>Used in Exadata node FQDNs.</td>
+</tr>
+<tr>
+<td>Exadata backup subnet</td>
+<td><code>backup</code></td>
+<td><code>backup.poc.oraclevcn.com</code></td>
+<td>Used for backup interface naming context.</td>
+</tr>
+<tr>
+<td>Database Tools subnet</td>
+<td><code>dbtools</code></td>
+<td><code>dbtools.poc.oraclevcn.com</code></td>
+<td>Private endpoint zone.</td>
+</tr>
+<tr>
+<td>Public load balancer subnet</td>
+<td><code>publb</code></td>
+<td><code>publb.poc.oraclevcn.com</code></td>
+<td>Public entry point only.</td>
+</tr>
+<tr>
+<td>Applications subnet</td>
+<td><code>apps</code></td>
+<td><code>apps.poc.oraclevcn.com</code></td>
+<td>Private application tier.</td>
+</tr>
+</tbody></table></div>
+<p>Example Exadata node FQDN shape:</p>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Text</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for DNS Label Plan.</span>
+  </div>
+  <pre class="code-scroll"><code>&lt;hostname-prefix&gt;-&lt;generated-node-suffix&gt;.&lt;subnet-dns-label&gt;.poc.oraclevcn.com</code></pre>
+</div>
+<p>Example:</p>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Text</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for DNS Label Plan.</span>
+  </div>
+  <pre class="code-scroll"><code>exadata-abcde1.client.poc.oraclevcn.com</code></pre>
+</div>
+      </section><section id="dns-resolver-posture" class="article-section">
+        <h2>DNS Resolver Posture</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Decision</th>
+<th scope="col">Standard</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>VCN DNS resolution</td>
+<td>Enabled</td>
+</tr>
+<tr>
+<td>Resolver</td>
+<td>Internet and VCN Resolver unless enterprise DNS architecture requires custom forwarding</td>
+</tr>
+<tr>
+<td>Exadata client DNS</td>
+<td>Must support node names and target SCAN resolution</td>
+</tr>
+<tr>
+<td>Hybrid DNS</td>
+<td>Forwarding or conditional resolution must be designed before on-premises applications connect to the database</td>
+</tr>
+<tr>
+<td>Public DNS</td>
+<td>Not used for database listener exposure</td>
+</tr>
+</tbody></table></div>
+<h3>5.1 Hybrid DNS Considerations</h3>
+<p>If applications or administrators connect from on-premises through FastConnect or Site-to-Site VPN:</p>
+<ul class="article-list">
+<li>Confirm whether on-premises DNS can resolve <code>*.oraclevcn.com</code> names.</li>
+<li>Configure conditional forwarding if enterprise DNS is authoritative for internal zones.</li>
+<li>Confirm that target SCAN names resolve from the application network.</li>
+<li>Avoid split-brain DNS where the same database service name resolves differently from different networks.</li>
+</ul>
+      </section><section id="addressing-validation-checklist" class="article-section">
+        <h2>Addressing Validation Checklist</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Check</th>
+<th scope="col">Expected result</th>
+<th scope="col" class="status-col">Status</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>VCN CIDR does not overlap with on-premises</td>
+<td>Confirmed by network architecture team</td>
+<td class="status-cell">[ ] Completed [ ] Not Completed</td>
+</tr>
+<tr>
+<td>VCN CIDR does not overlap with hub or peered VCNs</td>
+<td>Confirmed</td>
+<td class="status-cell">[ ] Completed [ ] Not Completed</td>
+</tr>
+<tr>
+<td>VCN DNS label is approved</td>
+<td><code>poc</code> or approved equivalent</td>
+<td class="status-cell">[ ] Completed [ ] Not Completed</td>
+</tr>
+<tr>
+<td>VCN DNS domain is confirmed</td>
+<td><code>poc.oraclevcn.com</code> or approved equivalent</td>
+<td class="status-cell">[ ] Completed [ ] Not Completed</td>
+</tr>
+<tr>
+<td>Exadata client subnet DNS label is approved</td>
+<td><code>client</code> or approved equivalent</td>
+<td class="status-cell">[ ] Completed [ ] Not Completed</td>
+</tr>
+<tr>
+<td>Admin subnet DNS domain is confirmed</td>
+<td><code>admin.poc.oraclevcn.com</code> or approved equivalent</td>
+<td class="status-cell">[ ] Completed [ ] Not Completed</td>
+</tr>
+<tr>
+<td>Exadata backup subnet DNS label is approved</td>
+<td><code>backup</code> or approved equivalent</td>
+<td class="status-cell">[ ] Completed [ ] Not Completed</td>
+</tr>
+<tr>
+<td>Subnet CIDRs are reserved in IPAM</td>
+<td>Reserved</td>
+<td class="status-cell">[ ] Completed [ ] Not Completed</td>
+</tr>
+<tr>
+<td>Expansion blocks are reserved</td>
+<td>Reserved</td>
+<td class="status-cell">[ ] Completed [ ] Not Completed</td>
+</tr>
+<tr>
+<td>Hybrid DNS plan exists, if required</td>
+<td>Documented</td>
+<td class="status-cell">[ ] Completed [ ] Not Completed</td>
+</tr>
+</tbody></table></div>
+      </section>
+      <section id="chapter-navigation" class="article-section">
+        <h2>Chapter navigation</h2>
+        <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../02-target-oci-network-architecture/index.html"><span class="nav-card-label">Previous</span><strong>02. Target OCI Network Architecture</strong></a><a class="chapter-link nav-card" href="../04-bastion-and-administrator-access/index.html"><span class="nav-card-label">Next</span><strong>04. Bastion and Administrator Access</strong></a>
+      </nav>
+        <div class="two-up">
+          <a class="content-card link-card" href="../index.html#documentation"><strong>Series documentation</strong></a>
+          <a class="content-card link-card" href="../index.html#glossary"><strong>Series glossary</strong></a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer class="site-footer">
+    <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+  </footer>
+  <button class="back-top" type="button" aria-label="Back to top">Back to top</button>
+  <script src="../shared-guide-set.js"></script>
+  <script src="../assets/workbook.js"></script>
+</body>
+</html>

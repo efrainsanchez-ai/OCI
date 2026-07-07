@@ -1,0 +1,2337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Network | OCI PoC RunBook</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/workbook.css">
+</head>
+<body class="workbook-chapter" data-guide-key="05-Network" data-guide-scope="nested">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">OCI</span>
+        <span class="brand-text">
+          <span class="brand-title" data-series-brand-title>OCI PoC RunBook</span>
+          <span class="brand-subtitle" data-series-brand-subtitle>Workbook</span>
+        </span>
+      </a>
+      <div class="top-actions">
+        <a class="top-link" href="../index.html#documentation">Documentation</a>
+        <a class="top-link" href="../index.html#glossary">Glossary</a>
+        <button class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+      </div>
+    </div>
+  </header>
+  <div id="top"></div>
+  <section class="hero hero-compact">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Chapter 05</p>
+        <h1>Network</h1>
+        <p class="subtitle">Run this sequence only after the <a href="../00-oci-poc-runbook/index.html#initialize-the-workbook-environment">Chapter 00 workbook environment</a> is ready. Confirm that <code>~/workbook/cli.env</code> exists, <code>~/workbook/helpers.sh</code> exists, and the helper functions are sourced in the current shell.</p>
+        <div class="hero-meta">
+          <span>Last updated July 6, 2026</span>
+        </div>
+        <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+  <div class="page-grid">
+    <nav class="toc" aria-label="Table of contents">
+      <p>Table of contents</p>
+      <ol><li><a href="#consolidated-oci-cli-artifact-creation">Consolidated OCI CLI Artifact Creation</a></li><li><a href="#generated-report-text-files">Generated Report Text Files</a></li></ol>
+    </nav>
+    <main id="main" class="article">
+      <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../04-bastion-and-administrator-access/index.html"><span class="nav-card-label">Previous</span><strong>04. Bastion and Administrator Access</strong></a><a class="chapter-link nav-card" href="../06-exadata-environment-initialization/index.html"><span class="nav-card-label">Next</span><strong>06. Exadata Environment Initialization</strong></a>
+      </nav>
+      <section id="consolidated-oci-cli-artifact-creation" class="article-section">
+        <h2>Consolidated OCI CLI Artifact Creation</h2>
+        <p>Run this sequence only after the <a href="../00-oci-poc-runbook/index.html#initialize-the-workbook-environment">Chapter 00 workbook environment</a> is ready. Confirm that <code>~/workbook/cli.env</code> exists, <code>~/workbook/helpers.sh</code> exists, and the helper functions are sourced in the current shell.</p>
+<p>The Bash cards below consolidate the workbook creation steps into one ordered OCI Cloud Shell flow. They use the pre-created <code>(root)/Partner/LAD-01</code> compartment by default as the active target and create the baseline VCN, gateways, route tables, subnets, NSGs, and core Exadata client access rules in that single compartment. The assigned child compartment name can change for other deployments.</p>
+<h3>BASH 01 - Verify Cloud Shell runtime</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step in OCI Cloud Shell from the OCI Console to confirm the OCI CLI and Bash versions used by this runbook.</span>
+  </div>
+  <pre class="code-scroll"><code>oci --version
+bash --version | sed -n '1p'</code></pre>
+</div>
+<h3>OUTPUT 01 - Expected Cloud Shell runtime output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that OCI Cloud Shell reports the expected OCI CLI and Bash versions for this workbook section.</span>
+  </div>
+  <pre class="code-scroll"><code>3.73.1
+GNU bash, version 4.4.20(1)-release (aarch64-redhat-linux-gnu)</code></pre>
+</div>
+<h3>BASH 02 - Create workbook shell script</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create <code>~/workbook/env.sh</code>, which enters the workbook directory, loads helpers and variables, sets a minimal shell prompt, and prints the preflight table used by the network runbook.</span>
+  </div>
+  <pre class="code-scroll"><code>cd ~/workbook || return 1
+cat &gt; ~/workbook/env.sh &lt;&lt;'EOF'
+cd ~/workbook || return 1
+. ./helpers.sh || return 1
+load_cli_env || return 1
+PS1='$ '
+
+if [ "${1:-}" = "--quiet" ]; then
+  return 0
+fi
+
+clear
+printf '%-28s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "----------------------------" "-----" \
+  "TENANCY_ID" "$TENANCY_ID" \
+  "REGION" "$REGION" \
+  "POC_PARENT_COMPARTMENT_NAME" "${POC_PARENT_COMPARTMENT_NAME:-Partner}" \
+  "POC_COMPARTMENT_NAME" "${POC_COMPARTMENT_NAME:-LAD-01 default; BASH 04 can override}" \
+  "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID" \
+  "VCN_NAME" "${VCN_NAME:-VCN-${POC_COMPARTMENT_NAME:-LAD-01}}" \
+  "VCN_CIDR" "${VCN_CIDR:-10.0.0.0/16}"
+EOF
+chmod 700 ~/workbook/env.sh
+
+clear
+printf '%-28s | %s\n' \
+  "SCRIPT" "$HOME/workbook/env.sh" \
+  "STATUS" "created" \
+  "NEXT_STEP" "Run BASH 03 to load the workbook shell and preflight table"</code></pre>
+</div>
+<h3>BASH 03 - Load workbook shell and run preflight</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step after BASH 02 to source <code>~/workbook/env.sh</code>, load the workbook helpers and variables into the current shell, and display prerequisite variables for the network runbook, the single pre-created PoC compartment model, and the VCN CIDR default.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh</code></pre>
+</div>
+<h3>OUTPUT 03 - Expected network runbook preflight output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the expected prerequisite variable table before running the consolidated artifact creation sequence.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                     | VALUE
+---------------------------- | -----
+TENANCY_ID                   | &lt;tenancy_ocid&gt;
+REGION                       | &lt;region&gt;
+POC_PARENT_COMPARTMENT_NAME  | Partner
+POC_COMPARTMENT_NAME         | LAD-01
+POC_COMPARTMENT_OCID         | &lt;poc_compartment_ocid&gt;
+VCN_NAME                     | VCN-LAD-01
+VCN_CIDR                     | 10.0.0.0/16</code></pre>
+</div>
+<h3>BASH 04 - Resolve PoC compartment and VCN CIDR</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to resolve the pre-created <code>(root)/Partner/LAD-01</code> compartment by default, set the VCN name to <code>VCN-&lt;compartment-name&gt;</code> by default, set the VCN CIDR block with <code>10.0.0.0/16</code> as the default, save <code>POC_COMPARTMENT_OCID</code>, and alias every workbook compartment variable to the same OCID. Enter a different assigned child compartment name if the deployment uses one. If you enter a different VCN CIDR, review the subnet CIDRs in the later subnet creation cards before execution and keep every subnet inside the selected VCN range.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card04() {
+
+POC_PARENT_COMPARTMENT_NAME="${POC_PARENT_COMPARTMENT_NAME:-Partner}"
+if [ -z "${POC_COMPARTMENT_NAME:-}" ]; then
+  printf 'Enter assigned PoC compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME" &gt;&amp;2
+  IFS= read -r POC_COMPARTMENT_NAME
+  POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
+fi
+
+if [ -z "${VCN_CIDR:-}" ]; then
+  printf 'Enter VCN CIDR block [10.0.0.0/16]: ' &gt;&amp;2
+  IFS= read -r VCN_CIDR
+  VCN_CIDR="${VCN_CIDR:-10.0.0.0/16}"
+fi
+
+if [ -z "${VCN_NAME:-}" ]; then
+  DEFAULT_VCN_NAME="VCN-${POC_COMPARTMENT_NAME}"
+  printf 'Enter VCN name. Press Enter to accept default [%s], or type a different name: ' "$DEFAULT_VCN_NAME" &gt;&amp;2
+  IFS= read -r VCN_NAME
+  VCN_NAME="${VCN_NAME:-$DEFAULT_VCN_NAME}"
+fi
+
+if [ -z "$TENANCY_ID" ] || [ "$TENANCY_ID" = "&lt;tenancy_ocid&gt;" ]; then
+  printf 'STOP: TENANCY_ID is not set. Run Chapter 00 profile discovery first.\n' &gt;&amp;2
+  return 1
+fi
+
+POC_PARENT_COMPARTMENT_OCID="$(
+  oci iam compartment list \
+    --compartment-id "$TENANCY_ID" \
+    --all \
+    --query "data[?name=='$POC_PARENT_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+    --raw-output
+)"
+
+if [ -z "$POC_PARENT_COMPARTMENT_OCID" ] || [ "$POC_PARENT_COMPARTMENT_OCID" = "null" ]; then
+  printf 'STOP: Parent compartment "%s" was not found under the tenancy root.\n' \
+    "$POC_PARENT_COMPARTMENT_NAME" &gt;&amp;2
+  return 1
+fi
+
+POC_COMPARTMENT_OCID="$(
+  oci iam compartment list \
+    --compartment-id "$POC_PARENT_COMPARTMENT_OCID" \
+    --all \
+    --query "data[?name=='$POC_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+    --raw-output
+)"
+
+if [ -z "$POC_COMPARTMENT_OCID" ] || [ "$POC_COMPARTMENT_OCID" = "null" ]; then
+  printf 'STOP: PoC compartment "%s/%s" was not found.\n' \
+    "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" &gt;&amp;2
+  return 1
+fi
+
+upsert_cli_env POC_PARENT_COMPARTMENT_NAME "$POC_PARENT_COMPARTMENT_NAME"
+upsert_cli_env POC_PARENT_COMPARTMENT_OCID "$POC_PARENT_COMPARTMENT_OCID"
+upsert_cli_env POC_COMPARTMENT_NAME "$POC_COMPARTMENT_NAME"
+upsert_cli_env POC_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+upsert_cli_env VCN_NAME "$VCN_NAME"
+upsert_cli_env VCN_CIDR "$VCN_CIDR"
+upsert_cli_env PARENT_COMPARTMENT_NAME "$POC_PARENT_COMPARTMENT_NAME"
+upsert_cli_env PARENT_COMPARTMENT_OCID "$POC_PARENT_COMPARTMENT_OCID"
+upsert_cli_env NETWORK_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+upsert_cli_env SECURITY_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+upsert_cli_env DATABASE_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+upsert_cli_env ADMIN_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+upsert_cli_env APPLICATION_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+upsert_cli_env LOG_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+}
+
+wb05_card04</code></pre>
+</div>
+<h3>BASH 05 - Reload compartment environment and print summary</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step after BASH 04 to reload <code>~/workbook/cli.env</code>, ensure the single-compartment aliases are recorded from <code>POC_COMPARTMENT_OCID</code>, default <code>VCN_CIDR</code> to <code>10.0.0.0/16</code> when it is missing or invalid, and confirm the final values before creating VCN artifacts.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card05() {
+
+if [ -z "${POC_COMPARTMENT_OCID:-}" ] || [ "${POC_COMPARTMENT_OCID#ocid1.compartment.oc1}" = "$POC_COMPARTMENT_OCID" ]; then
+  clear
+  printf 'STOP: POC_COMPARTMENT_OCID is not set. Run BASH 04 before continuing.\n' &gt;&amp;2
+  return 1
+else
+  POC_PARENT_COMPARTMENT_NAME="${POC_PARENT_COMPARTMENT_NAME:-Partner}"
+  POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
+
+  if [ -z "${VCN_NAME:-}" ]; then
+    VCN_NAME="VCN-${POC_COMPARTMENT_NAME}"
+  fi
+
+  case "${VCN_CIDR:-}" in
+    ""|*[!0-9./]*|*/*/*)
+      VCN_CIDR="10.0.0.0/16"
+      ;;
+  esac
+
+  upsert_cli_env POC_PARENT_COMPARTMENT_NAME "$POC_PARENT_COMPARTMENT_NAME"
+  upsert_cli_env POC_COMPARTMENT_NAME "$POC_COMPARTMENT_NAME"
+  upsert_cli_env VCN_NAME "$VCN_NAME"
+  upsert_cli_env VCN_CIDR "$VCN_CIDR"
+  upsert_cli_env PARENT_COMPARTMENT_NAME "$POC_PARENT_COMPARTMENT_NAME"
+  if [ -n "${POC_PARENT_COMPARTMENT_OCID:-}" ] &amp;&amp; \
+     [ "${POC_PARENT_COMPARTMENT_OCID#ocid1.compartment.oc1}" != "$POC_PARENT_COMPARTMENT_OCID" ]; then
+    upsert_cli_env POC_PARENT_COMPARTMENT_OCID "$POC_PARENT_COMPARTMENT_OCID"
+    upsert_cli_env PARENT_COMPARTMENT_OCID "$POC_PARENT_COMPARTMENT_OCID"
+  fi
+  upsert_cli_env NETWORK_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+  upsert_cli_env SECURITY_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+  upsert_cli_env DATABASE_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+  upsert_cli_env ADMIN_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+  upsert_cli_env APPLICATION_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+  upsert_cli_env LOG_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+
+  . ~/workbook/env.sh --quiet || return 1
+  clear
+  printf '%-28s | %s\n' \
+    "VARIABLE" "VALUE" \
+    "----------------------------" "-----" \
+    "POC_PARENT_COMPARTMENT_NAME" "$POC_PARENT_COMPARTMENT_NAME" \
+    "POC_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" \
+    "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID" \
+    "VCN_NAME" "$VCN_NAME" \
+    "VCN_CIDR" "$VCN_CIDR" \
+    "NETWORK_COMPARTMENT_OCID" "$NETWORK_COMPARTMENT_OCID" \
+    "SECURITY_COMPARTMENT_OCID" "$SECURITY_COMPARTMENT_OCID" \
+    "DATABASE_COMPARTMENT_OCID" "$DATABASE_COMPARTMENT_OCID" \
+    "ADMIN_COMPARTMENT_OCID" "$ADMIN_COMPARTMENT_OCID" \
+    "APPLICATION_COMPARTMENT_OCID" "$APPLICATION_COMPARTMENT_OCID" \
+    "LOG_COMPARTMENT_OCID" "$LOG_COMPARTMENT_OCID"
+fi
+}
+
+wb05_card05</code></pre>
+</div>
+<h3>OUTPUT 05 - Expected compartment OCID output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the single-compartment aliases before creating VCN artifacts in <code>(root)/Partner/LAD-01</code> by default, or the assigned child compartment entered for the deployment.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                     | VALUE
+---------------------------- | -----
+POC_PARENT_COMPARTMENT_NAME  | Partner
+POC_COMPARTMENT_NAME         | LAD-01
+POC_COMPARTMENT_OCID         | &lt;poc_compartment_ocid&gt;
+VCN_NAME                     | VCN-LAD-01
+VCN_CIDR                     | 10.0.0.0/16
+NETWORK_COMPARTMENT_OCID     | &lt;poc_compartment_ocid&gt;
+SECURITY_COMPARTMENT_OCID    | &lt;poc_compartment_ocid&gt;
+DATABASE_COMPARTMENT_OCID    | &lt;poc_compartment_ocid&gt;
+ADMIN_COMPARTMENT_OCID       | &lt;poc_compartment_ocid&gt;
+APPLICATION_COMPARTMENT_OCID | &lt;poc_compartment_ocid&gt;
+LOG_COMPARTMENT_OCID         | &lt;poc_compartment_ocid&gt;</code></pre>
+</div>
+<h3>BASH 06 - Create VCN</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create the VCN in <code>(root)/Partner/LAD-01</code> by default, or the assigned child compartment entered for the deployment, through <code>NETWORK_COMPARTMENT_OCID</code>, using <code>VCN_NAME</code> with <code>VCN-&lt;compartment-name&gt;</code> as the default, using <code>VCN_CIDR</code> with <code>10.0.0.0/16</code> as the default, and save <code>VCN_OCID</code> in <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card06() {
+
+VCN_OCID="$(
+  oci network vcn create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --display-name "$VCN_NAME" \
+    --cidr-block "$VCN_CIDR" \
+    --dns-label "poc" \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env VCN_OCID "$VCN_OCID"
+}
+
+wb05_card06</code></pre>
+</div>
+<h3>OUTPUT 06 - Expected VCN OCID output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured VCN OCID table before continuing to dependent networking artifacts.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE           | VALUE
+------------------ | -----
+VCN_OCID           | ocid1.vcn.oc1.iad.amaaaaaacszxurqat3fz4h2itxhzy2gurmpdu5tmsmansfwnuyiekerzylxq</code></pre>
+</div>
+<h3>BASH 07 - Update default security list</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to preserve required ICMP destination-unreachable ingress, allow default egress to <code>All &lt;region&gt; Services in Oracle Services Network</code>, save <code>DEFAULT_SECURITY_LIST_OCID</code>, and display the updated security list.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card07() {
+
+DEFAULT_SECURITY_LIST_OCID="$(
+  oci network vcn get \
+    --vcn-id "$VCN_OCID" \
+    --query 'data."default-security-list-id"' \
+    --raw-output
+)"
+upsert_cli_env DEFAULT_SECURITY_LIST_OCID "$DEFAULT_SECURITY_LIST_OCID"
+
+SERVICE_CIDR_BLOCK_LABEL="$(
+  oci network service list \
+    --query "data[?contains(name, 'All') &amp;&amp; contains(name, 'Oracle Services Network')].\"cidr-block\" | [0]" \
+    --raw-output
+)"
+upsert_cli_env SERVICE_CIDR_BLOCK_LABEL "$SERVICE_CIDR_BLOCK_LABEL"
+
+cat &gt; "$WORKBOOK_DIR/default-security-list-ingress-rules.json" &lt;&lt;EOF
+[
+  {
+    "description": "ICMP traffic for: 3, 4 Destination Unreachable: Fragmentation Needed and Don't Fragment was Set",
+    "isStateless": false,
+    "protocol": "1",
+    "source": "0.0.0.0/0",
+    "sourceType": "CIDR_BLOCK",
+    "icmpOptions": {
+      "type": 3,
+      "code": 4
+    }
+  },
+  {
+    "description": "ICMP traffic for: 3 Destination Unreachable",
+    "isStateless": false,
+    "protocol": "1",
+    "source": "0.0.0.0/0",
+    "sourceType": "CIDR_BLOCK",
+    "icmpOptions": {
+      "type": 3
+    }
+  }
+]
+EOF
+
+cat &gt; "$WORKBOOK_DIR/default-security-list-egress-rules.json" &lt;&lt;EOF
+[
+  {
+    "description": "Allow TCP egress to All Services in Oracle Services Network",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "$SERVICE_CIDR_BLOCK_LABEL",
+    "destinationType": "SERVICE_CIDR_BLOCK"
+  }
+]
+EOF
+
+oci network security-list update \
+  --security-list-id "$DEFAULT_SECURITY_LIST_OCID" \
+  --ingress-security-rules "file://$WORKBOOK_DIR/default-security-list-ingress-rules.json" \
+  --egress-security-rules "file://$WORKBOOK_DIR/default-security-list-egress-rules.json" \
+  --force \
+  --query 'data.id' \
+  --raw-output &gt;/dev/null
+
+clear
+printf '%-26s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "--------------------------" "-----" \
+  "DEFAULT_SECURITY_LIST_OCID" "$DEFAULT_SECURITY_LIST_OCID" \
+  "SERVICE_CIDR_BLOCK_LABEL" "$SERVICE_CIDR_BLOCK_LABEL"
+}
+
+wb05_card07</code></pre>
+</div>
+<h3>OUTPUT 07 - Expected default security list output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured default security-list OCID and service CIDR label before continuing to Service Gateway discovery.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                   | VALUE
+-------------------------- | -----
+DEFAULT_SECURITY_LIST_OCID | ocid1.securitylist.oc1.iad.&lt;generated_default_security_list_ocid&gt;
+SERVICE_CIDR_BLOCK_LABEL   | all-sjc-services-in-oracle-services-network</code></pre>
+</div>
+<h3>BASH 08 - Resolve Service Gateway target</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to resolve the regional Service Gateway target with OCI CLI query output and save the service values in <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card08() {
+
+ALL_REGION_SERVICES_SERVICE_OCID="$(
+  oci network service list \
+    --query "data[?contains(name, 'All') &amp;&amp; contains(name, 'Oracle Services Network')].id | [0]" \
+    --raw-output
+)"
+
+SERVICE_CIDR_BLOCK_LABEL="$(
+  oci network service list \
+    --query "data[?contains(name, 'All') &amp;&amp; contains(name, 'Oracle Services Network')].\"cidr-block\" | [0]" \
+    --raw-output
+)"
+
+upsert_cli_env ALL_REGION_SERVICES_SERVICE_OCID "$ALL_REGION_SERVICES_SERVICE_OCID"
+upsert_cli_env SERVICE_CIDR_BLOCK_LABEL "$SERVICE_CIDR_BLOCK_LABEL"
+
+clear
+printf '%-32s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "--------------------------------" "-----" \
+  "ALL_REGION_SERVICES_SERVICE_OCID" "$ALL_REGION_SERVICES_SERVICE_OCID" \
+  "SERVICE_CIDR_BLOCK_LABEL" "$SERVICE_CIDR_BLOCK_LABEL"
+}
+
+wb05_card08</code></pre>
+</div>
+<h3>OUTPUT 08 - Expected Service Gateway variable output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the resolved regional service values saved into <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                         | VALUE
+-------------------------------- | -----
+ALL_REGION_SERVICES_SERVICE_OCID | ocid1.service.oc1.iad.&lt;generated_service_ocid&gt;
+SERVICE_CIDR_BLOCK_LABEL         | all-sjc-services-in-oracle-services-network</code></pre>
+</div>
+<p>For this runbook, create a NAT Gateway so private subnets can reach approved outbound destinations without assigning public IPs to private VNICs. DRG creation is not part of the current baseline; keep <code>CREATE_DRG=false</code> unless the approved network design requires DRG connectivity.</p>
+<h3>BASH 09 - Create gateway targets</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create <code>gw-internet</code> as the Internet Gateway, <code>gw-service</code> as the Service Gateway, <code>gw-nat</code> as the NAT Gateway, and optional DRG resources.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card09() {
+
+load_cli_env
+CREATE_DRG="${CREATE_DRG:-false}"
+
+if [ -z "${IGW_OCID:-}" ]; then
+  IGW_OCID="$(
+    oci network internet-gateway create \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --vcn-id "$VCN_OCID" \
+      --display-name "gw-internet" \
+      --is-enabled true \
+      --query 'data.id' \
+      --raw-output
+  )"
+  upsert_cli_env IGW_OCID "$IGW_OCID"
+fi
+
+if [ -z "${SGW_OCID:-}" ]; then
+  SGW_OCID="$(
+    oci network service-gateway create \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --vcn-id "$VCN_OCID" \
+      --display-name "gw-service" \
+      --services "[{\"serviceId\":\"$ALL_REGION_SERVICES_SERVICE_OCID\"}]" \
+      --query 'data.id' \
+      --raw-output
+  )"
+  upsert_cli_env SGW_OCID "$SGW_OCID"
+fi
+
+if [ -z "${NAT_OCID:-}" ]; then
+  NAT_OCID="$(
+    oci network nat-gateway create \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --vcn-id "$VCN_OCID" \
+      --display-name "gw-nat" \
+      --block-traffic false \
+      --query 'data.id' \
+      --raw-output
+  )"
+  upsert_cli_env NAT_OCID "$NAT_OCID"
+fi
+
+if [ "$CREATE_DRG" = "true" ] &amp;&amp; [ -z "${DRG_OCID:-}" ]; then
+  DRG_OCID="$(
+    oci network drg create \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --display-name "dynamic-routing-gateway" \
+      --query 'data.id' \
+      --raw-output
+  )"
+  upsert_cli_env DRG_OCID "$DRG_OCID"
+fi
+
+if [ "$CREATE_DRG" = "true" ] &amp;&amp; [ -z "${DRG_ATTACHMENT_OCID:-}" ]; then
+  DRG_ATTACHMENT_OCID="$(
+    oci network drg-attachment create \
+      --drg-id "$DRG_OCID" \
+      --vcn-id "$VCN_OCID" \
+      --display-name "dynamic-routing-gateway-attachment" \
+      --query 'data.id' \
+      --raw-output
+  )"
+  upsert_cli_env DRG_ATTACHMENT_OCID "$DRG_ATTACHMENT_OCID"
+fi
+
+clear
+if [ -z "${IGW_OCID:-}" ] || [ -z "${SGW_OCID:-}" ] || [ -z "${NAT_OCID:-}" ]; then
+  printf 'STOP: One or more gateway OCIDs were not created or loaded. Review the OCI error above, then rerun BASH 09.\n'
+  false
+else
+  printf '%-19s | %s\n' \
+    "VARIABLE" "VALUE" \
+    "-------------------" "-----" \
+    "IGW_OCID" "$IGW_OCID" \
+    "SGW_OCID" "$SGW_OCID" \
+    "NAT_OCID" "$NAT_OCID"
+fi
+
+if [ "$CREATE_DRG" = "true" ]; then
+  printf '%-19s | %s\n' \
+    "DRG_OCID" "$DRG_OCID" \
+    "DRG_ATTACHMENT_OCID" "$DRG_ATTACHMENT_OCID"
+fi
+}
+
+wb05_card09</code></pre>
+</div>
+<h3>OUTPUT 09 - Expected gateway OCID output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured gateway OCIDs before creating route-rule files and route tables.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE            | VALUE
+------------------- | -----
+IGW_OCID            | ocid1.internetgateway.oc1.iad.&lt;generated_gw_internet_ocid&gt;
+SGW_OCID            | ocid1.servicegateway.oc1.iad.&lt;generated_gw_service_ocid&gt;
+NAT_OCID            | ocid1.natgateway.oc1.iad.&lt;generated_gw_nat_ocid&gt;
+
+Optional when CREATE_DRG=true:
+DRG_OCID            | ocid1.drg.oc1.iad.&lt;generated_drg_ocid&gt;
+DRG_ATTACHMENT_OCID | ocid1.drgattachment.oc1.iad.&lt;generated_drg_attachment_ocid&gt;</code></pre>
+</div>
+<p>The public route-rule file created in the next card is reused by every public subnet through <code>rt-public</code>. The private route-rule file is reused by every private subnet through <code>rt-private</code>. This avoids redundant per-subnet route tables and keeps the <code>All &lt;region&gt; Services in Oracle Services Network -&gt; gw-service</code> route consistent across private subnet routing.</p>
+<p>Keep the <code>All &lt;region&gt; Services in Oracle Services Network -&gt; gw-service</code> route out of <code>rt-public</code>. OCI rejects a route table that combines an Internet Gateway target with the All Services Service Gateway target.</p>
+<h3>BASH 10 - Create route-rule files</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to write route-rule JSON artifacts under <code>~/workbook</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card10() {
+
+cat &gt; "$WORKBOOK_DIR/rt-public-rules.json" &lt;&lt;EOF
+[
+  {
+    "destination": "0.0.0.0/0",
+    "destinationType": "CIDR_BLOCK",
+    "networkEntityId": "$IGW_OCID"
+  }
+]
+EOF
+
+cat &gt; "$WORKBOOK_DIR/rt-private-rules.json" &lt;&lt;EOF
+[
+  {
+    "destination": "0.0.0.0/0",
+    "destinationType": "CIDR_BLOCK",
+    "networkEntityId": "$NAT_OCID"
+  },
+  {
+    "destination": "$SERVICE_CIDR_BLOCK_LABEL",
+    "destinationType": "SERVICE_CIDR_BLOCK",
+    "networkEntityId": "$SGW_OCID"
+  }
+]
+EOF
+
+clear
+printf '%-21s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "---------------------" "-----" \
+  "RT_PUBLIC_RULES_FILE" "$WORKBOOK_DIR/rt-public-rules.json" \
+  "RT_PRIVATE_RULES_FILE" "$WORKBOOK_DIR/rt-private-rules.json"
+}
+
+wb05_card10</code></pre>
+</div>
+<h3>BASH 11 - Create route tables</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create route tables and save their OCIDs in <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card11() {
+
+RT_PUBLIC_OCID="$(
+  oci network route-table create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "rt-public" \
+    --route-rules "file://$WORKBOOK_DIR/rt-public-rules.json" \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env RT_PUBLIC_OCID "$RT_PUBLIC_OCID"
+
+RT_PRIVATE_OCID="$(
+  oci network route-table create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "rt-private" \
+    --route-rules "file://$WORKBOOK_DIR/rt-private-rules.json" \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env RT_PRIVATE_OCID "$RT_PRIVATE_OCID"
+
+clear
+printf '%-15s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "---------------" "-----" \
+  "RT_PUBLIC_OCID" "$RT_PUBLIC_OCID" \
+  "RT_PRIVATE_OCID" "$RT_PRIVATE_OCID"
+}
+
+wb05_card11</code></pre>
+</div>
+<h3>OUTPUT 11 - Expected route table OCID output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured route table OCIDs before creating subnets.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE        | VALUE
+--------------- | -----
+RT_PUBLIC_OCID  | ocid1.routetable.oc1.iad.&lt;generated_public_route_table_ocid&gt;
+RT_PRIVATE_OCID | ocid1.routetable.oc1.iad.&lt;generated_private_route_table_ocid&gt;</code></pre>
+</div>
+<h3>BASH 12 - Create backup security list</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to write the reviewed backup security-list JSON artifacts under <code>~/workbook</code>, create the backup security list, and save its OCID in <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card12() {
+
+cat &gt; "$WORKBOOK_DIR/sl-backup-ingress.json" &lt;&lt;EOF
+[
+  {
+    "description": "Allow VCN TCP 8005 to Exadata backup subnet",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "$VCN_CIDR",
+    "sourceType": "CIDR_BLOCK",
+    "tcpOptions": {
+      "destinationPortRange": {
+        "min": 8005,
+        "max": 8005
+      }
+    }
+  },
+  {
+    "description": "Allow VCN TCP 2484 to Exadata backup subnet",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "$VCN_CIDR",
+    "sourceType": "CIDR_BLOCK",
+    "tcpOptions": {
+      "destinationPortRange": {
+        "min": 2484,
+        "max": 2484
+      }
+    }
+  }
+]
+EOF
+
+cat &gt; "$WORKBOOK_DIR/sl-backup-egress.json" &lt;&lt;EOF
+[
+  {
+    "description": "Allow backup subnet TCP egress to VCN CIDR",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "$VCN_CIDR",
+    "destinationType": "CIDR_BLOCK"
+  }
+]
+EOF
+
+SECURITY_LIST_BACKUP_OCID="$(
+  oci network security-list create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "sl-backup" \
+    --ingress-security-rules "file://$WORKBOOK_DIR/sl-backup-ingress.json" \
+    --egress-security-rules "file://$WORKBOOK_DIR/sl-backup-egress.json" \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env SECURITY_LIST_BACKUP_OCID "$SECURITY_LIST_BACKUP_OCID"
+
+clear
+printf '%-26s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "--------------------------" "-----" \
+  "SECURITY_LIST_BACKUP_OCID" "$SECURITY_LIST_BACKUP_OCID"
+}
+
+wb05_card12</code></pre>
+</div>
+<h3>OUTPUT 12 - Expected security-list OCID output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured backup security-list OCID before creating subnets.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                   | VALUE
+-------------------------- | -----
+SECURITY_LIST_BACKUP_OCID  | ocid1.securitylist.oc1.iad.&lt;generated_sl_backup_ocid&gt;</code></pre>
+</div>
+<h3>BASH 13 - Create subnets</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step after BASH 12 to create the workbook subnets and save their OCIDs in <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card13() {
+
+cat &gt; "$WORKBOOK_DIR/subnet-backup-security-list-ids.json" &lt;&lt;EOF
+[
+  "$DEFAULT_SECURITY_LIST_OCID",
+  "$SECURITY_LIST_BACKUP_OCID"
+]
+EOF
+
+SUBNET_ADMIN_OCID="$(
+  oci network subnet create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "subnet-admin" \
+    --cidr-block "10.0.0.0/24" \
+    --dns-label "admin" \
+    --route-table-id "$RT_PUBLIC_OCID" \
+    --prohibit-public-ip-on-vnic false \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env SUBNET_ADMIN_OCID "$SUBNET_ADMIN_OCID"
+
+SUBNET_DBCLIENT_OCID="$(
+  oci network subnet create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "subnet-dbclient" \
+    --cidr-block "10.0.1.0/24" \
+    --dns-label "client" \
+    --route-table-id "$RT_PRIVATE_OCID" \
+    --prohibit-public-ip-on-vnic true \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env SUBNET_DBCLIENT_OCID "$SUBNET_DBCLIENT_OCID"
+
+SUBNET_DB_BACKUP_OCID="$(
+  oci network subnet create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "subnet-db-backup" \
+    --cidr-block "10.0.2.0/24" \
+    --dns-label "backup" \
+    --route-table-id "$RT_PRIVATE_OCID" \
+    --security-list-ids "file://$WORKBOOK_DIR/subnet-backup-security-list-ids.json" \
+    --prohibit-public-ip-on-vnic true \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env SUBNET_DB_BACKUP_OCID "$SUBNET_DB_BACKUP_OCID"
+
+SUBNET_DBTOOLS_OCID="$(
+  oci network subnet create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "subnet-dbtools" \
+    --cidr-block "10.0.3.0/28" \
+    --dns-label "dbtools" \
+    --route-table-id "$RT_PRIVATE_OCID" \
+    --prohibit-public-ip-on-vnic true \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env SUBNET_DBTOOLS_OCID "$SUBNET_DBTOOLS_OCID"
+
+SUBNET_PUBLIC_LB_OCID="$(
+  oci network subnet create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "subnet-public-lb" \
+    --cidr-block "10.0.10.0/24" \
+    --dns-label "publb" \
+    --route-table-id "$RT_PUBLIC_OCID" \
+    --prohibit-public-ip-on-vnic false \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env SUBNET_PUBLIC_LB_OCID "$SUBNET_PUBLIC_LB_OCID"
+
+SUBNET_APPS_OCID="$(
+  oci network subnet create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "subnet-applications" \
+    --cidr-block "10.0.11.0/24" \
+    --dns-label "apps" \
+    --route-table-id "$RT_PRIVATE_OCID" \
+    --prohibit-public-ip-on-vnic true \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env SUBNET_APPS_OCID "$SUBNET_APPS_OCID"
+
+clear
+printf '%-26s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "--------------------------" "-----" \
+  "SECURITY_LIST_BACKUP_OCID" "$SECURITY_LIST_BACKUP_OCID" \
+  "SUBNET_ADMIN_OCID" "$SUBNET_ADMIN_OCID" \
+  "SUBNET_DBCLIENT_OCID" "$SUBNET_DBCLIENT_OCID" \
+  "SUBNET_DB_BACKUP_OCID" "$SUBNET_DB_BACKUP_OCID" \
+  "SUBNET_DBTOOLS_OCID" "$SUBNET_DBTOOLS_OCID" \
+  "SUBNET_PUBLIC_LB_OCID" "$SUBNET_PUBLIC_LB_OCID" \
+  "SUBNET_APPS_OCID" "$SUBNET_APPS_OCID"
+}
+
+wb05_card13</code></pre>
+</div>
+<h3>OUTPUT 13 - Expected subnet and security-list OCID output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured backup security-list and subnet OCIDs before creating network security groups.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                   | VALUE
+-------------------------- | -----
+SECURITY_LIST_BACKUP_OCID  | ocid1.securitylist.oc1.iad.&lt;generated_sl_backup_ocid&gt;
+SUBNET_ADMIN_OCID          | ocid1.subnet.oc1.iad.&lt;generated_admin_subnet_ocid&gt;
+SUBNET_DBCLIENT_OCID       | ocid1.subnet.oc1.iad.&lt;generated_dbclient_subnet_ocid&gt;
+SUBNET_DB_BACKUP_OCID      | ocid1.subnet.oc1.iad.&lt;generated_db_backup_subnet_ocid&gt;
+SUBNET_DBTOOLS_OCID        | ocid1.subnet.oc1.iad.&lt;generated_dbtools_subnet_ocid&gt;
+SUBNET_PUBLIC_LB_OCID      | ocid1.subnet.oc1.iad.&lt;generated_public_lb_subnet_ocid&gt;
+SUBNET_APPS_OCID           | ocid1.subnet.oc1.iad.&lt;generated_applications_subnet_ocid&gt;</code></pre>
+</div>
+<h3>BASH 14 - Create <code>nsg-exadata-client</code> rule file and NSG</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create the Exadata client consolidated NSG rule JSON template, create the Exadata client NSG, and save its OCID in <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card14() {
+
+cat &gt; "$WORKBOOK_DIR/nsg-exadata-client-rules.template.json" &lt;&lt;'EOF'
+[
+  {
+    "description": "Allow Exadata client subnet TCP all to Exadata client network for OS patching and cluster node operations",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "10.0.1.0/24",
+    "sourceType": "CIDR_BLOCK"
+  },
+  {
+    "description": "Allow Exadata client subnet ICMP all to Exadata client network for OS patching",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "1",
+    "source": "10.0.1.0/24",
+    "sourceType": "CIDR_BLOCK"
+  },
+  {
+    "description": "Allow application SQL*Net to Exadata client network",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_APPLICATIONS_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 1521, "max": 1521}}
+  },
+  {
+    "description": "Allow admin SQL*Net to Exadata client network",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_BASTION_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 1521, "max": 1521}}
+  },
+  {
+    "description": "Allow Database Tools SQL*Net to Exadata client network",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_DBTOOLS_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 1521, "max": 1521}}
+  },
+  {
+    "description": "Allow application ONS/FAN to Exadata client network",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_APPLICATIONS_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 6200, "max": 6200}}
+  },
+  {
+    "description": "Allow admin ONS/FAN to Exadata client network",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_BASTION_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 6200, "max": 6200}}
+  },
+  {
+    "description": "Allow Database Tools ONS/FAN to Exadata client network",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_DBTOOLS_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 6200, "max": 6200}}
+  },
+  {
+    "description": "Allow admin SSH to Exadata client network",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_BASTION_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 22, "max": 22}}
+  },
+  {
+    "description": "Allow Exadata client Autonomous Recovery Service backup traffic to backup subnet",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "10.0.2.0/24",
+    "destinationType": "CIDR_BLOCK",
+    "tcpOptions": {"destinationPortRange": {"min": 8005, "max": 8005}}
+  },
+  {
+    "description": "Allow Exadata client Autonomous Recovery Service RMAN catalog connections to backup subnet",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "10.0.2.0/24",
+    "destinationType": "CIDR_BLOCK",
+    "tcpOptions": {"destinationPortRange": {"min": 2484, "max": 2484}}
+  },
+  {
+    "description": "Allow Exadata client TCP all egress to VCN CIDR",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "__VCN_CIDR__",
+    "destinationType": "CIDR_BLOCK"
+  }
+]
+EOF
+
+NSG_EXADATA_CLIENT_OCID="$(
+  oci network nsg create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "nsg-exadata-client" \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env NSG_EXADATA_CLIENT_OCID "$NSG_EXADATA_CLIENT_OCID"
+
+clear
+printf '%-23s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "-----------------------" "-----" \
+  "NSG_EXADATA_CLIENT_OCID" "$NSG_EXADATA_CLIENT_OCID"
+}
+
+wb05_card14</code></pre>
+</div>
+<h3>BASH 15 - Create <code>nsg-applications</code> rule file and NSG</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the applications NSG template with SSH ingress from <code>nsg-bastion-admin</code>, public load balancer ingress from <code>nsg-public-lb</code>, database egress to <code>nsg-exadata-client</code>, then create the NSG and save its OCID in <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card15() {
+
+cat &gt; "$WORKBOOK_DIR/nsg-applications-rules.template.json" &lt;&lt;'EOF'
+[
+  {
+    "description": "Allow admin SSH from bastion/admin NSG",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_BASTION_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 22, "max": 22}}
+  },
+  {
+    "description": "Allow public load balancer HTTP to applications",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_PUBLIC_LB_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 80, "max": 80}}
+  },
+  {
+    "description": "Allow public load balancer application HTTP alternate to applications",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_PUBLIC_LB_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 8080, "max": 8080}}
+  },
+  {
+    "description": "Allow public load balancer HTTPS to applications",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_PUBLIC_LB_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 443, "max": 443}}
+  },
+  {
+    "description": "Allow application SQL*Net egress to Exadata client network",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "__NSG_EXADATA_CLIENT_OCID__",
+    "destinationType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 1521, "max": 1521}}
+  },
+  {
+    "description": "Allow application ONS/FAN egress to Exadata client network",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "__NSG_EXADATA_CLIENT_OCID__",
+    "destinationType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 6200, "max": 6200}}
+  }
+]
+EOF
+
+NSG_APPLICATIONS_OCID="$(
+  oci network nsg create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "nsg-applications" \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env NSG_APPLICATIONS_OCID "$NSG_APPLICATIONS_OCID"
+
+clear
+printf '%-20s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "--------------------" "-----" \
+  "NSG_APPLICATIONS_OCID" "$NSG_APPLICATIONS_OCID"
+}
+
+wb05_card15</code></pre>
+</div>
+<h3>BASH 16 - Create <code>nsg-dbtools-endpoint</code> rule file and NSG</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the Database Tools endpoint NSG with egress rules to the Exadata client NSG on TCP 1521 and TCP 6200, then save its OCID in <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card16() {
+
+cat &gt; "$WORKBOOK_DIR/nsg-dbtools-endpoint-rules.template.json" &lt;&lt;'EOF'
+[
+  {
+    "description": "Allow Database Tools SQL*Net egress to Exadata client network",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "__NSG_EXADATA_CLIENT_OCID__",
+    "destinationType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 1521, "max": 1521}}
+  },
+  {
+    "description": "Allow Database Tools ONS/FAN egress to Exadata client network",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "__NSG_EXADATA_CLIENT_OCID__",
+    "destinationType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 6200, "max": 6200}}
+  }
+]
+EOF
+
+NSG_DBTOOLS_OCID="$(
+  oci network nsg create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "nsg-dbtools-endpoint" \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env NSG_DBTOOLS_OCID "$NSG_DBTOOLS_OCID"
+
+clear
+printf '%-17s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "-----------------" "-----" \
+  "NSG_DBTOOLS_OCID" "$NSG_DBTOOLS_OCID"
+}
+
+wb05_card16</code></pre>
+</div>
+<h3>BASH 17 - Create <code>nsg-bastion-admin</code> rule file and NSG</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create the bastion/admin consolidated NSG rule JSON template, create the bastion/admin NSG, and save its OCID in <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card17() {
+
+cat &gt; "$WORKBOOK_DIR/nsg-bastion-admin-rules.template.json" &lt;&lt;'EOF'
+[
+  {
+    "description": "Allow SSH from internet to bastion/admin host",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "0.0.0.0/0",
+    "sourceType": "CIDR_BLOCK",
+    "tcpOptions": {"destinationPortRange": {"min": 22, "max": 22}}
+  },
+  {
+    "description": "Allow admin SSH egress to Exadata client network",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "__NSG_EXADATA_CLIENT_OCID__",
+    "destinationType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 22, "max": 22}}
+  },
+  {
+    "description": "Allow admin SSH egress to applications network",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "__NSG_APPLICATIONS_OCID__",
+    "destinationType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 22, "max": 22}}
+  },
+  {
+    "description": "Allow admin SQL*Net egress to Exadata client network",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "__NSG_EXADATA_CLIENT_OCID__",
+    "destinationType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 1521, "max": 1521}}
+  },
+  {
+    "description": "Allow admin ONS/FAN egress to Exadata client network",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "__NSG_EXADATA_CLIENT_OCID__",
+    "destinationType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 6200, "max": 6200}}
+  },
+  {
+    "description": "Allow bastion/admin TCP egress to public internet through Internet Gateway",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "0.0.0.0/0",
+    "destinationType": "CIDR_BLOCK"
+  }
+]
+EOF
+
+NSG_BASTION_OCID="$(
+  oci network nsg create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "nsg-bastion-admin" \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env NSG_BASTION_OCID "$NSG_BASTION_OCID"
+
+clear
+printf '%-16s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "----------------" "-----" \
+  "NSG_BASTION_OCID" "$NSG_BASTION_OCID"
+}
+
+wb05_card17</code></pre>
+</div>
+<h3>BASH 18 - Create <code>nsg-public-lb</code></h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the public load balancer NSG without SSH access, allow internet listener ingress and egress on TCP 80, 443, and 8080, and save its OCID in <code>~/workbook/cli.env</code>.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card18() {
+
+cat &gt; "$WORKBOOK_DIR/nsg-public-lb-rules.template.json" &lt;&lt;'EOF'
+[
+  {
+    "description": "Allow HTTPS from internet to public load balancer",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "0.0.0.0/0",
+    "sourceType": "CIDR_BLOCK",
+    "tcpOptions": {"destinationPortRange": {"min": 443, "max": 443}}
+  },
+  {
+    "description": "Allow HTTP from internet to public load balancer",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "0.0.0.0/0",
+    "sourceType": "CIDR_BLOCK",
+    "tcpOptions": {"destinationPortRange": {"min": 80, "max": 80}}
+  },
+  {
+    "description": "Allow HTTP alternate from internet to public load balancer",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "0.0.0.0/0",
+    "sourceType": "CIDR_BLOCK",
+    "tcpOptions": {"destinationPortRange": {"min": 8080, "max": 8080}}
+  },
+  {
+    "description": "Allow public load balancer HTTP egress to internet",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "0.0.0.0/0",
+    "destinationType": "CIDR_BLOCK",
+    "tcpOptions": {"destinationPortRange": {"min": 80, "max": 80}}
+  },
+  {
+    "description": "Allow public load balancer HTTP alternate egress to internet",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "0.0.0.0/0",
+    "destinationType": "CIDR_BLOCK",
+    "tcpOptions": {"destinationPortRange": {"min": 8080, "max": 8080}}
+  },
+  {
+    "description": "Allow public load balancer HTTPS egress to internet",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "0.0.0.0/0",
+    "destinationType": "CIDR_BLOCK",
+    "tcpOptions": {"destinationPortRange": {"min": 443, "max": 443}}
+  }
+]
+EOF
+
+NSG_PUBLIC_LB_OCID="$(
+  oci network nsg create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "nsg-public-lb" \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env NSG_PUBLIC_LB_OCID "$NSG_PUBLIC_LB_OCID"
+
+clear
+printf '%-23s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "-----------------------" "-----" \
+  "NSG_EXADATA_CLIENT_OCID" "$NSG_EXADATA_CLIENT_OCID" \
+  "NSG_APPLICATIONS_OCID" "$NSG_APPLICATIONS_OCID" \
+  "NSG_DBTOOLS_OCID" "$NSG_DBTOOLS_OCID" \
+  "NSG_BASTION_OCID" "$NSG_BASTION_OCID" \
+  "NSG_PUBLIC_LB_OCID" "$NSG_PUBLIC_LB_OCID"
+}
+
+wb05_card18</code></pre>
+</div>
+<h3>OUTPUT 18 - Expected NSG OCID output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured network security group OCIDs before applying consolidated NSG rule files.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                | VALUE
+----------------------- | -----
+NSG_EXADATA_CLIENT_OCID | ocid1.networksecuritygroup.oc1.iad.&lt;generated_exadata_client_nsg_ocid&gt;
+NSG_APPLICATIONS_OCID   | ocid1.networksecuritygroup.oc1.iad.&lt;generated_applications_nsg_ocid&gt;
+NSG_DBTOOLS_OCID        | ocid1.networksecuritygroup.oc1.iad.&lt;generated_dbtools_nsg_ocid&gt;
+NSG_BASTION_OCID        | ocid1.networksecuritygroup.oc1.iad.&lt;generated_bastion_nsg_ocid&gt;
+NSG_PUBLIC_LB_OCID      | ocid1.networksecuritygroup.oc1.iad.&lt;generated_public_lb_nsg_ocid&gt;</code></pre>
+</div>
+<h3>BASH 19 - Apply consolidated NSG rule files</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step after BASH 14 through BASH 18 to render each NSG's reviewed JSON template with captured NSG OCIDs, then apply the rendered rule file to its matching NSG.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card19() {
+
+load_cli_env
+
+render_nsg_rules() {
+  local template_file="$1"
+  local rendered_file="$2"
+  sed \
+    -e "s|__NSG_EXADATA_CLIENT_OCID__|$NSG_EXADATA_CLIENT_OCID|g" \
+    -e "s|__NSG_APPLICATIONS_OCID__|$NSG_APPLICATIONS_OCID|g" \
+    -e "s|__NSG_DBTOOLS_OCID__|$NSG_DBTOOLS_OCID|g" \
+    -e "s|__NSG_BASTION_OCID__|$NSG_BASTION_OCID|g" \
+    -e "s|__NSG_PUBLIC_LB_OCID__|$NSG_PUBLIC_LB_OCID|g" \
+    -e "s|__VCN_CIDR__|$VCN_CIDR|g" \
+    "$WORKBOOK_DIR/$template_file" &gt; "$WORKBOOK_DIR/$rendered_file"
+}
+
+apply_nsg_rules() {
+  local nsg_id="$1"
+  local template_file="$2"
+  local rendered_file="${template_file/.template/}"
+  render_nsg_rules "$template_file" "$rendered_file"
+  oci network nsg rules add \
+    --nsg-id "$nsg_id" \
+    --security-rules "file://$WORKBOOK_DIR/$rendered_file" \
+    --query 'data[].id' \
+    --raw-output &gt;/dev/null
+}
+
+NSG_EXADATA_CLIENT_RULES_STATUS="applied"
+NSG_APPLICATIONS_RULES_STATUS="applied"
+NSG_DBTOOLS_RULES_STATUS="applied"
+NSG_BASTION_RULES_STATUS="applied"
+NSG_PUBLIC_LB_RULES_STATUS="applied"
+nsg_apply_failed=0
+
+if ! apply_nsg_rules "$NSG_EXADATA_CLIENT_OCID" "nsg-exadata-client-rules.template.json"; then
+  NSG_EXADATA_CLIENT_RULES_STATUS="failed"
+  nsg_apply_failed=1
+fi
+if ! apply_nsg_rules "$NSG_APPLICATIONS_OCID" "nsg-applications-rules.template.json"; then
+  NSG_APPLICATIONS_RULES_STATUS="failed"
+  nsg_apply_failed=1
+fi
+if ! apply_nsg_rules "$NSG_DBTOOLS_OCID" "nsg-dbtools-endpoint-rules.template.json"; then
+  NSG_DBTOOLS_RULES_STATUS="failed"
+  nsg_apply_failed=1
+fi
+if ! apply_nsg_rules "$NSG_BASTION_OCID" "nsg-bastion-admin-rules.template.json"; then
+  NSG_BASTION_RULES_STATUS="failed"
+  nsg_apply_failed=1
+fi
+if ! apply_nsg_rules "$NSG_PUBLIC_LB_OCID" "nsg-public-lb-rules.template.json"; then
+  NSG_PUBLIC_LB_RULES_STATUS="failed"
+  nsg_apply_failed=1
+fi
+
+printf '%-24s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "------------------------" "-----" \
+  "NSG_EXADATA_CLIENT_RULES" "$NSG_EXADATA_CLIENT_RULES_STATUS" \
+  "NSG_APPLICATIONS_RULES" "$NSG_APPLICATIONS_RULES_STATUS" \
+  "NSG_DBTOOLS_RULES" "$NSG_DBTOOLS_RULES_STATUS" \
+  "NSG_BASTION_RULES" "$NSG_BASTION_RULES_STATUS" \
+  "NSG_PUBLIC_LB_RULES" "$NSG_PUBLIC_LB_RULES_STATUS"
+}
+
+wb05_card19</code></pre>
+</div>
+<h3>OUTPUT 19 - Expected NSG rule application output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the rendered consolidated NSG rule files were applied to each network security group.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                 | VALUE
+------------------------ | -----
+NSG_EXADATA_CLIENT_RULES | applied
+NSG_APPLICATIONS_RULES   | applied
+NSG_DBTOOLS_RULES        | applied
+NSG_BASTION_RULES        | applied
+NSG_PUBLIC_LB_RULES      | applied</code></pre>
+</div>
+<h3>BASH 20 - Generate executive implementation report</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create and execute a report script that summarizes current artifact names, states, and NSG ingress and egress access. Run <code>~/workbook/executive-report.sh nsg</code> to show only the NSG sections.</span>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb05_card20() {
+
+cd ~/workbook
+. ./helpers.sh
+load_cli_env
+WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+
+cat &gt; "$WORKBOOK_DIR/executive-report.sh" &lt;&lt;'REPORT_SCRIPT'
+#!/usr/bin/env bash
+
+WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+REPORT_FILE="$WORKBOOK_DIR/networking-executive-report.txt"
+
+cd "$WORKBOOK_DIR" || exit 1
+. ./helpers.sh
+load_cli_env
+
+line() {
+  printf '%*s\n' 96 '' | tr ' ' '-'
+}
+
+section() {
+  printf '\n%s\n' "$1"
+  line
+}
+
+kv_header() {
+  printf '%-30s | %s\n' "ITEM" "VALUE"
+  printf '%-30s | %s\n' "------------------------------" "-----"
+}
+
+kv() {
+  printf '%-30s | %s\n' "$1" "${2:-NOT_AVAILABLE}"
+}
+
+shorten() {
+  VALUE="$1"
+  MAX="$2"
+  if [ "${#VALUE}" -gt "$MAX" ]; then
+    printf '%s...' "${VALUE:0:$((MAX - 3))}"
+  else
+    printf '%s' "$VALUE"
+  fi
+}
+
+run_table() {
+  TITLE="$1"
+  shift
+  section "$TITLE"
+  if ! "$@"; then
+    kv_header
+    kv "Status" "Not available or review required"
+  fi
+}
+
+run_optional_table() {
+  TITLE="$1"
+  REQUIRED_KEY="$2"
+  shift 2
+  if [ -n "${!REQUIRED_KEY:-}" ]; then
+    run_table "$TITLE" "$@"
+  else
+    section "$TITLE"
+    kv_header
+    kv "Status" "Not available"
+  fi
+}
+
+access_header() {
+  printf '%-22s | %-43s | %s\n' "NSG" "INGRESS ACCESS" "EGRESS ACCESS"
+  printf '%-22s | %-43s | %s\n' "----------------------" "-------------------------------------------" "-------------------------------------------"
+}
+
+access_row() {
+  NSG="$(shorten "$1" 22)"
+  INGRESS="$(shorten "$2" 43)"
+  EGRESS="$(shorten "$3" 43)"
+  printf '%-22s | %-43s | %-43s\n' "$NSG" "$INGRESS" "$EGRESS"
+}
+
+rule_header() {
+  printf '%-20s | %-7s | %-5s | %-10s | %-24s | %s\n' \
+    "NSG" "DIR" "PROTO" "PORTS" "NSG / SERVICE / CIDR" "DESCRIPTION"
+  printf '%-20s | %-7s | %-5s | %-10s | %-24s | %s\n' \
+    "--------------------" "-------" "-----" "----------" "------------------------" "------------------------------"
+}
+
+rule_row() {
+  NSG="$(shorten "$1" 20)"
+  DIRECTION="$(shorten "$2" 7)"
+  PROTOCOL="$(shorten "$3" 5)"
+  PORTS="$(shorten "$4" 10)"
+  PEER="$(shorten "$5" 24)"
+  DESCRIPTION="$(shorten "$6" 30)"
+  printf '%-20s | %-7s | %-5s | %-10s | %-24s | %-30s\n' \
+    "$NSG" "$DIRECTION" "$PROTOCOL" "$PORTS" "$PEER" "$DESCRIPTION"
+}
+
+security_list_header() {
+  printf '%-20s | %-7s | %-5s | %-10s | %-24s | %s\n' \
+    "SECURITY LIST" "DIR" "PROTO" "PORTS" "CIDR / SERVICE" "DESCRIPTION"
+  printf '%-20s | %-7s | %-5s | %-10s | %-24s | %s\n' \
+    "--------------------" "-------" "-----" "----------" "------------------------" "------------------------------"
+}
+
+security_list_row() {
+  LIST_NAME="$(shorten "$1" 20)"
+  DIRECTION="$(shorten "$2" 7)"
+  PROTOCOL="$(shorten "$3" 5)"
+  PORTS="$(shorten "$4" 10)"
+  PEER="$(shorten "$5" 24)"
+  DESCRIPTION="$(shorten "$6" 30)"
+  printf '%-20s | %-7s | %-5s | %-10s | %-24s | %-30s\n' \
+    "$LIST_NAME" "$DIRECTION" "$PROTOCOL" "$PORTS" "$PEER" "$DESCRIPTION"
+}
+
+security_list_rules() {
+  TITLE="$1"
+  SECURITY_LIST_ID="$2"
+  LIST_NAME="$3"
+  section "$TITLE"
+
+  if [ -z "$SECURITY_LIST_ID" ]; then
+    kv_header
+    kv "Status" "Not available"
+    return
+  fi
+
+  if ! command -v jq &gt;/dev/null 2&gt;&amp;1; then
+    kv_header
+    kv "Status" "jq not available; showing compact OCI output"
+    oci network security-list get \
+      --security-list-id "$SECURITY_LIST_ID" \
+      --query 'data.{Ingress:"ingress-security-rules",Egress:"egress-security-rules"}' \
+      --output table
+    return
+  fi
+
+  RULES_JSON="$(
+    oci network security-list get \
+      --security-list-id "$SECURITY_LIST_ID" \
+      --output json
+  )"
+
+  security_list_header
+  printf '%s\n' "$RULES_JSON" | jq -r \
+    --arg name "$LIST_NAME" '
+      def protocol_name:
+        if .protocol == "6" then "TCP"
+        elif .protocol == "1" then "ICMP"
+        else (.protocol // "-")
+        end;
+      def port_from:
+        if ."tcp-options"?."destination-port-range"? then
+          ((."tcp-options"."destination-port-range".min // "All") | tostring)
+        elif ."icmp-options"? then
+          ((."icmp-options".type // "All") | tostring)
+        else
+          "All"
+        end;
+      def port_to:
+        if ."tcp-options"?."destination-port-range"? then
+          ((."tcp-options"."destination-port-range".max // "All") | tostring)
+        elif ."icmp-options"? then
+          ((."icmp-options".code // "All") | tostring)
+        else
+          "All"
+        end;
+      (
+        (.data."ingress-security-rules" // [])[] |
+        [$name, "INGRESS", protocol_name, port_from, port_to, ((.source // "-") | tostring), (.description // "-")]
+      ),
+      (
+        (.data."egress-security-rules" // [])[] |
+        [$name, "EGRESS", protocol_name, port_from, port_to, ((.destination // "-") | tostring), (.description // "-")]
+      ) | @tsv
+    ' | while IFS="$(printf '\t')" read -r LIST_NAME DIRECTION PROTOCOL PORT_FROM PORT_TO PEER DESCRIPTION; do
+      if [ "$PORT_TO" = "All" ] &amp;&amp; [ "$PROTOCOL" = "ICMP" ]; then
+        PORTS="$PORT_FROM"
+      elif [ "$PORT_FROM" = "$PORT_TO" ]; then
+        PORTS="$PORT_FROM"
+      else
+        PORTS="$PORT_FROM-$PORT_TO"
+      fi
+      security_list_row "$LIST_NAME" "$DIRECTION" "$PROTOCOL" "$PORTS" "$PEER" "$DESCRIPTION"
+    done
+}
+
+nsg_rules() {
+  TITLE="$1"
+  REQUIRED_KEY="$2"
+  CURRENT_NSG="$3"
+  section "$TITLE"
+
+  if [ -z "${!REQUIRED_KEY:-}" ]; then
+    kv_header
+    kv "Status" "Not available"
+    return
+  fi
+
+  if ! command -v jq &gt;/dev/null 2&gt;&amp;1; then
+    kv_header
+    kv "Status" "jq not available; showing compact OCI output"
+    oci network nsg rules list \
+      --nsg-id "${!REQUIRED_KEY}" \
+      --query 'data[].{Direction:direction,Protocol:protocol,PortFrom:"tcp-options"."destination-port-range".min,PortTo:"tcp-options"."destination-port-range".max}' \
+      --output table
+    return
+  fi
+
+  RULES_JSON="$(
+    oci network nsg rules list \
+      --nsg-id "${!REQUIRED_KEY}" \
+      --output json
+  )"
+
+  rule_header
+  printf '%s\n' "$RULES_JSON" | jq -r \
+    --arg current "$CURRENT_NSG" \
+    --arg client "${NSG_EXADATA_CLIENT_OCID:-}" \
+    --arg apps "${NSG_APPLICATIONS_OCID:-}" \
+    --arg dbtools "${NSG_DBTOOLS_OCID:-}" \
+    --arg bastion "${NSG_BASTION_OCID:-}" \
+    --arg lb "${NSG_PUBLIC_LB_OCID:-}" '
+      def nsg_name($id):
+        if $id == $client then "nsg-exadata-client"
+        elif $id == $apps then "nsg-applications"
+        elif $id == $dbtools then "nsg-dbtools-endpoint"
+        elif $id == $bastion then "nsg-bastion-admin"
+        elif $id == $lb then "nsg-public-lb"
+        else "-"
+        end;
+      def protocol_name:
+        if .protocol == "6" then "TCP"
+        elif .protocol == "1" then "ICMP"
+        else (.protocol // "-")
+        end;
+      def service_name($value):
+        if ($value // "") | contains("sjc") then "All SJC Services"
+        else ($value // "-")
+        end;
+      .data[] |
+      [
+        $current,
+        (.direction // "-"),
+        protocol_name,
+        ((."tcp-options"?."destination-port-range"?.min // "All") | tostring),
+        ((."tcp-options"?."destination-port-range"?.max // "All") | tostring),
+        (
+          if .direction == "INGRESS" then
+            if ."source-type" == "NETWORK_SECURITY_GROUP" then nsg_name(.source)
+            elif ."source-type" == "SERVICE_CIDR_BLOCK" then service_name(.source)
+            elif ."source-type" == "CIDR_BLOCK" then .source
+            else "-"
+            end
+          else
+            if ."destination-type" == "NETWORK_SECURITY_GROUP" then nsg_name(.destination)
+            elif ."destination-type" == "SERVICE_CIDR_BLOCK" then service_name(.destination)
+            elif ."destination-type" == "CIDR_BLOCK" then .destination
+            else "-"
+            end
+          end
+        ),
+        (.description // "-")
+      ] | @tsv
+    ' | while IFS="$(printf '\t')" read -r NSG DIRECTION PROTOCOL PORT_FROM PORT_TO PEER DESCRIPTION; do
+      if [ -z "$PORT_FROM" ] &amp;&amp; [ -z "$PORT_TO" ]; then
+        PORTS="All"
+      elif [ "$PORT_FROM" = "All" ] &amp;&amp; [ "$PORT_TO" = "All" ]; then
+        PORTS="All"
+      elif [ "$PORT_FROM" = "$PORT_TO" ]; then
+        PORTS="$PORT_FROM"
+      else
+        PORTS="$PORT_FROM-$PORT_TO"
+      fi
+      rule_row "$NSG" "$DIRECTION" "$PROTOCOL" "$PORTS" "$PEER" "$DESCRIPTION"
+    done
+}
+
+gateway_header() {
+  printf '%-18s | %-28s | %s\n' "TYPE" "NAME" "STATE"
+  printf '%-18s | %-28s | %s\n' "------------------" "----------------------------" "---------------"
+}
+
+gateway_row() {
+  TYPE="$(shorten "$1" 18)"
+  NAME="$(shorten "${2:-Not available}" 28)"
+  STATE="$(shorten "${3:-Not available}" 15)"
+  printf '%-18s | %-28s | %s\n' "$TYPE" "$NAME" "$STATE"
+}
+
+gateway_from_list() {
+  TYPE="$1"
+  shift
+  RESULT="$("$@" --output json 2&gt;/dev/null)"
+  if [ -n "$RESULT" ] &amp;&amp; command -v jq &gt;/dev/null 2&gt;&amp;1; then
+    COUNT="$(printf '%s\n' "$RESULT" | jq '.data | length')"
+    if [ "$COUNT" -gt 0 ]; then
+      printf '%s\n' "$RESULT" | jq -r \
+        --arg type "$TYPE" \
+        '.data[] | [$type, (."display-name" // .name // "Not available"), (."lifecycle-state" // "Not available")] | @tsv' |
+        while IFS="$(printf '\t')" read -r ROW_TYPE ROW_NAME ROW_STATE; do
+          gateway_row "$ROW_TYPE" "$ROW_NAME" "$ROW_STATE"
+        done
+      return
+    fi
+  fi
+  gateway_row "$TYPE" "Not available" "Not available"
+}
+
+gateway_from_get() {
+  TYPE="$1"
+  REQUIRED_KEY="$2"
+  shift 2
+  if [ -z "${!REQUIRED_KEY:-}" ]; then
+    gateway_row "$TYPE" "Not available" "Not available"
+    return
+  fi
+  RESULT="$("$@" --output json 2&gt;/dev/null)"
+  if [ -n "$RESULT" ] &amp;&amp; command -v jq &gt;/dev/null 2&gt;&amp;1; then
+    printf '%s\n' "$RESULT" | jq -r \
+      --arg type "$TYPE" \
+      '.data | [$type, (."display-name" // .name // "Not available"), (."lifecycle-state" // "Not available")] | @tsv' |
+      while IFS="$(printf '\t')" read -r ROW_TYPE ROW_NAME ROW_STATE; do
+        gateway_row "$ROW_TYPE" "$ROW_NAME" "$ROW_STATE"
+      done
+    return
+  fi
+  gateway_row "$TYPE" "Not available" "Not available"
+}
+
+gateway_summary() {
+  section "Gateways"
+  gateway_header
+  gateway_from_list "gw-internet" \
+    oci network internet-gateway list \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --vcn-id "$VCN_OCID"
+  gateway_from_get "gw-service" SGW_OCID \
+    oci network service-gateway get \
+      --service-gateway-id "$SGW_OCID"
+  gateway_from_list "gw-nat" \
+    oci network nat-gateway list \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --vcn-id "$VCN_OCID"
+  gateway_from_get "DRG" DRG_OCID \
+    oci network drg get \
+      --drg-id "$DRG_OCID"
+}
+
+subnet_header() {
+  printf '%-21s | %-13s | %-7s | %-7s | %-22s | %s\n' \
+    "NAME" "CIDR" "DNS" "PRIVATE" "SECURITY LISTS" "STATE"
+  printf '%-21s | %-13s | %-7s | %-7s | %-22s | %s\n' \
+    "---------------------" "-------------" "-------" "-------" "----------------------" "---------------"
+}
+
+subnet_row() {
+  NAME="$(shorten "$1" 21)"
+  CIDR="$(shorten "$2" 13)"
+  DNS="$(shorten "$3" 7)"
+  PRIVATE="$(shorten "$4" 7)"
+  SECURITY_LISTS="$(shorten "$5" 22)"
+  STATE="$(shorten "$6" 15)"
+  printf '%-21s | %-13s | %-7s | %-7s | %-22s | %s\n' \
+    "$NAME" "$CIDR" "$DNS" "$PRIVATE" "$SECURITY_LISTS" "$STATE"
+}
+
+show_subnet_inventory() {
+  section "Subnets"
+
+  if ! command -v jq &gt;/dev/null 2&gt;&amp;1; then
+    run_table "Subnets" \
+      oci network subnet list \
+        --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+        --vcn-id "$VCN_OCID" \
+        --query 'data[].{Name:"display-name",Cidr:"cidr-block",Dns:"dns-label",Private:"prohibit-public-ip-on-vnic",State:"lifecycle-state"}' \
+        --output table
+    return
+  fi
+
+  SUBNETS_JSON="$(
+    oci network subnet list \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --vcn-id "$VCN_OCID" \
+      --output json
+  )"
+
+  subnet_header
+  printf '%s\n' "$SUBNETS_JSON" | jq -r \
+    --arg default_sl "${DEFAULT_SECURITY_LIST_OCID:-}" \
+    --arg backup_sl "${SECURITY_LIST_BACKUP_OCID:-}" '
+      def sl_name($id):
+        if $id == $default_sl then "default"
+        elif $id == $backup_sl then "sl-backup"
+        else ($id[0:12] + "...")
+        end;
+      .data[] |
+      [
+        (."display-name" // "-"),
+        (."cidr-block" // "-"),
+        (."dns-label" // "-"),
+        (if has("prohibit-public-ip-on-vnic") then (."prohibit-public-ip-on-vnic" | tostring) else "-" end),
+        ((."security-list-ids" // []) | map(sl_name(.)) | join(",")),
+        (."lifecycle-state" // "-")
+      ] | @tsv
+    ' | while IFS="$(printf '\t')" read -r NAME CIDR DNS PRIVATE SECURITY_LISTS STATE; do
+      subnet_row "$NAME" "$CIDR" "$DNS" "$PRIVATE" "$SECURITY_LISTS" "$STATE"
+    done
+}
+
+show_nsg_access_model() {
+  section "NSG Access Model"
+  access_header
+  access_row "nsg-exadata-client" "Client TCP/ICMP; app/admin/dbtools SQL/ONS; SSH" "Backup 8005/2484; VCN TCP"
+  access_row "nsg-applications" "Public LB 80/8080/443; admin SSH" "Exadata client TCP 1521 and 6200"
+  access_row "nsg-dbtools-endpoint" "None" "Exadata client TCP 1521 and 6200"
+  access_row "nsg-bastion-admin" "Internet SSH" "SSH to client/app; SQL/ONS to client; internet"
+  access_row "nsg-public-lb" "Internet 80/443/8080" "Internet TCP 80, 443, and 8080"
+}
+
+show_security_list_rule_details() {
+  section "Current Security List Rule Details"
+  kv_header
+  kv "Display focus" "Direction, protocol, port range, CIDR or service, and rule description"
+
+  security_list_rules "Default security list ingress and egress" "${DEFAULT_SECURITY_LIST_OCID:-}" "default"
+  security_list_rules "sl-backup ingress and egress" "${SECURITY_LIST_BACKUP_OCID:-}" "sl-backup"
+}
+
+show_nsg_inventory() {
+  run_table "NSGs" \
+    oci network nsg list \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --vcn-id "$VCN_OCID" \
+      --query 'data[].{Name:"display-name",State:"lifecycle-state"}' \
+      --output table
+}
+
+show_nsg_rule_details() {
+  section "Current NSG Rule Details"
+  kv_header
+  kv "Display focus" "Direction, protocol, port range, and rule description"
+
+  nsg_rules "nsg-exadata-client ingress and egress" NSG_EXADATA_CLIENT_OCID "nsg-exadata-client"
+  nsg_rules "nsg-applications ingress and egress" NSG_APPLICATIONS_OCID "nsg-applications"
+  nsg_rules "nsg-dbtools-endpoint ingress and egress" NSG_DBTOOLS_OCID "nsg-dbtools-endpoint"
+  nsg_rules "nsg-bastion-admin ingress and egress" NSG_BASTION_OCID "nsg-bastion-admin"
+  nsg_rules "nsg-public-lb ingress and egress" NSG_PUBLIC_LB_OCID "nsg-public-lb"
+}
+
+show_nsg_sections() {
+  show_nsg_access_model
+  show_nsg_inventory
+  show_nsg_rule_details
+}
+
+show_full_report() {
+  COMPARTMENT_PATH="${POC_PARENT_COMPARTMENT_NAME:-Partner}/${POC_COMPARTMENT_NAME:-LAD-01}"
+
+  section "OCI PoC RunBook Executive Report"
+  kv_header
+  kv "Generated UTC" "$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+  kv "Region" "${REGION:-NOT_AVAILABLE}"
+  kv "Workbook directory" "$WORKBOOK_DIR"
+  kv "Report file" "$REPORT_FILE"
+  kv "Format" "Names, states, and access details"
+  kv "PoC compartment" "(root)/$COMPARTMENT_PATH"
+  kv "Network artifacts compartment" "(root)/$COMPARTMENT_PATH"
+  kv "Admin artifacts compartment" "(root)/$COMPARTMENT_PATH"
+  kv "VCN name" "${VCN_NAME:-VCN-${POC_COMPARTMENT_NAME:-LAD-01}}"
+  kv "VCN CIDR" "${VCN_CIDR:-10.0.0.0/16}"
+  kv "DNS domain" "poc.oraclevcn.com"
+
+  section "Current Artifacts"
+  kv_header
+  kv "PoC compartment" "(root)/$COMPARTMENT_PATH"
+  kv "Network artifacts compartment" "(root)/$COMPARTMENT_PATH"
+  kv "Admin artifacts compartment" "(root)/$COMPARTMENT_PATH"
+  kv "VCN" "${VCN_NAME:-VCN-${POC_COMPARTMENT_NAME:-LAD-01}}"
+  kv "Gateways" "gw-internet, gw-service, gw-nat, optional dynamic-routing-gateway"
+  kv "Route tables" "rt-public, rt-private"
+  kv "Subnets" "subnet-admin, subnet-dbclient, subnet-db-backup, subnet-dbtools, subnet-public-lb, subnet-applications"
+  kv "Security lists" "default security list, sl-backup"
+  kv "NSGs" "nsg-exadata-client, nsg-applications, nsg-dbtools-endpoint, nsg-bastion-admin, nsg-public-lb"
+  kv "Service access" "Route tables provide NAT, Service Gateway, and Internet Gateway paths; security-list baseline uses the default list plus sl-backup"
+
+  show_nsg_access_model
+
+  run_optional_table "VCN" VCN_OCID \
+    oci network vcn get \
+      --vcn-id "$VCN_OCID" \
+      --query 'data.{Name:"display-name",Cidr:"cidr-block",Dns:"dns-label",State:"lifecycle-state"}' \
+      --output table
+
+  gateway_summary
+
+  run_table "Route Tables" \
+    oci network route-table list \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --vcn-id "$VCN_OCID" \
+      --query 'data[].{Name:"display-name",State:"lifecycle-state"}' \
+      --output table
+
+  show_subnet_inventory
+
+  run_table "Security Lists" \
+    oci network security-list list \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --vcn-id "$VCN_OCID" \
+      --query 'data[].{Name:"display-name",State:"lifecycle-state"}' \
+      --output table
+
+  show_security_list_rule_details
+
+  show_nsg_inventory
+  show_nsg_rule_details
+
+  section "Completion Notes"
+  kv_header
+  kv "Report saved" "$REPORT_FILE"
+  kv "Next action" "Review NSG ingress and egress with the security owner"
+}
+
+main() {
+  REPORT_SCOPE="${1:-all}"
+  case "$REPORT_SCOPE" in
+    all|full)
+      show_full_report
+      ;;
+    nsg|nsg-only|--nsg|--nsg-only)
+      show_nsg_sections
+      ;;
+    *)
+      printf 'Usage: %s [all|nsg]\n' "$0" &gt;&amp;2
+      exit 2
+      ;;
+  esac
+}
+
+main "${1:-all}" | tee "$REPORT_FILE"
+REPORT_SCRIPT
+
+chmod +x "$WORKBOOK_DIR/executive-report.sh"
+clear
+"$WORKBOOK_DIR/executive-report.sh" all
+}
+
+wb05_card20</code></pre>
+</div>
+<h3>OUTPUT 20 - Expected executive report output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the executive report reflects one PoC compartment, the selected VCN name and CIDR, default security lists on every subnet, sl-backup only on the backup subnet, and the expected NSG rule model.</span>
+  </div>
+  <pre class="code-scroll"><code>OCI PoC RunBook Executive Report
+------------------------------------------------------------------------------------------------
+ITEM                           | VALUE
+------------------------------ | -----
+Generated UTC                  | &lt;generated UTC timestamp&gt;
+Region                         | &lt;region&gt;
+Workbook directory             | /home/&lt;user&gt;/workbook
+Report file                    | /home/&lt;user&gt;/workbook/networking-executive-report.txt
+Format                         | Names, states, and access details
+PoC compartment                | (root)/&lt;parent-compartment&gt;/&lt;poc-compartment&gt;
+Network artifacts compartment  | (root)/&lt;parent-compartment&gt;/&lt;poc-compartment&gt;
+Admin artifacts compartment    | (root)/&lt;parent-compartment&gt;/&lt;poc-compartment&gt;
+VCN name                       | VCN-&lt;poc-compartment&gt;
+VCN CIDR                       | &lt;vcn-cidr&gt;
+DNS domain                     | poc.oraclevcn.com
+
+Current Artifacts
+------------------------------------------------------------------------------------------------
+ITEM                           | VALUE
+------------------------------ | -----
+PoC compartment                | (root)/&lt;parent-compartment&gt;/&lt;poc-compartment&gt;
+Network artifacts compartment  | (root)/&lt;parent-compartment&gt;/&lt;poc-compartment&gt;
+Admin artifacts compartment    | (root)/&lt;parent-compartment&gt;/&lt;poc-compartment&gt;
+VCN                            | VCN-&lt;poc-compartment&gt;
+Gateways                       | gw-internet, gw-service, gw-nat, optional dynamic-routing-gateway
+Route tables                   | rt-public, rt-private
+Subnets                        | subnet-admin, subnet-dbclient, subnet-db-backup, subnet-dbtools, subnet-public-lb, subnet-applications
+Security lists                 | default security list, sl-backup
+NSGs                           | nsg-exadata-client, nsg-applications, nsg-dbtools-endpoint, nsg-bastion-admin, nsg-public-lb
+Service access                 | Route tables provide NAT, Service Gateway, and Internet Gateway paths; security-list baseline uses the default list plus sl-backup
+
+NSG Access Model
+------------------------------------------------------------------------------------------------
+NSG                    | INGRESS ACCESS                              | EGRESS ACCESS
+---------------------- | ------------------------------------------- | -------------------------------------------
+nsg-exadata-client     | Client TCP/ICMP; app/admin/dbtools SQL/O... | Backup 8005/2484; VCN TCP
+nsg-applications       | Public LB 80/8080/443; admin SSH            | Exadata client TCP 1521 and 6200
+nsg-dbtools-endpoint   | None                                        | Exadata client TCP 1521 and 6200
+nsg-bastion-admin      | Internet SSH                                | SSH to client/app; SQL/ONS to client; in...
+nsg-public-lb          | Internet 80/443/8080                        | Internet TCP 80, 443, and 8080
+
+VCN
+------------------------------------------------------------------------------------------------
+etag: &lt;etag&gt;
++-------------+-----+------------+-----------+
+| Cidr        | Dns | Name       | State     |
++-------------+-----+------------+-----------+
+| &lt;vcn-cidr&gt;  | poc | VCN-&lt;poc-compartment&gt; | AVAILABLE |
++-------------+-----+------------+-----------+
+
+Gateways
+------------------------------------------------------------------------------------------------
+TYPE               | NAME                         | STATE
+------------------ | ---------------------------- | ---------------
+gw-internet        | gw-internet                  | AVAILABLE
+gw-service         | gw-service                   | AVAILABLE
+gw-nat             | gw-nat                       | AVAILABLE
+DRG                | Not available                | Not available
+
+Route Tables
+------------------------------------------------------------------------------------------------
++------------------------------------+-----------+
+| Name                               | State     |
++------------------------------------+-----------+
+| rt-private                         | AVAILABLE |
+| rt-public                          | AVAILABLE |
+| Default Route Table for VCN-&lt;poc-compartment&gt; | AVAILABLE |
++------------------------------------+-----------+
+
+Subnets
+------------------------------------------------------------------------------------------------
+NAME                  | CIDR          | DNS     | PRIVATE | SECURITY LISTS         | STATE
+--------------------- | ------------- | ------- | ------- | ---------------------- | ---------------
+subnet-applications   | &lt;apps-cidr&gt;   | apps    | true    | default                | AVAILABLE
+subnet-public-lb      | &lt;public-lb-cidr&gt; | publb | false   | default                | AVAILABLE
+subnet-dbtools        | &lt;dbtools-cidr&gt; | dbtools | true    | default                | AVAILABLE
+subnet-db-backup      | &lt;backup-cidr&gt; | backup  | true    | default,sl-backup      | AVAILABLE
+subnet-dbclient       | &lt;client-cidr&gt; | client  | true    | default                | AVAILABLE
+subnet-admin          | &lt;admin-cidr&gt;  | admin   | false   | default                | AVAILABLE
+
+Security Lists
+------------------------------------------------------------------------------------------------
++--------------------------------------+-----------+
+| Name                                 | State     |
++--------------------------------------+-----------+
+| sl-backup                            | AVAILABLE |
+| Default Security List for VCN-&lt;poc-compartment&gt; | AVAILABLE |
++--------------------------------------+-----------+
+
+Current Security List Rule Details
+------------------------------------------------------------------------------------------------
+ITEM                           | VALUE
+------------------------------ | -----
+Display focus                  | Direction, protocol, port range, CIDR or service, and rule description
+
+Default security list ingress and egress
+------------------------------------------------------------------------------------------------
+SECURITY LIST        | DIR     | PROTO | PORTS      | CIDR / SERVICE           | DESCRIPTION
+-------------------- | ------- | ----- | ---------- | ------------------------ | ------------------------------
+default              | INGRESS | ICMP  | 3-4        | 0.0.0.0/0                | ICMP traffic for: 3, 4 Dest...
+default              | INGRESS | ICMP  | 3          | 0.0.0.0/0                | ICMP traffic for: 3 Destina...
+default              | EGRESS  | TCP   | All        | all-&lt;region&gt;-services... | Allow TCP egress to All Ser...
+
+sl-backup ingress and egress
+------------------------------------------------------------------------------------------------
+SECURITY LIST        | DIR     | PROTO | PORTS      | CIDR / SERVICE           | DESCRIPTION
+-------------------- | ------- | ----- | ---------- | ------------------------ | ------------------------------
+sl-backup            | INGRESS | TCP   | 8005       | &lt;vcn-cidr&gt;               | Allow VCN TCP 8005 to Exada...
+sl-backup            | INGRESS | TCP   | 2484       | &lt;vcn-cidr&gt;               | Allow VCN TCP 2484 to Exada...
+sl-backup            | EGRESS  | TCP   | All        | &lt;vcn-cidr&gt;               | Allow backup subnet TCP egr...
+
+NSGs
+------------------------------------------------------------------------------------------------
++----------------------+-----------+
+| Name                 | State     |
++----------------------+-----------+
+| nsg-public-lb        | AVAILABLE |
+| nsg-bastion-admin    | AVAILABLE |
+| nsg-dbtools-endpoint | AVAILABLE |
+| nsg-applications     | AVAILABLE |
+| nsg-exadata-client   | AVAILABLE |
++----------------------+-----------+
+
+Current NSG Rule Details
+------------------------------------------------------------------------------------------------
+ITEM                           | VALUE
+------------------------------ | -----
+Display focus                  | Direction, protocol, port range, and rule description
+
+nsg-exadata-client ingress and egress
+------------------------------------------------------------------------------------------------
+NSG                  | DIR     | PROTO | PORTS      | NSG / SERVICE / CIDR     | DESCRIPTION
+-------------------- | ------- | ----- | ---------- | ------------------------ | ------------------------------
+nsg-exadata-client   | INGRESS | TCP   | All        | &lt;client-cidr&gt;            | Allow Exadata client subnet...
+nsg-exadata-client   | INGRESS | ICMP  | All        | &lt;client-cidr&gt;            | Allow Exadata client subnet...
+nsg-exadata-client   | INGRESS | TCP   | 1521       | nsg-applications         | Allow application SQL*Net t...
+nsg-exadata-client   | INGRESS | TCP   | 1521       | nsg-bastion-admin        | Allow admin SQL*Net to Exad...
+nsg-exadata-client   | INGRESS | TCP   | 1521       | nsg-dbtools-endpoint     | Allow Database Tools SQL*Ne...
+nsg-exadata-client   | INGRESS | TCP   | 6200       | nsg-applications         | Allow application ONS/FAN t...
+nsg-exadata-client   | INGRESS | TCP   | 6200       | nsg-bastion-admin        | Allow admin ONS/FAN to Exad...
+nsg-exadata-client   | INGRESS | TCP   | 6200       | nsg-dbtools-endpoint     | Allow Database Tools ONS/FA...
+nsg-exadata-client   | INGRESS | TCP   | 22         | nsg-bastion-admin        | Allow admin SSH to Exadata ...
+nsg-exadata-client   | EGRESS  | TCP   | 8005       | &lt;backup-cidr&gt;            | Allow Exadata client Autono...
+nsg-exadata-client   | EGRESS  | TCP   | 2484       | &lt;backup-cidr&gt;            | Allow Exadata client Autono...
+nsg-exadata-client   | EGRESS  | TCP   | All        | &lt;vcn-cidr&gt;               | Allow Exadata client TCP al...
+
+nsg-applications ingress and egress
+------------------------------------------------------------------------------------------------
+NSG                  | DIR     | PROTO | PORTS      | NSG / SERVICE / CIDR     | DESCRIPTION
+-------------------- | ------- | ----- | ---------- | ------------------------ | ------------------------------
+nsg-applications     | INGRESS | TCP   | 22         | nsg-bastion-admin        | Allow admin SSH from bastio...
+nsg-applications     | INGRESS | TCP   | 80         | nsg-public-lb            | Allow public load balancer ...
+nsg-applications     | INGRESS | TCP   | 8080       | nsg-public-lb            | Allow public load balancer ...
+nsg-applications     | INGRESS | TCP   | 443        | nsg-public-lb            | Allow public load balancer ...
+nsg-applications     | EGRESS  | TCP   | 1521       | nsg-exadata-client       | Allow application SQL*Net e...
+nsg-applications     | EGRESS  | TCP   | 6200       | nsg-exadata-client       | Allow application ONS/FAN e...
+
+nsg-dbtools-endpoint ingress and egress
+------------------------------------------------------------------------------------------------
+NSG                  | DIR     | PROTO | PORTS      | NSG / SERVICE / CIDR     | DESCRIPTION
+-------------------- | ------- | ----- | ---------- | ------------------------ | ------------------------------
+nsg-dbtools-endpoint | EGRESS  | TCP   | 1521       | nsg-exadata-client       | Allow Database Tools SQL*Ne...
+nsg-dbtools-endpoint | EGRESS  | TCP   | 6200       | nsg-exadata-client       | Allow Database Tools ONS/FA...
+
+nsg-bastion-admin ingress and egress
+------------------------------------------------------------------------------------------------
+NSG                  | DIR     | PROTO | PORTS      | NSG / SERVICE / CIDR     | DESCRIPTION
+-------------------- | ------- | ----- | ---------- | ------------------------ | ------------------------------
+nsg-bastion-admin    | INGRESS | TCP   | 22         | 0.0.0.0/0                | Allow SSH from internet to ...
+nsg-bastion-admin    | EGRESS  | TCP   | 22         | nsg-exadata-client       | Allow admin SSH egress to E...
+nsg-bastion-admin    | EGRESS  | TCP   | 22         | nsg-applications         | Allow admin SSH egress to a...
+nsg-bastion-admin    | EGRESS  | TCP   | 1521       | nsg-exadata-client       | Allow admin SQL*Net egress ...
+nsg-bastion-admin    | EGRESS  | TCP   | 6200       | nsg-exadata-client       | Allow admin ONS/FAN egress ...
+nsg-bastion-admin    | EGRESS  | TCP   | All        | 0.0.0.0/0                | Allow bastion/admin TCP egr...
+
+nsg-public-lb ingress and egress
+------------------------------------------------------------------------------------------------
+NSG                  | DIR     | PROTO | PORTS      | NSG / SERVICE / CIDR     | DESCRIPTION
+-------------------- | ------- | ----- | ---------- | ------------------------ | ------------------------------
+nsg-public-lb        | INGRESS | TCP   | 443        | 0.0.0.0/0                | Allow HTTPS from internet t...
+nsg-public-lb        | INGRESS | TCP   | 80         | 0.0.0.0/0                | Allow HTTP from internet to...
+nsg-public-lb        | INGRESS | TCP   | 8080       | 0.0.0.0/0                | Allow HTTP alternate from i...
+nsg-public-lb        | EGRESS  | TCP   | 80         | 0.0.0.0/0                | Allow public load balancer ...
+nsg-public-lb        | EGRESS  | TCP   | 8080       | 0.0.0.0/0                | Allow public load balancer ...
+nsg-public-lb        | EGRESS  | TCP   | 443        | 0.0.0.0/0                | Allow public load balancer ...
+
+Completion Notes
+------------------------------------------------------------------------------------------------
+ITEM                           | VALUE
+------------------------------ | -----
+Report saved                   | /home/&lt;user&gt;/workbook/networking-executive-report.txt
+Next action                    | Review NSG ingress and egress with the security owner</code></pre>
+</div>
+      </section><section id="generated-report-text-files" class="article-section">
+        <h2>Generated Report Text Files</h2>
+        <p>The consolidated runbook creates the following text report files under <code>~/workbook</code>.</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Report file</th>
+<th scope="col">Generated by</th>
+<th scope="col">Purpose</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>~/workbook/networking-executive-report.txt</code></td>
+<td>BASH 20 - Generate executive implementation report</td>
+<td>Captures current artifact names, states, gateway inventory, subnet inventory, security lists, NSGs, NSG access model, and current NSG rule details for security review and Chapter 14 readiness sign-off.</td>
+</tr>
+</tbody></table></div>
+<p>The helper script <code>~/workbook/executive-report.sh</code> can regenerate the same report file. Run <code>~/workbook/executive-report.sh all</code> for the full report or <code>~/workbook/executive-report.sh nsg</code> to focus on NSG access and rule details.</p>
+      </section>
+      <section id="chapter-navigation" class="article-section">
+        <h2>Chapter navigation</h2>
+        <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../04-bastion-and-administrator-access/index.html"><span class="nav-card-label">Previous</span><strong>04. Bastion and Administrator Access</strong></a><a class="chapter-link nav-card" href="../06-exadata-environment-initialization/index.html"><span class="nav-card-label">Next</span><strong>06. Exadata Environment Initialization</strong></a>
+      </nav>
+        <div class="two-up">
+          <a class="content-card link-card" href="../index.html#documentation"><strong>Series documentation</strong></a>
+          <a class="content-card link-card" href="../index.html#glossary"><strong>Series glossary</strong></a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer class="site-footer">
+    <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+  </footer>
+  <button class="back-top" type="button" aria-label="Back to top">Back to top</button>
+  <script src="../shared-guide-set.js"></script>
+  <script src="../assets/workbook.js"></script>
+</body>
+</html>
