@@ -1313,15 +1313,16 @@ ssh -tt -i "$HOME/keys/$(basename "$SSH_PRIVATE_KEY_FILE")" "${BASTION_SSH_USER:
 </div>
       </section><section id="bash-13-allow-ssh-to-the-bastion-nsg" class="article-section">
         <h2>BASH 13 - Allow SSH to the bastion NSG</h2>
-        <p>To tighten bastion access, add a single IPv4 address as a <code>/32</code> SSH ingress rule on the bastion network security group. This card creates the reusable script <code>~/workbook/allow-bastion-ssh-source.sh</code>, resolves the current Cloud Shell public IP by default, and calls the reusable script with that IP address. To allow a different source, pass the IP address as the first parameter, for example <code>wb10_card13 203.0.113.10</code>. This workbook uses <code>NSG_BASTION_OCID</code> for bastion access control, so the reusable script updates the bastion NSG used by the VM. It adds the <code>/32</code> rule when missing; it does not remove broader existing rules automatically.</p>
+        <p>To tighten bastion access, add a single IPv4 address as a <code>/32</code> SSH ingress rule on the bastion network security group. This card creates the reusable script <code>~/workbook/allow-bastion-ssh-source.sh</code>, resolves the current Cloud Shell public IP by default, and calls the reusable script with that IP address. The default rule description is <code>Allow SSH from approved source IP - Cloud Shell</code>. To allow a different source, pass the IP address as the first parameter, for example <code>wb10_card13 &lt;approved_source_ip&gt;</code>; that custom rule description is <code>Allow SSH from approved source IP - Custom</code>. This workbook uses <code>NSG_BASTION_OCID</code> for bastion access control, so the reusable script updates the bastion NSG used by the VM. It adds the <code>/32</code> rule when missing; it does not remove broader existing rules automatically.</p>
 <h3>BASH 13 - Allow SSH to the bastion NSG</h3>
-<div class="code-card">
+<div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a reusable script that adds an SSH ingress rule for <code>&lt;source_ip&gt;/32</code> to <code>NSG_BASTION_OCID</code>, then execute it with the resolved Cloud Shell public IP by default or with a provided IP address.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb10_card13() {
@@ -1348,6 +1349,11 @@ allow_bastion_ssh_source() {
   RULES_JSON="$WORKBOOK_DIR/nsg-bastion-existing-rules.json"
   RULE_ID_FILE="$WORKBOOK_DIR/nsg-bastion-ssh-source-rule-id.txt"
   SOURCE_SSH_CIDR="$SOURCE_IP/32"
+  RULE_DESCRIPTION="Allow SSH from approved source IP - Custom"
+
+  if [ "$SOURCE_IP_MODE" = "current Cloud Shell public IP" ]; then
+    RULE_DESCRIPTION="Allow SSH from approved source IP - Cloud Shell"
+  fi
 
   missing=0
   for name in REGION NSG_BASTION_OCID SOURCE_IP; do
@@ -1395,7 +1401,7 @@ allow_bastion_ssh_source() {
     cat &gt; "$RULE_FILE" &lt;&lt;EOF
 [
   {
-    "description": "Allow SSH from approved source IP",
+    "description": "$RULE_DESCRIPTION",
     "direction": "INGRESS",
     "isStateless": false,
     "protocol": "6",
@@ -1430,6 +1436,7 @@ EOF
     "FIELD" "VALUE" \
     "----------------------------" "-----" \
     "SOURCE_IP_MODE" "$SOURCE_IP_MODE" \
+    "RULE_DESCRIPTION" "$RULE_DESCRIPTION" \
     "SOURCE_IP" "$SOURCE_IP" \
     "SOURCE_SSH_CIDR" "$SOURCE_SSH_CIDR" \
     "NSG_BASTION_OCID" "$NSG_BASTION_OCID" \
@@ -1458,7 +1465,7 @@ wb10_card13</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for BASH 13 - Allow SSH to the bastion NSG.</span>
   </div>
-  <pre class="code-scroll"><code>wb10_card13 203.0.113.10</code></pre>
+  <pre class="code-scroll"><code>wb10_card13 &lt;approved_source_ip&gt;</code></pre>
 </div>
 <p>After the card creates the reusable script, you can also run it directly with any approved source IP:</p>
 <div class="code-card">
@@ -1469,7 +1476,7 @@ wb10_card13</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for BASH 13 - Allow SSH to the bastion NSG.</span>
   </div>
-  <pre class="code-scroll"><code>~/workbook/allow-bastion-ssh-source.sh 203.0.113.10</code></pre>
+  <pre class="code-scroll"><code>~/workbook/allow-bastion-ssh-source.sh &lt;approved_source_ip&gt;</code></pre>
 </div>
 <h3>OUTPUT 13 - Expected bastion SSH ingress update</h3>
 <div class="code-card">
