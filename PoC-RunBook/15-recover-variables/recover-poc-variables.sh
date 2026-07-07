@@ -125,7 +125,24 @@ fi
 RECOVERY_SERVICE_SUBNET_OCID="$(ociq oci recovery recovery-service-subnet-collection list-recovery-service-subnets --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name rss-exadata-backup --vcn-id "$VCN_OCID" --lifecycle-state ACTIVE --all --query 'data.items[0].id')"
 PROTECTION_POLICY_NAME=Bronze; BACKUP_DESTINATION_TYPE=DBRS; BACKUP_RETENTION_POLICY_ON_TERMINATE=RETAIN_FOR_72_HOURS; REAL_TIME_DATA_PROTECTION_ENABLED=false
 PROTECTION_POLICY_OCID="$(ociq oci recovery protection-policy-collection list-protection-policies --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$PROTECTION_POLICY_NAME" --all --query 'data.items[0].id')"
-INITIAL_BACKUP_OCID="$(ociq oci db backup list --region "$REGION" --database-id "$CDB_OCID" --all --sort-by TIMECREATED --sort-order DESC --query 'data[0].id')"
+BACKUP_LIST_JSON="$WORKBOOK_DIR/recovered-backup-list.json"
+oci db backup list \
+  --region "$REGION" \
+  --database-id "$CDB_OCID" \
+  --all \
+  --output json > "$BACKUP_LIST_JSON" 2>/dev/null || printf '{"data":[]}\n' > "$BACKUP_LIST_JSON"
+INITIAL_BACKUP_OCID="$(
+  jq -r --arg prefix "${CDB_NAME}-initial-full-" '
+    def t: ."time-started" // ."time-created" // "";
+    ((.data // [])
+      | map(select((."display-name" // "") | startswith($prefix)))
+      | sort_by(t)
+      | reverse
+      | .[0].id)
+    // ((.data // []) | sort_by(t) | reverse | .[0].id)
+    // empty
+  ' "$BACKUP_LIST_JSON" 2>/dev/null
+)"
 DBMGMT_MANAGEMENT_TYPE=ADVANCED; DBMGMT_CREDENTIAL_USERNAME=SYSTEM; DBMGMT_PROTOCOL=TCP; DBMGMT_PORT=1521; DBMGMT_ROLE=NORMAL; DBMGMT_SECRET_POLICY_NAME=DBMgmt_Resource_Policy
 DBMGMT_SYSTEM_SECRET_OCID="$CDB_SYSTEM_SECRET_OCID"; DBMGMT_PASSWORD_SECRET_OCID="$CDB_SYSTEM_SECRET_OCID"; DBMGMT_IAM_HOME_REGION=us-phoenix-1; DBMGMT_SECRET_POLICY_COMPARTMENT_NAME="$POC_COMPARTMENT_NAME"
 DBMGMT_SECRET_POLICY_OCID="$(ociq oci iam policy list --region "$DBMGMT_IAM_HOME_REGION" --compartment-id "$POC_COMPARTMENT_OCID" --name "$DBMGMT_SECRET_POLICY_NAME" --all --query 'data[0].id')"

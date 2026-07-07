@@ -279,7 +279,7 @@ RECOVERY_DIR="$WORKBOOK_DIR/recovery-tools"
 RECOVERY_SCRIPT="$RECOVERY_DIR/recover-poc-variables.sh"
 RECOVERY_REPORT="$WORKBOOK_DIR/recovered-variable-summary.txt"
 DEFAULT_RECOVERY_URL="https://efrainsanchez-ai.github.io/OCI/PoC-RunBook/15-recover-variables/recover-poc-variables.sh"
-RECOVERY_URL="${RECOVERY_URL:-$DEFAULT_RECOVERY_URL}"
+RECOVERY_URL="$DEFAULT_RECOVERY_URL"
 
 mkdir -p "$RECOVERY_DIR"
 chmod 700 "$RECOVERY_DIR"
@@ -288,7 +288,7 @@ printf 'Downloading recovery script ...\n'
 printf 'Source: %s\n' "$RECOVERY_URL"
 if ! curl -fsSL "$RECOVERY_URL" -o "$RECOVERY_SCRIPT"; then
   printf 'STOP: Unable to download recovery script.\n' &gt;&amp;2
-  printf 'Set RECOVERY_URL to the published recover-poc-variables.sh location and rerun wb15_card02.\n' &gt;&amp;2
+  printf 'Confirm the published recover-poc-variables.sh file exists and rerun wb15_card02.\n' &gt;&amp;2
   return 1
 fi
 
