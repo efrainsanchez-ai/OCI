@@ -104,16 +104,22 @@
             "label": "14. OCI Database Management"
       },
       {
-            "key": "15-stop-and-start-services",
-            "rootPath": "15-stop-and-start-services/index.html",
-            "nestedPath": "../15-stop-and-start-services/index.html",
-            "label": "15. Stop and Start Services"
+            "key": "15-oci-file-storage",
+            "rootPath": "15-oci-file-storage/index.html",
+            "nestedPath": "../15-oci-file-storage/index.html",
+            "label": "15. OCI File Storage"
       },
       {
-            "key": "16-recover-variables",
-            "rootPath": "16-recover-variables/index.html",
-            "nestedPath": "../16-recover-variables/index.html",
-            "label": "16. Recover Variables"
+            "key": "16-stop-and-start-services",
+            "rootPath": "16-stop-and-start-services/index.html",
+            "nestedPath": "../16-stop-and-start-services/index.html",
+            "label": "16. Stop and Start Services"
+      },
+      {
+            "key": "17-recover-variables",
+            "rootPath": "17-recover-variables/index.html",
+            "nestedPath": "../17-recover-variables/index.html",
+            "label": "17. Recover Variables"
       }
 ]
   };

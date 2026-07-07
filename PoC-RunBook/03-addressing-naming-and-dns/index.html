@@ -45,7 +45,7 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#chapter-purpose">Chapter Purpose</a></li><li><a href="#logical-architecture">Logical Architecture</a></li><li><a href="#cidr-plan">CIDR Plan</a></li><li><a href="#naming-standard">Naming Standard</a></li><li><a href="#dns-label-plan">DNS Label Plan</a></li><li><a href="#dns-resolver-posture">DNS Resolver Posture</a></li><li><a href="#addressing-validation-checklist">Addressing Validation Checklist</a></li></ol>
+      <ol><li><a href="#chapter-purpose">Chapter Purpose</a></li><li><a href="#logical-architecture">Logical Architecture</a></li><li><a href="#cidr-plan">CIDR Plan</a></li><li><a href="#naming-standard">Naming Standard</a></li><li><a href="#dns-label-plan">DNS Label Plan</a></li><li><a href="#dns-resolver-posture">DNS Resolver Posture</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
@@ -56,25 +56,84 @@
         <div class="note-box">This chapter defines the IP addressing, subnet names, DNS labels, and resolver posture required for an Exadata-ready OCI VCN baseline.</div>
       </section><section id="logical-architecture" class="article-section">
         <h2>Logical Architecture</h2>
-        <div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Text</span>
-    <button class="copy-btn" type="button">Copy</button>
+        <div class="architecture-infographic addressing-dns-infographic" aria-label="Addressing, naming, and DNS logical model infographic">
+  <div class="architecture-stage architecture-stage-external">
+    <p class="visual-caption">Naming inputs</p>
+    <div class="architecture-node node-admin">
+      <span class="node-icon" aria-hidden="true">CIDR</span>
+      <strong>VCN address space</strong>
+      <span>Parent private address range selected and reserved before subnet creation.</span>
+    </div>
+    <div class="architecture-node node-internet">
+      <span class="node-icon" aria-hidden="true">VCN</span>
+      <strong>VCN name</strong>
+      <span><code>VCN-&lt;compartment-name&gt;</code>, for example <code>VCN-LAD-01</code>.</span>
+    </div>
+    <div class="architecture-node node-hybrid">
+      <span class="node-icon" aria-hidden="true">DNS</span>
+      <strong>VCN DNS label</strong>
+      <span><code>poc</code> creates the private DNS domain <code>poc.oraclevcn.com</code>.</span>
+    </div>
   </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for Logical Architecture.</span>
+
+  <div class="architecture-stage architecture-stage-vcn">
+    <div class="stage-header">
+      <p class="visual-caption">Subnet address and DNS plan</p>
+      <span>Each subnet receives a role-based name and DNS label under <code>poc.oraclevcn.com</code>.</span>
+    </div>
+    <div class="architecture-grid">
+      <div class="architecture-node node-bastion">
+        <span class="node-icon" aria-hidden="true">ADM</span>
+        <strong>subnet-admin</strong>
+        <span>Bastion and admin access<br><code>admin.poc.oraclevcn.com</code></span>
+      </div>
+      <div class="architecture-node node-client">
+        <span class="node-icon" aria-hidden="true">CLI</span>
+        <strong>subnet-dbclient</strong>
+        <span>Exadata client and SQL*Net<br><code>client.poc.oraclevcn.com</code></span>
+      </div>
+      <div class="architecture-node node-backup">
+        <span class="node-icon" aria-hidden="true">BKP</span>
+        <strong>subnet-db-backup</strong>
+        <span>Backup and recovery traffic<br><code>backup.poc.oraclevcn.com</code></span>
+      </div>
+      <div class="architecture-node node-dbtools">
+        <span class="node-icon" aria-hidden="true">SQL</span>
+        <strong>subnet-dbtools</strong>
+        <span>Database tools endpoint<br><code>dbtools.poc.oraclevcn.com</code></span>
+      </div>
+      <div class="architecture-node node-lb">
+        <span class="node-icon" aria-hidden="true">LB</span>
+        <strong>subnet-public-lb</strong>
+        <span>Public load balancer tier<br><code>publb.poc.oraclevcn.com</code></span>
+      </div>
+      <div class="architecture-node node-apps">
+        <span class="node-icon" aria-hidden="true">APP</span>
+        <strong>subnet-applications</strong>
+        <span>Private application tier<br><code>apps.poc.oraclevcn.com</code></span>
+      </div>
+    </div>
   </div>
-  <pre class="code-scroll"><code>VCN: VCN-&lt;compartment-name&gt; default, for example VCN-LAD-01 / 10.0.0.0/16 default / DNS label poc
-  |
-  +-- subnet-admin        10.0.0.0/24   DNS: admin.poc.oraclevcn.com
-  +-- subnet-dbclient     10.0.1.0/24   DNS: client.poc.oraclevcn.com
-  +-- subnet-db-backup    10.0.2.0/24   DNS: backup.poc.oraclevcn.com
-  +-- subnet-dbtools      10.0.3.0/28   DNS: dbtools.poc.oraclevcn.com
-  +-- subnet-public-lb    10.0.10.0/24  DNS: publb.poc.oraclevcn.com
-  +-- subnet-applications 10.0.11.0/24  DNS: apps.poc.oraclevcn.com
-  |
-  +-- Internet and VCN Resolver
-      +-- Optional enterprise DNS forwarding</code></pre>
+
+  <div class="architecture-stage architecture-stage-services">
+    <p class="visual-caption">Resolution posture</p>
+    <div class="architecture-node node-sgw">
+      <span class="node-icon" aria-hidden="true">RES</span>
+      <strong>Internet and VCN Resolver</strong>
+      <span>Default private hostname resolution for VCN resources.</span>
+    </div>
+    <div class="architecture-node node-nat">
+      <span class="node-icon" aria-hidden="true">HYB</span>
+      <strong>Optional enterprise forwarding</strong>
+      <span>Use conditional forwarding only when hybrid DNS requires it.</span>
+    </div>
+  </div>
+
+  <div class="flow-label flow-admin">CIDR allocation</div>
+  <div class="flow-label flow-web">Subnet names</div>
+  <div class="flow-label flow-sql">DNS labels</div>
+  <div class="flow-label flow-services">Resolver</div>
+  <div class="flow-label flow-hybrid">Hybrid DNS</div>
 </div>
 <div class="table-wrap">
 <table class="data-table">
@@ -162,36 +221,6 @@
 <td><code>subnet-applications</code></td>
 <td class="align-right"><code>10.0.11.0/24</code></td>
 <td>Private application and middleware subnet</td>
-</tr>
-</tbody></table></div>
-<h3>2.3 Reserved Expansion Space</h3>
-<p>Do not consume the rest of <code>10.0.0.0/16</code> without architecture approval. Suggested reserved ranges:</p>
-<div class="table-wrap">
-<table class="data-table">
-<thead><tr>
-<th scope="col">Reserved CIDR</th>
-<th scope="col">Reserved use</th>
-</tr></thead>
-<tbody>
-<tr>
-<td><code>10.0.4.0/22</code></td>
-<td>Additional private database tooling, jump services, management endpoints</td>
-</tr>
-<tr>
-<td><code>10.0.12.0/22</code></td>
-<td>Additional application tiers</td>
-</tr>
-<tr>
-<td><code>10.0.20.0/22</code></td>
-<td>Internal load balancers or service mesh</td>
-</tr>
-<tr>
-<td><code>10.0.30.0/22</code></td>
-<td>Observability, logging collectors, security appliances</td>
-</tr>
-<tr>
-<td><code>10.0.40.0/21</code></td>
-<td>Disaster recovery staging or replication utilities</td>
 </tr>
 </tbody></table></div>
       </section><section id="naming-standard" class="article-section">
@@ -388,67 +417,6 @@
 <li>Confirm that target SCAN names resolve from the application network.</li>
 <li>Avoid split-brain DNS where the same database service name resolves differently from different networks.</li>
 </ul>
-      </section><section id="addressing-validation-checklist" class="article-section">
-        <h2>Addressing Validation Checklist</h2>
-        <div class="table-wrap">
-<table class="data-table">
-<thead><tr>
-<th scope="col">Check</th>
-<th scope="col">Expected result</th>
-<th scope="col" class="status-col">Status</th>
-</tr></thead>
-<tbody>
-<tr>
-<td>VCN CIDR does not overlap with on-premises</td>
-<td>Confirmed by network architecture team</td>
-<td class="status-cell">[ ] Completed [ ] Not Completed</td>
-</tr>
-<tr>
-<td>VCN CIDR does not overlap with hub or peered VCNs</td>
-<td>Confirmed</td>
-<td class="status-cell">[ ] Completed [ ] Not Completed</td>
-</tr>
-<tr>
-<td>VCN DNS label is approved</td>
-<td><code>poc</code> or approved equivalent</td>
-<td class="status-cell">[ ] Completed [ ] Not Completed</td>
-</tr>
-<tr>
-<td>VCN DNS domain is confirmed</td>
-<td><code>poc.oraclevcn.com</code> or approved equivalent</td>
-<td class="status-cell">[ ] Completed [ ] Not Completed</td>
-</tr>
-<tr>
-<td>Exadata client subnet DNS label is approved</td>
-<td><code>client</code> or approved equivalent</td>
-<td class="status-cell">[ ] Completed [ ] Not Completed</td>
-</tr>
-<tr>
-<td>Admin subnet DNS domain is confirmed</td>
-<td><code>admin.poc.oraclevcn.com</code> or approved equivalent</td>
-<td class="status-cell">[ ] Completed [ ] Not Completed</td>
-</tr>
-<tr>
-<td>Exadata backup subnet DNS label is approved</td>
-<td><code>backup</code> or approved equivalent</td>
-<td class="status-cell">[ ] Completed [ ] Not Completed</td>
-</tr>
-<tr>
-<td>Subnet CIDRs are reserved in IPAM</td>
-<td>Reserved</td>
-<td class="status-cell">[ ] Completed [ ] Not Completed</td>
-</tr>
-<tr>
-<td>Expansion blocks are reserved</td>
-<td>Reserved</td>
-<td class="status-cell">[ ] Completed [ ] Not Completed</td>
-</tr>
-<tr>
-<td>Hybrid DNS plan exists, if required</td>
-<td>Documented</td>
-<td class="status-cell">[ ] Completed [ ] Not Completed</td>
-</tr>
-</tbody></table></div>
       </section>
       <section id="chapter-navigation" class="article-section">
         <h2>Chapter navigation</h2>

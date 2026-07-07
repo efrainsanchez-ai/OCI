@@ -57,22 +57,63 @@
 <div class="note-box">The consolidated runbook uses the pre-created <code>(root)/Partner/LAD-01</code> compartment by default for the network baseline and any approved PoC administration resources. The assigned child compartment name can change for other deployments. Creating the Bastion VM itself is outside the scope of this runbook.</div>
       </section><section id="logical-architecture" class="article-section">
         <h2>Logical Architecture</h2>
-        <div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Text</span>
-    <button class="copy-btn" type="button">Copy</button>
+        <div class="bastion-flow-infographic" aria-label="Bastion and administrator access logical model infographic">
+  <div class="bastion-flow-main">
+    <div class="bastion-step step-admin">
+      <span class="bastion-step-number">1</span>
+      <span class="bastion-step-icon" aria-hidden="true">ID</span>
+      <strong>Administrator identity</strong>
+      <span>Named user governed by IAM, MFA, and approval workflow.</span>
+    </div>
+    <div class="bastion-connector" aria-hidden="true">Session</div>
+    <div class="bastion-step step-session">
+      <span class="bastion-step-number">2</span>
+      <span class="bastion-step-icon" aria-hidden="true">BST</span>
+      <strong>OCI Bastion or approved jump host</strong>
+      <span>Controlled administrative entry point for private resources.</span>
+      <div class="bastion-nsg-mini">
+        <strong>Bastion/admin NSG</strong>
+        <span><code>nsg-bastion-admin</code></span>
+      </div>
+    </div>
+    <div class="bastion-connector" aria-hidden="true">Private</div>
+    <div class="bastion-step step-target">
+      <span class="bastion-step-number">3</span>
+      <span class="bastion-step-icon" aria-hidden="true">EXA</span>
+      <strong>Exadata administration target</strong>
+      <span>SSH TCP 22 and SQL*Net validation stay on private paths.</span>
+      <div class="bastion-nsg-mini">
+        <strong>Exadata client NSG</strong>
+        <span><code>nsg-exadata-client</code></span>
+      </div>
+    </div>
+    <div class="bastion-connector" aria-hidden="true">Admin</div>
+    <div class="bastion-step step-host">
+      <span class="bastion-step-number">4</span>
+      <span class="bastion-step-icon" aria-hidden="true">APP</span>
+      <strong>Application administration target</strong>
+      <span>Private application hosts can be reached only through the approved path.</span>
+      <div class="bastion-nsg-mini">
+        <strong>Applications NSG</strong>
+        <span><code>nsg-applications</code></span>
+      </div>
+    </div>
   </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for Logical Architecture.</span>
+
+  <div class="bastion-control-panel" aria-label="Administrator access controls">
+    <div class="bastion-control">
+      <strong>Identity control</strong>
+      <span>Human access starts with named administrator identity and approval.</span>
+    </div>
+    <div class="bastion-control">
+      <strong>Network control</strong>
+      <span>Only approved source CIDRs can reach the bastion entry point.</span>
+    </div>
+    <div class="bastion-control">
+      <strong>Target control</strong>
+      <span>Private NSGs limit SSH, SQL*Net, and validation traffic by destination.</span>
+    </div>
   </div>
-  <pre class="code-scroll"><code>Administrator identity
-  |
-  +-- OCI Bastion session or approved jump-host path
-      |
-      +-- nsg-bastion-admin
-          +-- SSH TCP 22 -&gt; nsg-exadata-client
-          +-- SSH TCP 22 -&gt; nsg-applications
-          +-- SQL*Net / ONS validation -&gt; nsg-exadata-client</code></pre>
 </div>
 <div class="table-wrap">
 <table class="data-table">

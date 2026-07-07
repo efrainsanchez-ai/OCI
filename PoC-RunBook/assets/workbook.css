@@ -477,6 +477,10 @@ body[data-theme="dark"] .article-section code:not(.code-card code) {
   box-shadow: var(--shadow);
 }
 
+.addressing-dns-infographic {
+  grid-template-columns: minmax(130px, 0.65fr) minmax(460px, 2.5fr) minmax(145px, 0.75fr);
+}
+
 .architecture-infographic::before,
 .architecture-infographic::after {
   content: "";
@@ -534,6 +538,10 @@ body[data-theme="dark"] .article-section code:not(.code-card code) {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
+}
+
+.addressing-dns-infographic .architecture-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .architecture-node {
