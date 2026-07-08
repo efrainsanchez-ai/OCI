@@ -117,7 +117,7 @@
 </tr>
 <tr>
 <td>Vault resources</td>
-<td>This workbook uses a <code>DEFAULT</code> Vault because software-protected keys and secrets are priced differently from a <code>VIRTUAL_PRIVATE</code> Vault. A virtual private Vault, if selected in another environment, can have a fixed recurring charge.</td>
+<td>This workbook uses a <code>DEFAULT</code> Vault. Oracle lists software-protected Vault keys and Vault secrets as free; virtual private Vaults and some HSM-protected key versions can charge if selected in another environment.</td>
 </tr>
 <tr>
 <td>Database Management and observability</td>
@@ -160,6 +160,7 @@ ENV_FILE="${ENV_FILE:-$SERVICE_ADMIN_DIR/env.sh}"
 
 mkdir -p "$SERVICE_ADMIN_DIR"
 chmod 700 "$SERVICE_ADMIN_DIR"
+printf 'Preparing admin workspace: %s ...\n' "$SERVICE_ADMIN_DIR"
 
 cat &gt; "$HELPERS_FILE" &lt;&lt;'HELPERS'
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/admin}"
@@ -279,6 +280,7 @@ printf '%-22s | %s\n' \
   "BASTION_VM_OCID" "$BASTION_VM_OCID"
 EOF
 chmod 700 "$ENV_FILE"
+printf 'Admin helper files created.\n'
 
 printf 'Enter parent compartment name [Partner]: '
 IFS= read -r POC_PARENT_COMPARTMENT_NAME
@@ -351,6 +353,7 @@ if [ -z "${TENANCY_ID:-}" ] || [ "${TENANCY_ID#ocid1.tenancy.oc1}" = "$TENANCY_I
 fi
 
 POC_PARENT_COMPARTMENT_OCID="$(
+  printf 'Resolving parent compartment OCID ...\n' &gt;&amp;2
   oci iam compartment list \
     --compartment-id "$TENANCY_ID" \
     --all \
@@ -365,6 +368,7 @@ if [ -z "$POC_PARENT_COMPARTMENT_OCID" ] || [ "$POC_PARENT_COMPARTMENT_OCID" = "
 fi
 
 POC_COMPARTMENT_OCID="$(
+  printf 'Resolving assigned compartment OCID ...\n' &gt;&amp;2
   oci iam compartment list \
     --compartment-id "$POC_PARENT_COMPARTMENT_OCID" \
     --all \
@@ -379,6 +383,7 @@ if [ -z "$POC_COMPARTMENT_OCID" ] || [ "$POC_COMPARTMENT_OCID" = "null" ]; then
 fi
 
 VM_CLUSTER_OCID="$(
+  printf 'Discovering Exadata VM cluster: %s ...\n' "$EXADATA_DISPLAY_NAME" &gt;&amp;2
   oci db exadb-vm-cluster list \
     --region "$REGION" \
     --compartment-id "$POC_COMPARTMENT_OCID" \
@@ -397,6 +402,7 @@ if [ -z "$VM_CLUSTER_OCID" ] || [ "$VM_CLUSTER_OCID" = "null" ]; then
 fi
 
 BASTION_VM_OCID="$(
+  printf 'Discovering bastion VM: %s ...\n' "$BASTION_DISPLAY_NAME" &gt;&amp;2
   oci compute instance list \
     --region "$REGION" \
     --compartment-id "$POC_COMPARTMENT_OCID" \
@@ -505,6 +511,7 @@ if [ -n "$missing_vars" ]; then
   return 1
 fi
 
+printf 'Reading Exadata VM cluster runtime state ...\n'
 CLUSTER_DISPLAY_NAME="$(
   oci db exadb-vm-cluster get \
     --region "$REGION" \
@@ -540,6 +547,7 @@ CLUSTER_TOTAL_ECPUS="$(
     --query 'data."total-e-cpu-count"' \
     --raw-output
 )"
+printf 'Reading bastion VM runtime state ...\n'
 BASTION_DISPLAY_NAME="$(
   oci compute instance get \
     --region "$REGION" \
@@ -623,6 +631,7 @@ if ! command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1; then
   return 1
 fi
 
+printf 'Reading restore values from current Exadata and bastion state ...\n'
 SERVICE_RESTORE_ENABLED_ECPU_COUNT="$(
   oci db exadb-vm-cluster get \
     --region "$REGION" \
@@ -706,6 +715,7 @@ DOWNSCALE_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-downscale-ecp
 DOWNSCALE_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-downscale-ecpu-error.txt"
 DOWNSCALE_TARGET_ENABLED_ECPUS="${DOWNSCALE_TARGET_ENABLED_ECPUS:-0}"
 
+printf 'Reading current Exadata VM cluster state before downscale ...\n'
 CLUSTER_STATE="$(
   oci db exadb-vm-cluster get \
     --region "$REGION" \
@@ -750,6 +760,7 @@ else
       ;;
   esac
 
+  printf 'Submitting Exadata enabled ECPU downscale request ...\n'
   oci db exadb-vm-cluster update \
     --region "$REGION" \
     --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
@@ -825,6 +836,7 @@ wb16_card05() {
 BASTION_STOP_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-stop-response.json"
 BASTION_STOP_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-stop-error.txt"
 
+printf 'Reading bastion VM state before stop ...\n'
 BASTION_STATE="$(
   oci compute instance get \
     --region "$REGION" \
@@ -854,6 +866,7 @@ case "$BASTION_STATE" in
         ;;
     esac
 
+    printf 'Submitting bastion VM SOFTSTOP request ...\n'
     oci compute instance action \
       --region "$REGION" \
       --instance-id "$BASTION_VM_OCID" \
@@ -928,6 +941,7 @@ wb16_card05</code></pre>
   <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
 
 wb16_card06() {
+printf 'Validating shutdown state for Exadata VM cluster and bastion VM ...\n'
 CLUSTER_DISPLAY_NAME="$(
   oci db exadb-vm-cluster get \
     --region "$REGION" \
@@ -1023,6 +1037,7 @@ wb16_card07() {
 SERVICE_ADMIN_DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"
 ARTIFACT_REPORT_SCRIPT="$SERVICE_ADMIN_DIR/service-residual-artifacts-report.sh"
 
+printf 'Preparing residual artifact report script ...\n'
 cat &gt; "$ARTIFACT_REPORT_SCRIPT" &lt;&lt;'SCRIPT'
 #!/bin/bash
 set -u
@@ -1092,7 +1107,7 @@ oci db db-home list \
   &gt; "$SERVICE_ADMIN_DIR/service-artifacts-db-homes.json" \
   2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-db-homes.json"
 
-printf '%s\n' "Discovering Base-Database records..."
+printf '%s\n' "Discovering databases in the Exadata VM cluster..."
 printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-databases.json"
 for DB_HOME_OCID in $(jq -r '.data[]?.id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-db-homes.json"); do
   DB_HOME_DATABASES_JSON="$SERVICE_ADMIN_DIR/service-artifacts-databases-$DB_HOME_OCID.json"
@@ -1286,7 +1301,7 @@ NAT_GATEWAY_NAMES="$(jq -r '.data[]? | ."display-name" // .name // .id // empty'
 LOG_GROUP_NAMES="$(jq -r '.data[]? | ."display-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-log-groups.json" | compact_names)"
 DBMGMT_MANAGED_DATABASE_NAMES="$(jq -r '(.data.items // .data // [])[]? | .name // ."database-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-managed-databases.json" | compact_names)"
 DBMGMT_PRIVATE_ENDPOINT_NAMES="$(jq -r '(.data.items // .data // [])[]? | .name // ."display-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-private-endpoints.json" | compact_names)"
-EXADATA_STORAGE_NAMES="VM clusters: $EXADB_VM_CLUSTER_NAMES; Base-Database: $DATABASE_NAMES"
+EXADATA_STORAGE_NAMES="VM clusters: $EXADB_VM_CLUSTER_NAMES; databases using cluster storage: $DATABASE_NAMES"
 BASTION_STORAGE_NAMES="instances: $COMPUTE_INSTANCE_NAMES"
 NETWORK_SERVICE_NAMES="NAT gateways: $NAT_GATEWAY_NAMES; public IPs: $PUBLIC_IP_NAMES"
 OBJECT_STORAGE_NAMES="buckets: $BUCKET_NAMES; objects discovered: $BUCKET_OBJECT_COUNT"
@@ -1311,11 +1326,12 @@ cat &gt; "$ARTIFACT_REPORT_JSON" &lt;&lt;REPORT
 }
 REPORT
 
+printf '%s\n' "Preparing residual artifact and cost report..."
 printf '%-28s | %s\n' \
   "ARTIFACT" "COUNT" \
   "----------------------------" "-----" \
   "Exadata VM clusters" "$EXADB_VM_CLUSTER_COUNT" \
-  "Base-Database" "$DATABASE_COUNT" \
+  "Databases" "$DATABASE_COUNT" \
   "Database backups" "$DB_BACKUP_COUNT" \
   "Compute instances" "$COMPUTE_INSTANCE_COUNT" \
   "Block volumes" "$BLOCK_VOLUME_COUNT" \
@@ -1323,6 +1339,7 @@ printf '%-28s | %s\n' \
   "Object Storage buckets" "$BUCKET_COUNT" \
   "Object Storage objects" "$BUCKET_OBJECT_COUNT" \
   "Vaults" "$VAULT_COUNT" \
+  "Vault names" "$VAULT_NAMES" \
   "NAT gateways" "$NAT_GATEWAY_COUNT" \
   "Log groups" "$LOG_GROUP_COUNT" \
   "DB Mgmt managed DBs" "$DBMGMT_MANAGED_DATABASE_COUNT" \
@@ -1331,7 +1348,7 @@ printf '%-28s | %s\n' \
 printf '\n'
 print_line "COST_CATEGORY" "STILL_CHARGED_WHEN_PAUSED"
 print_separator
-print_wrapped_row "Exadata storage" "Yes - allocated database, sparse, smart, or VM file system storage can remain billable."
+print_wrapped_row "Exadata storage" "Yes - Exadata storage allocated to the VM cluster can remain billable even when enabled ECPUs are set to 0."
 print_wrapped_row "" "Artifacts: $EXADATA_STORAGE_NAMES"
 print_separator
 print_wrapped_row "Database backups" "Yes - retained backups, Recovery Service, or Object Storage copies can remain billable."
@@ -1349,19 +1366,19 @@ print_separator
 print_wrapped_row "Object Storage" "Yes - buckets and objects remain charged until deleted or lifecycle-expired."
 print_wrapped_row "" "Artifacts: $OBJECT_STORAGE_NAMES"
 print_separator
-print_wrapped_row "Vault" "Maybe - DEFAULT software keys and secrets fit this workbook cost model; VIRTUAL_PRIVATE Vault can have fixed charges."
+print_wrapped_row "Vault" "No charge expected for this workbook's DEFAULT Vault with software-protected keys and secrets, based on the OCI price list. Charges can apply for virtual private Vaults and for HSM-protected key versions beyond the free allowance."
 print_wrapped_row "" "Artifacts: $VAULT_NAMES"
 print_separator
 print_wrapped_row "Observability" "Maybe - Logging, VCN Flow Logs, Database Management, Operations Insights, and retained telemetry can charge."
 print_wrapped_row "" "Artifacts: $LOG_GROUP_NAMES"
 print_separator
-print_wrapped_row "Database Management" "Maybe - Database Management for Oracle Cloud Databases is metered by ECPU or OCPU hour; private endpoints are supporting artifacts to verify against the current price list."
+print_wrapped_row "Database Management" "No active Database Management charge is expected while the Exadata VM cluster has 0 enabled ECPUs. The service is listed on the OCI price list as ECPU per hour and OCPU per hour; verify the result in Cost Analysis."
 print_wrapped_row "" "Artifacts: $DATABASE_MANAGEMENT_NAMES"
 print_separator
 print_wrapped_row "Network services" "Maybe - NAT Gateways, Load Balancers, private endpoints, and data transfer can charge if provisioned or used."
 print_wrapped_row "" "Artifacts: $NETWORK_SERVICE_NAMES"
 print_separator
-print_wrapped_row "Commitments" "Maybe - Universal Credits, BYOL, marketplace, support, and contract terms still apply."
+print_wrapped_row "Commitments" "Contract-specific - Universal Credits, BYOL, marketplace subscriptions, support, and committed-spend terms are commercial agreements outside this runbook."
 print_separator
 printf '\n%s\n' "wb16_card07"
 }
@@ -1384,10 +1401,24 @@ wb16_card07</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review discovered artifact counts and the resource categories that can still be charged after the service shutdown.</span>
   </div>
-  <pre class="code-scroll"><code>ARTIFACT                     | COUNT
+  <pre class="code-scroll"><code>Discovering Exadata VM clusters...
+Discovering database homes...
+Discovering databases in the Exadata VM cluster...
+Discovering database backups...
+Discovering compute instances...
+Discovering block volumes...
+Discovering public IPs...
+Discovering Object Storage buckets...
+Discovering Vaults...
+Discovering NAT gateways...
+Discovering log groups...
+Discovering Database Management managed databases...
+Discovering Database Management private endpoints...
+Preparing residual artifact and cost report...
+ARTIFACT                     | COUNT
 ---------------------------- | -----
 Exadata VM clusters          | 1
-Base-Database                | 1
+Databases                    | 1
 Database backups             | 1
 Compute instances            | 1
 Block volumes                | 0
@@ -1395,6 +1426,7 @@ Public IPs                   | 0
 Object Storage buckets       | 1
 Object Storage objects       | 3
 Vaults                       | 1
+Vault names                  | Vault-01
 NAT gateways                 | 1
 Log groups                   | 0
 DB Mgmt managed DBs          | 2
@@ -1403,9 +1435,9 @@ Report JSON                  | /home/oci/admin/service-residual-artifacts.json
 
 COST_CATEGORY                          | STILL_CHARGED_WHEN_PAUSED
 -------------------------------------- | --------------------------------------------------------------------------------
-Exadata storage                        | Yes - allocated database, sparse, smart, or VM file system storage can remain
-                                       | billable.
-                                       | Artifacts: VM clusters: VMCluster-01; Base-Database: CDB01
+Exadata storage                        | Yes - Exadata storage allocated to the VM cluster can remain billable even when
+                                       | enabled ECPUs are set to 0.
+                                       | Artifacts: VM clusters: VMCluster-01; databases using cluster storage: CDB01
 -------------------------------------- | --------------------------------------------------------------------------------
 Database backups                       | Yes - retained backups, Recovery Service, or Object Storage copies can remain
                                        | billable.
@@ -1424,25 +1456,26 @@ Reserve Public IPv4                    | Yes - reserved or billable public IPv4 
 Object Storage                         | Yes - buckets and objects remain charged until deleted or lifecycle-expired.
                                        | Artifacts: buckets: &lt;bucket_name&gt;; objects discovered: 3
 -------------------------------------- | --------------------------------------------------------------------------------
-Vault                                  | Maybe - DEFAULT software keys and secrets fit this workbook cost model;
-                                       | VIRTUAL_PRIVATE Vault can have fixed charges.
+Vault                                  | No charge expected for this workbook's DEFAULT Vault with software-protected
+                                       | keys and secrets, based on the OCI price list. Charges can apply for virtual
+                                       | private Vaults and for HSM-protected key versions beyond the free allowance.
                                        | Artifacts: Vault-01
 -------------------------------------- | --------------------------------------------------------------------------------
 Observability                          | Maybe - Logging, VCN Flow Logs, Database Management, Operations Insights, and
                                        | retained telemetry can charge.
                                        | Artifacts: &lt;log_group_name&gt;
 -------------------------------------- | --------------------------------------------------------------------------------
-Database Management                    | Maybe - Database Management for Oracle Cloud Databases is metered by ECPU or
-                                       | OCPU hour; private endpoints are supporting artifacts to verify against the
-                                       | current price list.
+Database Management                    | No active Database Management charge is expected while the Exadata VM cluster
+                                       | has 0 enabled ECPUs. The service is listed on the OCI price list as ECPU per
+                                       | hour and OCPU per hour; verify the result in Cost Analysis.
                                        | Artifacts: managed databases: CDB01, PDB01; private endpoints: dbmgmt_pe_exadata
 -------------------------------------- | --------------------------------------------------------------------------------
 Network services                       | Maybe - NAT Gateways, Load Balancers, private endpoints, and data transfer can
                                        | charge if provisioned or used.
                                        | Artifacts: NAT gateways: &lt;nat_gateway_name&gt;; public IPs: none discovered
 -------------------------------------- | --------------------------------------------------------------------------------
-Commitments                            | Maybe - Universal Credits, BYOL, marketplace, support, and contract terms still
-                                       | apply.
+Commitments                            | Contract-specific - Universal Credits, BYOL, marketplace subscriptions, support,
+                                       | and committed-spend terms are commercial agreements outside this runbook.
 -------------------------------------- | --------------------------------------------------------------------------------
 
 wb16_card07</code></pre>
@@ -1468,6 +1501,7 @@ wb16_card08() {
 BASTION_START_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-start-response.json"
 BASTION_START_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-start-error.txt"
 
+printf 'Reading bastion VM state before start ...\n'
 BASTION_STATE="$(
   oci compute instance get \
     --region "$REGION" \
@@ -1482,6 +1516,7 @@ case "$BASTION_STATE" in
     BASTION_START_STATUS="0"
     ;;
   STOPPED)
+    printf 'Submitting bastion VM START request ...\n'
     oci compute instance action \
       --region "$REGION" \
       --instance-id "$BASTION_VM_OCID" \
@@ -1567,6 +1602,7 @@ if [ -z "${SERVICE_RESTORE_ENABLED_ECPU_COUNT:-}" ]; then
   return 1
 fi
 
+printf 'Reading current Exadata VM cluster state before restore ...\n'
 CLUSTER_STATE="$(
   oci db exadb-vm-cluster get \
     --region "$REGION" \
@@ -1595,6 +1631,7 @@ if [ "$CURRENT_ENABLED_ECPUS" = "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" ]; then
   RESTORE_ACTION="SKIPPED_ALREADY_AT_TARGET"
   RESTORE_STATUS="0"
 else
+  printf 'Submitting Exadata enabled ECPU restore request ...\n'
   oci db exadb-vm-cluster update \
     --region "$REGION" \
     --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
@@ -1663,6 +1700,7 @@ wb16_card09</code></pre>
   <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
 
 wb16_card10() {
+printf 'Validating started state for Exadata VM cluster and bastion VM ...\n'
 CLUSTER_DISPLAY_NAME="$(
   oci db exadb-vm-cluster get \
     --region "$REGION" \
