@@ -44,8 +44,12 @@ POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
 printf 'This recovery will discover existing resources in /%s/%s and write %s.\n' "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" "$CLI_ENV"
 printf 'Confirm this compartment path? [y/N]: '; IFS= read -r ans
 case "$ans" in y|Y|yes|YES) ;; *) printf 'STOP: Recovery was not confirmed.\n' >&2; exit 1;; esac
-printf 'Enter CDB_ADMIN_PASSWORD [Enter to use Default]: '; IFS= read -r CDB_ADMIN_PASSWORD
-CDB_ADMIN_PASSWORD="${CDB_ADMIN_PASSWORD:-WelCome#2026_}"
+while :; do
+  printf 'Type CDB_ADMIN_PASSWORD : '
+  IFS= read -r CDB_ADMIN_PASSWORD
+  ok "$CDB_ADMIN_PASSWORD" && break
+  printf 'CDB_ADMIN_PASSWORD cannot be empty. Type the password and press Enter.\n' >&2
+done
 
 phase 'Resolving compartment OCIDs'
 POC_PARENT_COMPARTMENT_OCID="$(ociq oci iam compartment list --compartment-id "$TENANCY_ID" --all --query "data[?name=='$POC_PARENT_COMPARTMENT_NAME' && \"lifecycle-state\"=='ACTIVE'].id | [0]")"
