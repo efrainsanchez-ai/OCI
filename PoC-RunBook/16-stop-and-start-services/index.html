@@ -117,7 +117,7 @@
 </tr>
 <tr>
 <td>Vault resources</td>
-<td>This workbook uses a <code>DEFAULT</code> Vault. Oracle lists software-protected Vault keys and Vault secrets as free; virtual private Vaults and some HSM-protected key versions can charge if selected in another environment.</td>
+<td>This workbook uses an Exascale storage vault for VM cluster storage and a <code>DEFAULT</code> Key Management vault for credential secrets. Software-protected Key Management vault keys and secrets are listed separately from Exascale storage vault capacity.</td>
 </tr>
 <tr>
 <td>Database Management and observability</td>
@@ -275,7 +275,9 @@ clear
 printf '%-22s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------" "-----" \
+  "TENANCY_ID" "$TENANCY_ID" \
   "REGION" "$REGION" \
+  "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID" \
   "VM_CLUSTER_OCID" "$VM_CLUSTER_OCID" \
   "BASTION_VM_OCID" "$BASTION_VM_OCID"
 EOF
@@ -307,11 +309,10 @@ case "$CONFIRM_DISCOVERY" in
 esac
 
 OCI_CONFIG_FILE="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
-OCI_CONFIG_PROFILE="${OCI_CLI_PROFILE:-DEFAULT}"
 if [ -f "$OCI_CONFIG_FILE" ]; then
   if [ -z "${REGION:-}" ]; then
     REGION="$(
-      awk -F= -v profile="$OCI_CONFIG_PROFILE" '
+      awk -F= -v profile="DEFAULT" '
         $0 == "[" profile "]" { in_profile=1; next }
         /^\[/ { in_profile=0 }
         in_profile &amp;&amp; $1 ~ /^[[:space:]]*region[[:space:]]*$/ {
@@ -324,7 +325,7 @@ if [ -f "$OCI_CONFIG_FILE" ]; then
   fi
   if [ -z "${TENANCY_ID:-}" ]; then
     TENANCY_ID="$(
-      awk -F= -v profile="$OCI_CONFIG_PROFILE" '
+      awk -F= -v profile="DEFAULT" '
         $0 == "[" profile "]" { in_profile=1; next }
         /^\[/ { in_profile=0 }
         in_profile &amp;&amp; $1 ~ /^[[:space:]]*tenancy[[:space:]]*$/ {
@@ -420,7 +421,12 @@ if [ -z "$BASTION_VM_OCID" ] || [ "$BASTION_VM_OCID" = "null" ]; then
   return 1
 fi
 
+upsert_cli_env TENANCY_ID "$TENANCY_ID" &gt;/dev/null
 upsert_cli_env REGION "$REGION" &gt;/dev/null
+upsert_cli_env POC_PARENT_COMPARTMENT_NAME "$POC_PARENT_COMPARTMENT_NAME" &gt;/dev/null
+upsert_cli_env POC_PARENT_COMPARTMENT_OCID "$POC_PARENT_COMPARTMENT_OCID" &gt;/dev/null
+upsert_cli_env POC_COMPARTMENT_NAME "$POC_COMPARTMENT_NAME" &gt;/dev/null
+upsert_cli_env POC_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID" &gt;/dev/null
 upsert_cli_env VM_CLUSTER_OCID "$VM_CLUSTER_OCID" &gt;/dev/null
 upsert_cli_env BASTION_VM_OCID "$BASTION_VM_OCID" &gt;/dev/null
 
@@ -446,7 +452,9 @@ printf '%-28s | %s\n' \
   "HELPERS_FILE" "$HELPERS_FILE" \
   "ENV_FILE" "$ENV_FILE" \
   "COMPARTMENT_PATH" "/$POC_PARENT_COMPARTMENT_NAME/$POC_COMPARTMENT_NAME" \
+  "TENANCY_ID" "$TENANCY_ID" \
   "REGION" "$REGION" \
+  "POC_PARENT_COMPARTMENT_OCID" "$POC_PARENT_COMPARTMENT_OCID" \
   "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID" \
   "VM_CLUSTER_OCID" "$VM_CLUSTER_OCID" \
   "BASTION_VM_OCID" "$BASTION_VM_OCID" \
@@ -471,7 +479,9 @@ CLI_ENV                      | /home/oci/admin/cli.env
 HELPERS_FILE                 | /home/oci/admin/helpers.sh
 ENV_FILE                     | /home/oci/admin/env.sh
 COMPARTMENT_PATH             | /Partner/LAD-01
+TENANCY_ID                   | &lt;tenancy_ocid&gt;
 REGION                       | &lt;region&gt;
+POC_PARENT_COMPARTMENT_OCID  | &lt;parent_compartment_ocid&gt;
 POC_COMPARTMENT_OCID         | &lt;poc_compartment_ocid&gt;
 VM_CLUSTER_OCID              | &lt;vm_cluster_ocid&gt;
 BASTION_VM_OCID              | &lt;bastion_vm_ocid&gt;
@@ -1034,377 +1044,93 @@ wb16_card06</code></pre>
   <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
 
 wb16_card07() {
-SERVICE_ADMIN_DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"
-ARTIFACT_REPORT_SCRIPT="$SERVICE_ADMIN_DIR/service-residual-artifacts-report.sh"
+DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"; R="$DIR/service-residual-artifacts.json"; OCI=oci; mkdir -p "$DIR"
+cnt(){ n="$(jq -r 'if (.data|type)=="array" then .data|length elif (.data.items|type)=="array" then .data.items|length else 0 end' "$1" 2&gt;/dev/null)"; case "$n" in ''|*[!0-9]*) printf 0;; *) printf '%s' "$n";; esac; }
+nam(){ jq -r 'if (.data|type)=="array" then .data[]? elif (.data.items|type)=="array" then .data.items[]? else empty end|."display-name"//.displayName//.name//."db-name"//.databaseName//.id//empty' "$1" 2&gt;/dev/null | awk 'BEGIN{s=""} NF{s=s (s?", ":"") $0} END{print s?s:"none discovered"}'; }
+run(){ l="$1"; f="$2"; shift 2; printf 'Discovering %s...\n' "$l"; "$@" &gt;"$f" 2&gt;/dev/null || printf '{"data":[]}\n' &gt;"$f"; printf 'Found %s %s.\n' "$(cnt "$f")" "$l"; }
+add(){ jq -s '{data:((.[0].data//[])+(.[1].data//[]))}' "$1" "$2" &gt;"$2.m" &amp;&amp; mv "$2.m" "$1"; }
+row(){ printf '%-28s | %s\n' "$1" "$2"; }
+wrap(){ printf '%s\n' "$2" | fold -s -w 80 | awk -v c="$1" 'NR==1{printf "%-38s | %s\n",c,$0;next}{printf "%-38s | %s\n","",$0}'; }
+sep(){ printf '%-38s | %s\n' '--------------------------------------' '--------------------------------------------------------------------------------'; }
 
-printf 'Preparing residual artifact report script ...\n'
-cat &gt; "$ARTIFACT_REPORT_SCRIPT" &lt;&lt;'SCRIPT'
-#!/bin/bash
-set -u
+C="$(oci db exadb-vm-cluster get --region "$REGION" --exadb-vm-cluster-id "$VM_CLUSTER_OCID" --query 'data."compartment-id"' --raw-output 2&gt;/dev/null)"
+[ -n "$C" ] &amp;&amp; [ "$C" != null ] || { printf 'STOP: Unable to resolve VM cluster compartment.\n' &gt;&amp;2; return 1; }
 
-service_residual_artifacts_report() {
-SERVICE_ADMIN_DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"
-ARTIFACT_REPORT_JSON="$SERVICE_ADMIN_DIR/service-residual-artifacts.json"
-
-count_data() {
-  file_path="$1"
-  if [ -s "$file_path" ]; then
-    jq -r '(.data.items // .data // []) | length' "$file_path" 2&gt;/dev/null
-  else
-    printf '0\n'
-  fi
-}
-
-compact_names() {
-  sed '/^$/d' | awk 'BEGIN { value = "" } { if (value == "") value = $0; else value = value ", " $0 } END { if (value == "") print "none discovered"; else print value }'
-}
-
-print_line() {
-  printf '%-38s | %s\n' "$1" "$2"
-}
-
-print_separator() {
-  print_line "--------------------------------------" "--------------------------------------------------------------------------------"
-}
-
-print_wrapped_row() {
-  category="$1"
-  text="$2"
-  printf '%s\n' "$text" \
-  | fold -s -w 80 \
-  | awk -v category="$category" '
-      NR == 1 { printf "%-38s | %s\n", category, $0; next }
-      { printf "%-38s | %s\n", "", $0 }
-    '
-}
-
-CLUSTER_COMPARTMENT_OCID="$(
-  oci db exadb-vm-cluster get \
-    --region "$REGION" \
-    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
-    --query 'data."compartment-id"' \
-    --raw-output
-)"
-if [ -z "$CLUSTER_COMPARTMENT_OCID" ] || [ "$CLUSTER_COMPARTMENT_OCID" = "null" ]; then
-  printf '%s\n\n' "STOP: Unable to resolve the VM cluster compartment OCID." &gt;&amp;2
-  return 1
+EXA="$DIR/service-artifacts-exadb-vm-clusters.json"
+run 'Exadata VM clusters' "$EXA" oci db exadb-vm-cluster list --region "$REGION" --compartment-id "$C" --all
+if [ "$(cnt "$EXA")" = 0 ]; then
+  "$OCI" db exadb-vm-cluster get --region "$REGION" --exadb-vm-cluster-id "$VM_CLUSTER_OCID" 2&gt;/dev/null | jq '{data:[.data]}' &gt;"$EXA" || printf '{"data":[{"id":"%s"}]}\n' "$VM_CLUSTER_OCID" &gt;"$EXA"
+  printf 'Found %s Exadata VM clusters after direct lookup.\n' "$(cnt "$EXA")"
 fi
 
-printf '%s\n' "Discovering Exadata VM clusters..."
-oci db exadb-vm-cluster list \
-  --region "$REGION" \
-  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-  --all \
-  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-exadb-vm-clusters.json" \
-  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-exadb-vm-clusters.json"
-
-printf '%s\n' "Discovering Exascale storage vault..."
-printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-exascale-storage-vault.json"
-if [ -n "${VAULT_OCID:-}" ] &amp;&amp; [ "${VAULT_OCID#ocid1}" != "$VAULT_OCID" ]; then
-  oci db exascale-db-storage-vault get \
-    --region "$REGION" \
-    --exascale-db-storage-vault-id "$VAULT_OCID" \
-    &gt; "$SERVICE_ADMIN_DIR/service-artifacts-exascale-storage-vault.json" \
-    2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-exascale-storage-vault.json"
-fi
-
-printf '%s\n' "Discovering database homes..."
-oci db db-home list \
-  --region "$REGION" \
-  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-  --vm-cluster-id "$VM_CLUSTER_OCID" \
-  --all \
-  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-db-homes.json" \
-  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-db-homes.json"
-
-printf '%s\n' "Discovering databases in the Exadata VM cluster..."
-printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-databases.json"
-for DB_HOME_OCID in $(jq -r '.data[]?.id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-db-homes.json"); do
-  DB_HOME_DATABASES_JSON="$SERVICE_ADMIN_DIR/service-artifacts-databases-$DB_HOME_OCID.json"
-  MERGED_DATABASES_JSON="$SERVICE_ADMIN_DIR/service-artifacts-databases-merged.json"
-  oci db database list \
-    --region "$REGION" \
-    --db-home-id "$DB_HOME_OCID" \
-    --all \
-    &gt; "$DB_HOME_DATABASES_JSON" \
-    2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$DB_HOME_DATABASES_JSON"
-  jq -s '{data: ((.[0].data // []) + (.[1].data // []))}' \
-    "$SERVICE_ADMIN_DIR/service-artifacts-databases.json" \
-    "$DB_HOME_DATABASES_JSON" \
-    &gt; "$MERGED_DATABASES_JSON"
-  mv "$MERGED_DATABASES_JSON" "$SERVICE_ADMIN_DIR/service-artifacts-databases.json"
+DBH="$DIR/service-artifacts-db-homes.json"; DBS="$DIR/service-artifacts-databases.json"
+BAK="$DIR/service-artifacts-db-backups.json"; RDB="$DIR/service-artifacts-recovery-protected-databases.json"
+run 'database homes' "$DBH" oci db db-home list --region "$REGION" --compartment-id "$C" --vm-cluster-id "$VM_CLUSTER_OCID" --all
+printf '{"data":[]}\n' &gt;"$DBS"; printf '{"data":[]}\n' &gt;"$BAK"
+for h in $(jq -r '.data[]?.id//empty' "$DBH"); do
+  t="$DIR/db-$h.json"; "$OCI" db database list --region "$REGION" --db-home-id "$h" --all &gt;"$t" 2&gt;/dev/null || printf '{"data":[]}\n' &gt;"$t"; add "$DBS" "$t"
 done
-if [ "$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-databases.json")" = "0" ]; then
-  oci db database list \
-    --region "$REGION" \
-    --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-    --all \
-    &gt; "$SERVICE_ADMIN_DIR/service-artifacts-databases.json" \
-    2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-databases.json"
+printf 'Found %s databases in database homes.\n' "$(cnt "$DBS")"
+for d in $(jq -r '.data[]?.id//empty' "$DBS"); do
+  t="$DIR/backup-$d.json"; "$OCI" db backup list --region "$REGION" --database-id "$d" --all &gt;"$t" 2&gt;/dev/null || printf '{"data":[]}\n' &gt;"$t"; add "$BAK" "$t"
+done
+printf 'Found %s database backups from database inventory.\n' "$(cnt "$BAK")"
+run 'Recovery Service protected databases' "$RDB" oci recovery protected-database-collection list-protected-databases --region "$REGION" --compartment-id "$C" --all
+if [ "$(cnt "$DBS")" = 0 ] &amp;&amp; [ "$(cnt "$RDB")" != 0 ]; then
+  jq '{data:(if (.data|type)=="array" then .data elif (.data.items|type)=="array" then .data.items else [] end|map({id:(."database-id"//.databaseId//.id),"display-name":(."display-name"//.displayName//.databaseName//.name//.id)}))}' "$RDB" &gt;"$DBS"
+  printf 'Found %s databases from Recovery Service protected database inventory.\n' "$(cnt "$DBS")"
 fi
 
-printf '%s\n' "Discovering database backups..."
-printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-db-backups.json"
-for DATABASE_OCID in $(jq -r '.data[]?.id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-databases.json"); do
-  DATABASE_BACKUPS_JSON="$SERVICE_ADMIN_DIR/service-artifacts-db-backups-$DATABASE_OCID.json"
-  MERGED_BACKUPS_JSON="$SERVICE_ADMIN_DIR/service-artifacts-db-backups-merged.json"
-  oci db backup list \
-    --region "$REGION" \
-    --database-id "$DATABASE_OCID" \
-    --all \
-    &gt; "$DATABASE_BACKUPS_JSON" \
-    2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$DATABASE_BACKUPS_JSON"
-  jq -s '{data: ((.[0].data // []) + (.[1].data // []))}' \
-    "$SERVICE_ADMIN_DIR/service-artifacts-db-backups.json" \
-    "$DATABASE_BACKUPS_JSON" \
-    &gt; "$MERGED_BACKUPS_JSON"
-  mv "$MERGED_BACKUPS_JSON" "$SERVICE_ADMIN_DIR/service-artifacts-db-backups.json"
-done
+CMP="$DIR/service-artifacts-compute-instances.json"
+run 'compute instances' "$CMP" oci compute instance list --region "$REGION" --compartment-id "$C" --all
+if [ "$(cnt "$CMP")" = 0 ] &amp;&amp; [ -n "${BASTION_VM_OCID:-}" ]; then
+  "$OCI" compute instance get --region "$REGION" --instance-id "$BASTION_VM_OCID" 2&gt;/dev/null | jq '{data:[.data]}' &gt;"$CMP" || printf '{"data":[{"id":"%s"}]}\n' "$BASTION_VM_OCID" &gt;"$CMP"
+  printf 'Found %s compute instances after bastion direct lookup.\n' "$(cnt "$CMP")"
+fi
 
-printf '%s\n' "Discovering compute instances..."
-oci compute instance list \
-  --region "$REGION" \
-  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-  --all \
-  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-compute-instances.json" \
-  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-compute-instances.json"
+run 'block volumes' "$DIR/service-artifacts-block-volumes.json" oci bv volume list --region "$REGION" --compartment-id "$C" --all
+run 'public IPs' "$DIR/service-artifacts-public-ips.json" oci network public-ip list --region "$REGION" --compartment-id "$C" --scope REGION --all
+KMS="$DIR/service-artifacts-kms-vaults.json"; ESV="$DIR/service-artifacts-exascale-storage-vaults.json"
+run 'KMS vaults' "$KMS" oci kms management vault list --region "$REGION" --compartment-id "$C" --all
+run 'Exascale storage vaults' "$ESV" oci db exascale-db-storage-vault list --region "$REGION" --compartment-id "$C" --all
+if [ "$(cnt "$ESV")" = 0 ] &amp;&amp; [ -n "${VAULT_OCID:-}" ]; then
+  "$OCI" db exascale-db-storage-vault get --region "$REGION" --exascale-db-storage-vault-id "$VAULT_OCID" 2&gt;/dev/null | jq '{data:[.data]}' &gt;"$ESV" || printf '{"data":[{"id":"%s","display-name":"Vault-01"}]}\n' "$VAULT_OCID" &gt;"$ESV"
+  printf 'Found %s Exascale storage vaults after direct lookup.\n' "$(cnt "$ESV")"
+fi
+run 'NAT gateways' "$DIR/service-artifacts-nat-gateways.json" oci network nat-gateway list --region "$REGION" --compartment-id "$C" --all
+run 'log groups' "$DIR/service-artifacts-log-groups.json" oci logging log-group list --region "$REGION" --compartment-id "$C" --all
+run 'DB Mgmt managed DBs' "$DIR/service-artifacts-dbmgmt-managed-databases.json" oci database-management managed-database list --region "$REGION" --compartment-id "$C" --all
+run 'DB Mgmt private endpoints' "$DIR/service-artifacts-dbmgmt-private-endpoints.json" oci database-management private-endpoint list --region "$REGION" --compartment-id "$C" --all
 
-printf '%s\n' "Discovering block volumes..."
-oci bv volume list \
-  --region "$REGION" \
-  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-  --all \
-  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-block-volumes.json" \
-  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-block-volumes.json"
-
-printf '%s\n' "Discovering public IPs..."
-oci network public-ip list \
-  --region "$REGION" \
-  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-  --scope REGION \
-  --all \
-  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-public-ips.json" \
-  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-public-ips.json"
-
-printf '%s\n' "Discovering Object Storage buckets..."
-OBJECT_STORAGE_NAMESPACE="$(oci os ns get --region "$REGION" --raw-output 2&gt;/dev/null || printf '')"
-if [ -n "$OBJECT_STORAGE_NAMESPACE" ]; then
-  oci os bucket list \
-    --region "$REGION" \
-    --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
-    --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-    --all \
-    &gt; "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json" \
-    2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json"
-  printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json"
-  for BUCKET_NAME in $(jq -r '.data[]?.name // empty' "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json"); do
-    BUCKET_OBJECTS_JSON="$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects-$BUCKET_NAME.json"
-    MERGED_BUCKET_OBJECTS_JSON="$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects-merged.json"
-    oci os object list \
-      --region "$REGION" \
-      --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
-      --bucket-name "$BUCKET_NAME" \
-      --all \
-      &gt; "$BUCKET_OBJECTS_JSON" \
-      2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$BUCKET_OBJECTS_JSON"
-    jq -s --arg bucket "$BUCKET_NAME" '
-      {
-        data: (
-          (.[0].data // [])
-          + [.[1].data[]? | . + {bucketName: $bucket}]
-        )
-      }
-    ' "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json" \
-      "$BUCKET_OBJECTS_JSON" \
-      &gt; "$MERGED_BUCKET_OBJECTS_JSON"
-    mv "$MERGED_BUCKET_OBJECTS_JSON" "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json"
+BKT="$DIR/service-artifacts-buckets.json"; OBJ="$DIR/service-artifacts-bucket-objects.json"
+printf '{"data":[]}\n' &gt;"$BKT"; printf '{"data":[]}\n' &gt;"$OBJ"; NS="$(oci os ns get --region "$REGION" --query data --raw-output 2&gt;/dev/null)"
+if [ -n "$NS" ]; then
+  for c in "$C" "${POC_COMPARTMENT_OCID:-}" "${POC_PARENT_COMPARTMENT_OCID:-}" "${TENANCY_ID:-}"; do
+    [ -n "$c" ] &amp;&amp; [ "$(cnt "$BKT")" = 0 ] &amp;&amp; run 'Object Storage buckets' "$BKT" oci os bucket list --region "$REGION" --namespace-name "$NS" --compartment-id "$c" --all
   done
-else
-  printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json"
-  printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json"
+  [ "$(cnt "$BKT")" = 0 ] &amp;&amp; run 'namespace-visible buckets' "$BKT" oci os bucket list --region "$REGION" --namespace-name "$NS" --all
+  for b in $(jq -r '.data[]?.name//empty' "$BKT"); do
+    t="$DIR/objects-$b.json"; "$OCI" os object list --region "$REGION" --namespace-name "$NS" --bucket-name "$b" --all &gt;"$t" 2&gt;/dev/null || printf '{"data":[]}\n' &gt;"$t"
+    jq -s --arg b "$b" '{data:((.[0].data//[])+[.[1].data[]?|.+{bucketName:$b}])}' "$OBJ" "$t" &gt;"$t.m" &amp;&amp; mv "$t.m" "$OBJ"
+    printf 'Found %s objects in bucket %s.\n' "$(cnt "$t")" "$b"
+  done
 fi
+printf 'Found %s Object Storage objects across discovered buckets.\n' "$(cnt "$OBJ")"
 
-printf '%s\n' "Discovering Vaults..."
-oci kms management vault list \
-  --region "$REGION" \
-  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-  --all \
-  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-vaults.json" \
-  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-vaults.json"
+EXAC="$(cnt "$EXA")"; DBC="$(cnt "$DBS")"; BAKC="$(cnt "$BAK")"; RDBC="$(cnt "$RDB")"; CMPC="$(cnt "$CMP")"; BLC="$(cnt "$DIR/service-artifacts-block-volumes.json")"; BKTC="$(cnt "$BKT")"; OBJC="$(cnt "$OBJ")"; KMSC="$(cnt "$KMS")"; ESVC="$(cnt "$ESV")"; NATC="$(cnt "$DIR/service-artifacts-nat-gateways.json")"; LOGC="$(cnt "$DIR/service-artifacts-log-groups.json")"; DBMC="$(cnt "$DIR/service-artifacts-dbmgmt-managed-databases.json")"; DBMPC="$(cnt "$DIR/service-artifacts-dbmgmt-private-endpoints.json")"
+printf '{"compartmentId":"%s","exadbVmClusters":%s,"databases":%s,"databaseBackups":%s,"recoveryServiceProtectedDatabases":%s,"computeInstances":%s,"blockVolumes":%s,"objectStorageBuckets":%s,"objectStorageObjects":%s,"kmsVaults":%s,"exascaleStorageVaults":%s,"natGateways":%s,"logGroups":%s,"databaseManagementManagedDatabases":%s,"databaseManagementPrivateEndpoints":%s}\n' "$C" "$EXAC" "$DBC" "$BAKC" "$RDBC" "$CMPC" "$BLC" "$BKTC" "$OBJC" "$KMSC" "$ESVC" "$NATC" "$LOGC" "$DBMC" "$DBMPC" &gt;"$R"
 
-printf '%s\n' "Discovering NAT gateways..."
-oci network nat-gateway list \
-  --region "$REGION" \
-  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-  --all \
-  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-nat-gateways.json" \
-  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-nat-gateways.json"
-
-printf '%s\n' "Discovering log groups..."
-oci logging log-group list \
-  --region "$REGION" \
-  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-  --all \
-  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-log-groups.json" \
-  2&gt;/dev/null || printf '{"data":[]}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-log-groups.json"
-
-printf '%s\n' "Discovering Database Management managed databases..."
-oci database-management managed-database list \
-  --region "$REGION" \
-  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-  --all \
-  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-managed-databases.json" \
-  2&gt;/dev/null || printf '{"data":{"items":[]}}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-managed-databases.json"
-
-printf '%s\n' "Discovering Database Management private endpoints..."
-oci database-management private-endpoint list \
-  --region "$REGION" \
-  --compartment-id "$CLUSTER_COMPARTMENT_OCID" \
-  --all \
-  &gt; "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-private-endpoints.json" \
-  2&gt;/dev/null || printf '{"data":{"items":[]}}\n' &gt; "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-private-endpoints.json"
-
-EXADB_VM_CLUSTER_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-exadb-vm-clusters.json")"
-EXASCALE_STORAGE_VAULT_COUNT="$(jq -r 'if (.data.id // "") != "" then 1 else 0 end' "$SERVICE_ADMIN_DIR/service-artifacts-exascale-storage-vault.json" 2&gt;/dev/null || printf '0')"
-DATABASE_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-databases.json")"
-DB_BACKUP_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-db-backups.json")"
-COMPUTE_INSTANCE_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-compute-instances.json")"
-BLOCK_VOLUME_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-block-volumes.json")"
-PUBLIC_IP_COUNT="$(
-  jq -r '
-    [
-      .data[]?
-      | select((."assigned-entity-type" // "") != "NAT_GATEWAY")
-      | select((."display-name" // "") | startswith("IP for NAT gateway") | not)
-    ]
-    | length
-  ' "$SERVICE_ADMIN_DIR/service-artifacts-public-ips.json" 2&gt;/dev/null
-)"
-BUCKET_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json")"
-BUCKET_OBJECT_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json")"
-VAULT_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-vaults.json")"
-NAT_GATEWAY_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-nat-gateways.json")"
-LOG_GROUP_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-log-groups.json")"
-DBMGMT_MANAGED_DATABASE_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-managed-databases.json")"
-DBMGMT_PRIVATE_ENDPOINT_COUNT="$(count_data "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-private-endpoints.json")"
-
-EXADB_VM_CLUSTER_NAMES="$(jq -r '.data[]? | ."display-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-exadb-vm-clusters.json" | compact_names)"
-EXASCALE_STORAGE_VAULT_NAME="$(jq -r '.data."display-name" // .data.name // empty' "$SERVICE_ADMIN_DIR/service-artifacts-exascale-storage-vault.json" 2&gt;/dev/null | compact_names)"
-DATABASE_NAMES="$(jq -r '.data[]? | ."db-name" // ."db-unique-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-databases.json" | compact_names)"
-DB_BACKUP_NAMES="$(jq -r '.data[]? | ."display-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-db-backups.json" | compact_names)"
-COMPUTE_INSTANCE_NAMES="$(jq -r '.data[]? | ."display-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-compute-instances.json" | compact_names)"
-BLOCK_VOLUME_NAMES="$(jq -r '.data[]? | ."display-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-block-volumes.json" | compact_names)"
-PUBLIC_IP_NAMES="$(
-  jq -r '
-    .data[]?
-    | select((."assigned-entity-type" // "") != "NAT_GATEWAY")
-    | select((."display-name" // "") | startswith("IP for NAT gateway") | not)
-    | ."display-name" // ."ip-address" // .id // empty
-  ' "$SERVICE_ADMIN_DIR/service-artifacts-public-ips.json" | compact_names
-)"
-BUCKET_NAMES="$(
-  jq -r --argjson objects "$(jq -r '.data | length' "$SERVICE_ADMIN_DIR/service-artifacts-bucket-objects.json" 2&gt;/dev/null || printf '0')" '
-    .data[]?
-    | .name // empty
-  ' "$SERVICE_ADMIN_DIR/service-artifacts-buckets.json" | compact_names
-)"
-VAULT_NAMES="$(jq -r '.data[]? | ."display-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-vaults.json" | compact_names)"
-NAT_GATEWAY_NAMES="$(jq -r '.data[]? | ."display-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-nat-gateways.json" | compact_names)"
-LOG_GROUP_NAMES="$(jq -r '.data[]? | ."display-name" // .name // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-log-groups.json" | compact_names)"
-DBMGMT_MANAGED_DATABASE_NAMES="$(jq -r '(.data.items // .data // [])[]? | .name // ."database-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-managed-databases.json" | compact_names)"
-DBMGMT_PRIVATE_ENDPOINT_NAMES="$(jq -r '(.data.items // .data // [])[]? | .name // ."display-name" // .id // empty' "$SERVICE_ADMIN_DIR/service-artifacts-dbmgmt-private-endpoints.json" | compact_names)"
-EXASCALE_VM_STORAGE_NAMES="VM clusters: $EXADB_VM_CLUSTER_NAMES"
-EXASCALE_STORAGE_VAULT_NAMES="storage vault: $EXASCALE_STORAGE_VAULT_NAME; databases using vault storage: $DATABASE_NAMES"
-BASTION_STORAGE_NAMES="instances: $COMPUTE_INSTANCE_NAMES"
-NETWORK_SERVICE_NAMES="NAT gateways: $NAT_GATEWAY_NAMES; public IPs: $PUBLIC_IP_NAMES"
-OBJECT_STORAGE_NAMES="buckets: $BUCKET_NAMES; objects discovered: $BUCKET_OBJECT_COUNT"
-DATABASE_MANAGEMENT_NAMES="managed databases: $DBMGMT_MANAGED_DATABASE_NAMES; private endpoints: $DBMGMT_PRIVATE_ENDPOINT_NAMES"
-
-cat &gt; "$ARTIFACT_REPORT_JSON" &lt;&lt;REPORT
-{
-  "compartmentId": "$CLUSTER_COMPARTMENT_OCID",
-  "exadbVmClusters": $EXADB_VM_CLUSTER_COUNT,
-  "exascaleStorageVaults": $EXASCALE_STORAGE_VAULT_COUNT,
-  "databases": $DATABASE_COUNT,
-  "databaseBackups": $DB_BACKUP_COUNT,
-  "computeInstances": $COMPUTE_INSTANCE_COUNT,
-  "blockVolumes": $BLOCK_VOLUME_COUNT,
-  "publicIps": $PUBLIC_IP_COUNT,
-  "objectStorageBuckets": $BUCKET_COUNT,
-  "objectStorageObjects": $BUCKET_OBJECT_COUNT,
-  "vaults": $VAULT_COUNT,
-  "natGateways": $NAT_GATEWAY_COUNT,
-  "logGroups": $LOG_GROUP_COUNT,
-  "databaseManagementManagedDatabases": $DBMGMT_MANAGED_DATABASE_COUNT,
-  "databaseManagementPrivateEndpoints": $DBMGMT_PRIVATE_ENDPOINT_COUNT
-}
-REPORT
-
-printf '%s\n' "Preparing residual artifact and cost report..."
-printf '%-28s | %s\n' \
-  "ARTIFACT" "COUNT" \
-  "----------------------------" "-----" \
-  "Exadata VM clusters" "$EXADB_VM_CLUSTER_COUNT" \
-  "Exascale storage vaults" "$EXASCALE_STORAGE_VAULT_COUNT" \
-  "Exascale storage vault names" "$EXASCALE_STORAGE_VAULT_NAME" \
-  "Databases" "$DATABASE_COUNT" \
-  "Database backups" "$DB_BACKUP_COUNT" \
-  "Compute instances" "$COMPUTE_INSTANCE_COUNT" \
-  "Block volumes" "$BLOCK_VOLUME_COUNT" \
-  "Public IPs" "$PUBLIC_IP_COUNT" \
-  "Object Storage buckets" "$BUCKET_COUNT" \
-  "Object Storage objects" "$BUCKET_OBJECT_COUNT" \
-  "Vaults" "$VAULT_COUNT" \
-  "Vault names" "$VAULT_NAMES" \
-  "NAT gateways" "$NAT_GATEWAY_COUNT" \
-  "Log groups" "$LOG_GROUP_COUNT" \
-  "DB Mgmt managed DBs" "$DBMGMT_MANAGED_DATABASE_COUNT" \
-  "DB Mgmt private endpoints" "$DBMGMT_PRIVATE_ENDPOINT_COUNT" \
-  "Report JSON" "$ARTIFACT_REPORT_JSON"
-printf '\n'
-print_line "COST_CATEGORY" "STILL_CHARGED_WHEN_PAUSED"
-print_separator
-print_wrapped_row "Exascale VM storage" "Yes - VM file system storage allocated to the Exadata VM cluster can remain billable even when enabled ECPUs are set to 0."
-print_wrapped_row "" "Artifacts: $EXASCALE_VM_STORAGE_NAMES"
-print_separator
-print_wrapped_row "Exascale storage vault" "Yes - Exascale database storage allocated in the storage vault can remain billable even when enabled ECPUs are set to 0."
-print_wrapped_row "" "Artifacts: $EXASCALE_STORAGE_VAULT_NAMES"
-print_separator
-print_wrapped_row "Database Management" "No active Database Management charge is expected while the Exadata VM cluster has 0 enabled ECPUs. The service is listed on the OCI price list as ECPU per hour and OCPU per hour; verify the result in Cost Analysis."
-print_wrapped_row "" "Artifacts: $DATABASE_MANAGEMENT_NAMES"
-print_separator
-print_wrapped_row "Database backups" "Yes - automatic daily backups, retained backups, Recovery Service protection, or Object Storage backup copies can remain billable."
-print_wrapped_row "" "Artifacts: $DB_BACKUP_NAMES"
-print_separator
-print_wrapped_row "Bastion boot volume" "Yes - stopped compute keeps boot volume storage until the VM or boot volume is deleted."
-print_wrapped_row "" "Artifacts: $BASTION_STORAGE_NAMES"
-print_separator
-print_wrapped_row "Bastion block volumes" "Yes - any attached or detached block volumes continue as allocated storage."
-print_wrapped_row "" "Artifacts: $BLOCK_VOLUME_NAMES"
-print_separator
-print_wrapped_row "Object Storage" "Yes - buckets and objects remain charged until deleted or lifecycle-expired."
-print_wrapped_row "" "Artifacts: $OBJECT_STORAGE_NAMES"
-print_separator
-print_wrapped_row "OCI credential Vault" "No charge expected for this workbook's DEFAULT Vault with software-protected keys and secrets, based on the OCI price list. Charges can apply for virtual private Vaults and for HSM-protected key versions beyond the free allowance."
-print_wrapped_row "" "Artifacts: $VAULT_NAMES"
-print_separator
-print_wrapped_row "Observability" "Maybe - Logging, VCN Flow Logs, Database Management, Operations Insights, and retained telemetry can charge."
-print_wrapped_row "" "Artifacts: $LOG_GROUP_NAMES"
-print_separator
-print_wrapped_row "Network services" "Maybe - NAT Gateways, Load Balancers, private endpoints, data transfer, and reserved or billable public IPv4 resources can charge if provisioned or used."
-print_wrapped_row "" "Artifacts: $NETWORK_SERVICE_NAMES"
-print_separator
-print_wrapped_row "Commitments" "Contract-specific - Universal Credits, BYOL, marketplace subscriptions, support, and committed-spend terms are commercial agreements outside this runbook."
-print_separator
-printf '\n%s\n' "wb16_card07"
-}
-
-service_residual_artifacts_report
-SCRIPT
-
-chmod +x "$ARTIFACT_REPORT_SCRIPT"
-clear
-"$ARTIFACT_REPORT_SCRIPT"
+printf '%-28s | %s\n' 'ARTIFACT' 'COUNT' '----------------------------' '-----'
+row 'Exadata VM clusters' "$EXAC"; row 'Databases' "$DBC"; row 'Recovery protected DBs' "$RDBC"; row 'Compute instances' "$CMPC"; row 'Block volumes' "$BLC"; row 'Object Storage buckets' "$BKTC"; row 'Object Storage objects' "$OBJC"; row 'KMS vaults' "$KMSC"; row 'Exascale storage vaults' "$ESVC"; row 'NAT gateways' "$NATC"; row 'Log groups' "$LOGC"; row 'DB Mgmt managed DBs' "$DBMC"; row 'DB Mgmt private endpoints' "$DBMPC"; row 'Report JSON' "$R"
+printf '\n'; printf '%-38s | %s\n' 'COST_CATEGORY' 'STILL_CHARGED_WHEN_PAUSED'; sep
+wrap 'Exascale VM storage' "Yes - VM file system storage allocated to the Exadata VM cluster can remain billable even when enabled ECPUs are set to 0. Artifacts: Exascale storage vaults: $(nam "$ESV")"; sep
+wrap 'Database backups' "Yes - backups can remain billable. Artifacts: DB backups: $(nam "$BAK"); Recovery Service protected DBs: $(nam "$RDB")"; sep
+wrap 'Bastion storage' 'Yes - stopped compute keeps boot and block volume storage until deleted.'; sep
+wrap 'Object Storage' "Yes - buckets and objects remain charged until deleted or lifecycle-expired. Artifacts: buckets: $(nam "$BKT"); objects discovered: $OBJC"; sep
+wrap 'Observability, KMS, DB Mgmt' "Maybe - logging, telemetry, private endpoints, KMS configuration, and management services can charge by configuration and retention. Artifacts: KMS vaults: $(nam "$KMS")"; sep
+wrap 'Network services' 'Maybe - NAT Gateways, load balancers, public IPs, private endpoints, and data transfer can charge if provisioned or used.'; sep
+wrap 'Commitments' 'Contract-specific - credits, BYOL, subscriptions, support, and committed-spend terms are outside this runbook.'; sep
+printf '\n%s\n' 'wb16_card07'
 }
 
 wb16_card07</code></pre>
@@ -1418,84 +1144,43 @@ wb16_card07</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review discovered artifact counts and the resource categories that can still be charged after the service shutdown.</span>
   </div>
   <pre class="code-scroll"><code>Discovering Exadata VM clusters...
-Discovering Exascale storage vault...
+Found 1 Exadata VM clusters.
 Discovering database homes...
-Discovering databases in the Exadata VM cluster...
-Discovering database backups...
-Discovering compute instances...
-Discovering block volumes...
-Discovering public IPs...
+Found 1 database homes.
+Found 0 databases in database homes.
+Found 0 database backups from database inventory.
+Discovering Recovery Service protected databases...
+Found 1 Recovery Service protected databases.
+Found 1 databases from Recovery Service protected database inventory.
+Discovering KMS vaults...
+Found 1 KMS vaults.
+Discovering Exascale storage vaults...
+Found 1 Exascale storage vaults.
 Discovering Object Storage buckets...
-Discovering Vaults...
-Discovering NAT gateways...
-Discovering log groups...
-Discovering Database Management managed databases...
-Discovering Database Management private endpoints...
-Preparing residual artifact and cost report...
+Found 1 Object Storage buckets.
+Found 3 objects in bucket &lt;bucket_name&gt;.
+Found 3 Object Storage objects across discovered buckets.
 ARTIFACT                     | COUNT
 ---------------------------- | -----
 Exadata VM clusters          | 1
-Exascale storage vaults      | 1
-Exascale storage vault names | Vault-01
 Databases                    | 1
-Database backups             | 1
-Compute instances            | 1
-Block volumes                | 0
-Public IPs                   | 0
+Recovery protected DBs       | 1
 Object Storage buckets       | 1
 Object Storage objects       | 3
-Vaults                       | 1
-Vault names                  | Vault-01
-NAT gateways                 | 1
-Log groups                   | 0
-DB Mgmt managed DBs          | 2
-DB Mgmt private endpoints    | 1
+KMS vaults                   | 1
+Exascale storage vaults      | 1
 Report JSON                  | /home/oci/admin/service-residual-artifacts.json
 
 COST_CATEGORY                          | STILL_CHARGED_WHEN_PAUSED
 -------------------------------------- | --------------------------------------------------------------------------------
 Exascale VM storage                    | Yes - VM file system storage allocated to the Exadata VM cluster can remain
                                        | billable even when enabled ECPUs are set to 0.
-                                       | Artifacts: VM clusters: VMCluster-01
 -------------------------------------- | --------------------------------------------------------------------------------
-Exascale storage vault                 | Yes - Exascale database storage allocated in the storage vault can remain
-                                       | billable even when enabled ECPUs are set to 0.
-                                       | Artifacts: storage vault: Vault-01; databases using vault storage: CDB01
--------------------------------------- | --------------------------------------------------------------------------------
-Database Management                    | No active Database Management charge is expected while the Exadata VM cluster
-                                       | has 0 enabled ECPUs. The service is listed on the OCI price list as ECPU per
-                                       | hour and OCPU per hour; verify the result in Cost Analysis.
-                                       | Artifacts: managed databases: CDB01, PDB01; private endpoints: dbmgmt_pe_exadata
--------------------------------------- | --------------------------------------------------------------------------------
-Database backups                       | Yes - automatic daily backups, retained backups, Recovery Service protection, or
-                                       | Object Storage backup copies can remain billable.
-                                       | Artifacts: CDB01-initial-full-&lt;timestamp&gt;
--------------------------------------- | --------------------------------------------------------------------------------
-Bastion boot volume                    | Yes - stopped compute keeps boot volume storage until the VM or boot volume is
-                                       | deleted.
-                                       | Artifacts: instances: bastion-01
--------------------------------------- | --------------------------------------------------------------------------------
-Bastion block volumes                  | Yes - any attached or detached block volumes continue as allocated storage.
-                                       | Artifacts: none discovered
+Database backups                       | Yes - backups can remain billable. Artifacts: DB backups:
+                                       | &lt;backup_name&gt;; Recovery Service protected DBs: &lt;database_name&gt;
 -------------------------------------- | --------------------------------------------------------------------------------
 Object Storage                         | Yes - buckets and objects remain charged until deleted or lifecycle-expired.
                                        | Artifacts: buckets: &lt;bucket_name&gt;; objects discovered: 3
--------------------------------------- | --------------------------------------------------------------------------------
-OCI credential Vault                   | No charge expected for this workbook's DEFAULT Vault with software-protected
-                                       | keys and secrets, based on the OCI price list. Charges can apply for virtual
-                                       | private Vaults and for HSM-protected key versions beyond the free allowance.
-                                       | Artifacts: Vault-01
--------------------------------------- | --------------------------------------------------------------------------------
-Observability                          | Maybe - Logging, VCN Flow Logs, Database Management, Operations Insights, and
-                                       | retained telemetry can charge.
-                                       | Artifacts: &lt;log_group_name&gt;
--------------------------------------- | --------------------------------------------------------------------------------
-Network services                       | Maybe - NAT Gateways, Load Balancers, private endpoints, data transfer, and
-                                       | reserved or billable public IPv4 resources can charge if provisioned or used.
-                                       | Artifacts: NAT gateways: &lt;nat_gateway_name&gt;; public IPs: none discovered
--------------------------------------- | --------------------------------------------------------------------------------
-Commitments                            | Contract-specific - Universal Credits, BYOL, marketplace subscriptions, support,
-                                       | and committed-spend terms are commercial agreements outside this runbook.
 -------------------------------------- | --------------------------------------------------------------------------------
 
 wb16_card07</code></pre>

@@ -17,10 +17,10 @@ ociq() { "$@" --raw-output 2>/dev/null || true; }
 first_id() { "$@" --query 'data[0].id' --raw-output 2>/dev/null || true; }
 
 read_profile() {
-  cfg="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"; prof="${OCI_CLI_PROFILE:-DEFAULT}"
+  cfg="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
   [ -f "$cfg" ] || return 0
-  TENANCY_ID="$(awk -F= -v p="$prof" '$0=="["p"]"{i=1;next} /^\[/{i=0} i&&$1~/^[[:space:]]*tenancy[[:space:]]*$/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$cfg")"
-  REGION="$(awk -F= -v p="$prof" '$0=="["p"]"{i=1;next} /^\[/{i=0} i&&$1~/^[[:space:]]*region[[:space:]]*$/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$cfg")"
+  TENANCY_ID="$(awk -F= -v p="DEFAULT" '$0=="["p"]"{i=1;next} /^\[/{i=0} i&&$1~/^[[:space:]]*tenancy[[:space:]]*$/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$cfg")"
+  REGION="$(awk -F= -v p="DEFAULT" '$0=="["p"]"{i=1;next} /^\[/{i=0} i&&$1~/^[[:space:]]*region[[:space:]]*$/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$cfg")"
 }
 
 lookup_subnet() { first_id oci network subnet list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --display-name "$1" --all; }

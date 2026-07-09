@@ -262,38 +262,27 @@
         <h2>Initialize the Workbook Environment</h2>
         <p>Use <code>~/workbook</code> as the workbook working directory. Store all helper scripts, generated JSON artifacts, temporary OCI CLI output, and environment files under this directory. If your shell is in <code>$HOME</code>, this is the local <code>./workbook</code> directory.</p>
 <p>Create the workbook directory in your home folder, then create or update <code>~/workbook/cli.env</code>. Start the file with only the tenancy and region placeholders; later workbook steps add compartment IDs, created OCIDs, route-table IDs, gateway IDs, subnet IDs, NSG IDs, regional service IDs, and approved CIDR variables through <code>upsert_cli_env</code>.</p>
-<h3>BASH 01 - Create workbook directory and <code>cli.env</code></h3>
+<h3>BASH 01 - Initialize workbook environment</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the workbook working directory and initialize <code>~/workbook/cli.env</code> with tenancy and region placeholders.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the workbook directory, initialize <code>~/workbook/cli.env</code>, create <code>~/workbook/helpers.sh</code>, source the helpers, load current variables, and display one setup report.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>mkdir -p ~/workbook
+  <pre class="code-scroll"><code>wb00_card01() {
+mkdir -p ~/workbook
 cat &gt; ~/workbook/cli.env &lt;&lt;'EOF'
 set -a
 TENANCY_ID="&lt;tenancy_ocid&gt;"
 REGION="&lt;oci_region&gt;"
 set +a
 EOF
-chmod 600 ~/workbook/cli.env</code></pre>
-</div>
-<p>Create <code>~/workbook/helpers.sh</code> before the first use of <code>load_cli_env</code>, <code>upsert_cli_env</code>, or <code>capture_oci_id</code>. These are workbook helper functions. They are not built-in OCI CLI commands.</p>
-<p>The helper file uses <code>~/workbook</code> as the default location for the environment file and generated artifacts. The helpers use Bash, <code>awk</code>, <code>sed</code>, and OCI CLI query output; no Python runtime is required in OCI Cloud Shell. <code>upsert_cli_env</code> validates that a value was resolved, updates <code>~/workbook/cli.env</code>, exports the variable into the current shell, and prints the saved variable in a readable table.</p>
-<h3>BASH 02 - Define workbook helper functions</h3>
-<div class="code-card" data-collapsible="true" data-collapsed="true">
-  <div class="code-toolbar">
-    <span class="code-type">Bash</span>
-    <button class="copy-btn" type="button">Copy</button>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create <code>~/workbook/helpers.sh</code> with reusable functions for loading variables, saving resolved values, and capturing OCI CLI OCIDs.</span>
-    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
-  </div>
-  <pre class="code-scroll"><code>cat &gt; ~/workbook/helpers.sh &lt;&lt;'EOF'
+chmod 600 ~/workbook/cli.env
+
+cat &gt; ~/workbook/helpers.sh &lt;&lt;'EOF'
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 
@@ -383,41 +372,44 @@ capture_oci_id() {
   fi
   printf '%s\n' "$VALUE" &gt; "$TMP_OUT"
   rm -f "$TMP_OUT"
-  upsert_cli_env "$KEY" "$VALUE"
+  upsert_cli_env "$KEY" "$VALUE" &gt;/dev/null
 }
 EOF
-chmod 700 ~/workbook/helpers.sh</code></pre>
-</div>
-<p>Source <code>~/workbook/helpers.sh</code> in the current shell before running workbook commands. Then call <code>load_cli_env</code> to load variables from <code>~/workbook/cli.env</code>. If OCI Cloud Shell is reset or a new terminal session is opened, source the helper file again because shell functions are not preserved across sessions.</p>
-<h3>BASH 03 - Source helpers and load variables</h3>
-<div class="code-card" data-collapsible="true" data-collapsed="true">
-  <div class="code-toolbar">
-    <span class="code-type">Bash</span>
-    <button class="copy-btn" type="button">Copy</button>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Load workbook helper functions and current <code>~/workbook/cli.env</code> variables into the active shell session.</span>
-    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
-  </div>
-  <pre class="code-scroll"><code>cd ~/workbook
+chmod 700 ~/workbook/helpers.sh
+
+cd ~/workbook
 . ./helpers.sh
-load_cli_env</code></pre>
+load_cli_env
+
+clear
+printf '%-18s | %s\n' \
+  "ITEM" "VALUE" \
+  "------------------" "-----" \
+  "WORKBOOK_DIR" "$WORKBOOK_DIR" \
+  "CLI_ENV" "$CLI_ENV" \
+  "HELPERS" "$HOME/workbook/helpers.sh" \
+  "HELPERS_LOADED" "yes"
+printf '\n%s\n' "wb00_card01"
+}
+
+wb00_card01</code></pre>
 </div>
 <p>Because <code>~/workbook/cli.env</code> starts with <code>set -a</code> and ends with <code>set +a</code>, variables loaded through <code>load_cli_env</code> are exported into the current shell session.</p>
 <h3>Discover and store prerequisite variables</h3>
 <p>Workbook prerequisite variables such as <code>TENANCY_ID</code>, <code>REGION</code>, <code>POC_PARENT_COMPARTMENT_NAME</code>, <code>POC_COMPARTMENT_NAME</code>, and <code>POC_COMPARTMENT_OCID</code> are stored in <code>~/workbook/cli.env</code>. This PoC workbook uses one pre-created compartment for every artifact: <a href="https://cloud.oracle.com/identity/compartments/ocid1.tenancy.oc1..aaaaaaaafj37mytx22oquorcznlfuh77cd45int7tt7fo27tuejsfqbybzrq" target="_blank" rel="noopener">(root)</a> / Partner/LAD-01 by default. The assigned compartment name can change by environment. The scripts ask for that compartment name, resolve it under <code>Partner</code>, and store <code>POC_COMPARTMENT_OCID</code>. The implementation runbook later aliases the workbook compartment variables to that same OCID when it creates network artifacts.</p>
-<p>Run the following commands from an OCI Cloud Shell session. Cloud Shell provides the OCI CLI and an authenticated profile; the cards below read the active Cloud Shell OCI CLI profile, then review and store the tenancy OCID and configured region in <code>~/workbook/cli.env</code>.</p>
-<h3>BASH 04 - Cloud Shell profile discovery</h3>
+<p>Run the following commands from an OCI Cloud Shell session. Cloud Shell provides the OCI CLI and authenticated tenancy context; the card below reads tenancy and region from the active OCI CLI profile, then stores both values in <code>~/workbook/cli.env</code>.</p>
+<h3>BASH 02 - Discover and save profile values</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Load workbook helpers and read tenancy and region from the active Cloud Shell OCI CLI profile.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Load workbook helpers, read tenancy and region from the active OCI CLI profile with the original <code>~/.oci/config</code> method, then save both values in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>cd ~/workbook
+  <pre class="code-scroll"><code>wb00_card02() {
+cd ~/workbook
 
 if [ ! -f ./helpers.sh ]; then
   printf 'Workbook helpers are not available. Create ~/workbook/helpers.sh before continuing.\n' &gt;&amp;2
@@ -452,32 +444,28 @@ else
       }
     ' "$OCI_CONFIG_FILE"
   )"
-fi</code></pre>
-</div>
-<h3>BASH 05 - Review and save profile values</h3>
-<div class="code-card" data-collapsible="true" data-collapsed="true">
-  <div class="code-toolbar">
-    <span class="code-type">Bash</span>
-    <button class="copy-btn" type="button">Copy</button>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Save the discovered tenancy and region in <code>~/workbook/cli.env</code> and display each saved value through <code>upsert_cli_env</code>.</span>
-    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
-  </div>
-  <pre class="code-scroll"><code>if ! command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1; then
+fi
+
+clear
+if ! command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1; then
   printf 'Workbook helpers are not loaded. Run: cd ~/workbook &amp;&amp; . ./helpers.sh\n' &gt;&amp;2
 else
   upsert_cli_env TENANCY_ID "$TENANCY_ID"
   upsert_cli_env REGION "$REGION"
-fi</code></pre>
+fi
+
+printf '\n%s\n' "wb00_card02"
+}
+
+wb00_card02</code></pre>
 </div>
-<h3>OUTPUT 05 - Expected profile-value output</h3>
+<h3>OUTPUT 02 - Expected profile-value output</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the expected <code>upsert_cli_env</code> table output after saving the tenancy OCID and region.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the expected <code>upsert_cli_env</code> output after saving the tenancy OCID and region.</span>
   </div>
   <pre class="code-scroll"><code>VARIABLE           | VALUE
 ------------------ | -----
@@ -485,86 +473,42 @@ TENANCY_ID         | &lt;tenancy_ocid&gt;
 
 VARIABLE           | VALUE
 ------------------ | -----
-REGION             | &lt;region&gt;</code></pre>
+REGION             | &lt;region&gt;
+
+wb00_card02</code></pre>
 </div>
-<p>The workbook expects the approved root-level parent compartment name to be <code>Partner</code>. BASH 04 in the consolidated runbook defaults the assigned pre-created child compartment name to <code>LAD-01</code> under <code>Partner</code>, lets you enter a different assigned compartment when needed, and uses that one compartment for all network artifacts.</p>
-<h3>BASH 06 - Store PoC compartment path</h3>
+<p>The workbook defaults the approved root-level parent compartment name to <code>Partner</code> and the assigned pre-created child compartment name to <code>LAD-01</code>. BASH 03 asks for both names, lets you enter different assigned compartment values when needed, and uses that one child compartment for all network artifacts.</p>
+<h3>BASH 03 - Store PoC compartment path</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Discover and save <code>TENANCY_ID</code> from the active Cloud Shell OCI CLI profile first, then save the approved parent compartment name and prompt for the assigned PoC child compartment name in <code>~/workbook/cli.env</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Ask for both the parent compartment name and the assigned PoC child compartment name, resolve both compartment OCIDs, then save all PoC compartment values in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>if ! command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1 || \
+  <pre class="code-scroll"><code>wb00_card03() {
+if ! command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1 || \
    ! command -v load_cli_env &gt;/dev/null 2&gt;&amp;1; then
   printf 'Workbook helpers are not loaded. Run: cd ~/workbook &amp;&amp; . ./helpers.sh\n' &gt;&amp;2
+  return 1
 elif ! load_cli_env; then
-  :
-else
-  if [ -z "${TENANCY_ID:-}" ] || [ "$TENANCY_ID" = "&lt;tenancy_ocid&gt;" ]; then
-    OCI_CONFIG_FILE="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
-    OCI_CONFIG_PROFILE="${OCI_CLI_PROFILE:-DEFAULT}"
-    if [ -f "$OCI_CONFIG_FILE" ]; then
-      TENANCY_ID="$(
-        awk -F= -v profile="$OCI_CONFIG_PROFILE" '
-          $0 == "[" profile "]" { in_profile=1; next }
-          /^\[/ { in_profile=0 }
-          in_profile &amp;&amp; $1 ~ /^[[:space:]]*tenancy[[:space:]]*$/ {
-            gsub(/[[:space:]]/, "", $2)
-            print $2
-            exit
-          }
-        ' "$OCI_CONFIG_FILE"
-      )"
-    fi
-  fi
-
-  if [ -z "${TENANCY_ID:-}" ] || [ "${TENANCY_ID#ocid1.tenancy.oc1}" = "$TENANCY_ID" ]; then
-    printf 'TENANCY_ID could not be discovered from the active OCI CLI profile. Run Cloud Shell profile discovery before continuing.\n' &gt;&amp;2
-  else
-    upsert_cli_env TENANCY_ID "$TENANCY_ID"
-
-    POC_PARENT_COMPARTMENT_NAME="Partner"
-    printf 'Enter assigned PoC compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME" &gt;&amp;2
-    IFS= read -r POC_COMPARTMENT_NAME
-    POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
-    upsert_cli_env POC_PARENT_COMPARTMENT_NAME "Partner"
-    upsert_cli_env POC_COMPARTMENT_NAME "$POC_COMPARTMENT_NAME"
-  fi
-fi</code></pre>
-</div>
-<p>PoC compartment record: This PoC uses one pre-created compartment for every workbook artifact: network, security, database-readiness, administration, application, and logging references all point to the same <code>Partner/LAD-01</code> compartment by default. The single-compartment model keeps the lab easy to reset, makes OCID tracking simpler, and avoids creating production-style IAM and tagging dependencies before the network baseline is validated.</p>
-<p>For production environments, use separate compartments for distinct ownership and lifecycle boundaries such as networking, security, database, application, administration, and logging. Separate compartments make IAM least privilege easier to enforce, reduce accidental cross-team changes, support different budgets and quotas, improve audit scoping, and allow backup, retention, tagging, and change-control policies to vary by operational domain.</p>
-<p>Do not record placeholder compartment OCIDs. The following resolver card discovers the real <code>Partner/LAD-01</code> compartment OCID and stores only the PoC compartment variables. The implementation runbook records the other compartment aliases later.</p>
-<h3>BASH 07 - Discover and save PoC compartment OCID</h3>
-<div class="code-card" data-collapsible="true" data-collapsed="true">
-  <div class="code-toolbar">
-    <span class="code-type">Bash</span>
-    <button class="copy-btn" type="button">Copy</button>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Resolve the pre-created <code>(root)/Partner/LAD-01</code> compartment by default and save it as <code>POC_COMPARTMENT_OCID</code>. Enter a different assigned child compartment name if the deployment uses one.</span>
-    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
-  </div>
-  <pre class="code-scroll"><code>if ! command -v load_cli_env &gt;/dev/null 2&gt;&amp;1; then
-  printf 'Workbook helpers are not loaded. Run: cd ~/workbook &amp;&amp; . ./helpers.sh\n' &gt;&amp;2
-elif ! load_cli_env; then
-  :
+  return 1
 elif [ -z "$TENANCY_ID" ] || [ "$TENANCY_ID" = "&lt;tenancy_ocid&gt;" ]; then
-  printf 'TENANCY_ID is not set. Run the Cloud Shell profile discovery and save TENANCY_ID before discovering the PoC compartment.\n' &gt;&amp;2
+  printf 'TENANCY_ID is not set. Run BASH 02 to discover and save TENANCY_ID before discovering the PoC compartment.\n' &gt;&amp;2
+  return 1
 elif [ "${TENANCY_ID#ocid1.tenancy.oc1}" = "$TENANCY_ID" ]; then
   printf 'TENANCY_ID must be a tenancy OCID starting with ocid1.tenancy.oc1. Current value: %s\n' \
     "$TENANCY_ID" &gt;&amp;2
+  return 1
 else
-  : "${POC_PARENT_COMPARTMENT_NAME:=Partner}"
-  if [ -z "${POC_COMPARTMENT_NAME:-}" ]; then
-    printf 'Enter assigned PoC compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME" &gt;&amp;2
-    IFS= read -r POC_COMPARTMENT_NAME
-    POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
-  fi
+  printf 'Enter parent compartment name [Partner]: ' &gt;&amp;2
+  IFS= read -r POC_PARENT_COMPARTMENT_NAME
+  POC_PARENT_COMPARTMENT_NAME="${POC_PARENT_COMPARTMENT_NAME:-Partner}"
+  printf 'Enter assigned PoC compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME" &gt;&amp;2
+  IFS= read -r POC_COMPARTMENT_NAME
+  POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
 
   POC_PARENT_COMPARTMENT_OCID="$(
     oci iam compartment list \
@@ -590,65 +534,41 @@ else
       printf 'STOP: PoC compartment "%s/%s" was not found.\n' \
         "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" &gt;&amp;2
     else
-      upsert_cli_env POC_PARENT_COMPARTMENT_NAME "$POC_PARENT_COMPARTMENT_NAME"
-      upsert_cli_env POC_PARENT_COMPARTMENT_OCID "$POC_PARENT_COMPARTMENT_OCID"
-      upsert_cli_env POC_COMPARTMENT_NAME "$POC_COMPARTMENT_NAME"
-      upsert_cli_env POC_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID"
+      upsert_cli_env POC_PARENT_COMPARTMENT_NAME "$POC_PARENT_COMPARTMENT_NAME" &gt;/dev/null
+      upsert_cli_env POC_PARENT_COMPARTMENT_OCID "$POC_PARENT_COMPARTMENT_OCID" &gt;/dev/null
+      upsert_cli_env POC_COMPARTMENT_NAME "$POC_COMPARTMENT_NAME" &gt;/dev/null
+      upsert_cli_env POC_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID" &gt;/dev/null
     fi
   fi
-fi</code></pre>
+fi
+
+clear
+printf '%-32s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "--------------------------------" "-----" \
+  "TENANCY_ID" "$TENANCY_ID" \
+  "REGION" "$REGION" \
+  "POC_PARENT_COMPARTMENT_NAME" "$POC_PARENT_COMPARTMENT_NAME" \
+  "POC_PARENT_COMPARTMENT_OCID" "$POC_PARENT_COMPARTMENT_OCID" \
+  "POC_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" \
+  "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID"
+printf '\n%s\n' "wb00_card03"
+}
+
+wb00_card03</code></pre>
 </div>
-<h3>BASH 08 - Variable check</h3>
-<div class="code-card" data-collapsible="true" data-collapsed="true">
-  <div class="code-toolbar">
-    <span class="code-type">Bash</span>
-    <button class="copy-btn" type="button">Copy</button>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Reload the shell variables and display the required workbook variables in one readable table.</span>
-    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
-  </div>
-  <pre class="code-scroll"><code>if ! command -v load_cli_env &gt;/dev/null 2&gt;&amp;1; then
-  printf 'Workbook helpers are not loaded. Run: cd ~/workbook &amp;&amp; . ./helpers.sh\n' &gt;&amp;2
-elif ! load_cli_env; then
-  :
-else
-  printf '%-28s | %s\n' \
-    "VARIABLE" "VALUE" \
-    "----------------------------" "-----" \
-    "TENANCY_ID" "$TENANCY_ID" \
-    "REGION" "$REGION" \
-    "POC_PARENT_COMPARTMENT_NAME" "$POC_PARENT_COMPARTMENT_NAME" \
-    "POC_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" \
-    "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID"
-fi</code></pre>
-</div>
-<h3>OUTPUT 08 - Expected variable-check output</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the expected table format for the workbook variable check.</span>
-  </div>
-  <pre class="code-scroll"><code>VARIABLE                     | VALUE
----------------------------- | -----
-TENANCY_ID                   | &lt;tenancy_ocid&gt;
-REGION                       | &lt;region&gt;
-POC_PARENT_COMPARTMENT_NAME  | Partner
-POC_COMPARTMENT_NAME         | LAD-01
-POC_COMPARTMENT_OCID         | ocid1.compartment.oc1..aaaaaaaapartnerpoccompartment</code></pre>
-</div>
+<p>PoC compartment record: This PoC uses one pre-created compartment for every workbook artifact: network, security, database-readiness, administration, application, and logging references all point to the same <code>Partner/LAD-01</code> compartment by default. The single-compartment model keeps the lab easy to reset, makes OCID tracking simpler, and avoids creating production-style IAM and tagging dependencies before the network baseline is validated.</p>
+<p>For production environments, use separate compartments for distinct ownership and lifecycle boundaries such as networking, security, database, application, administration, and logging. Separate compartments make IAM least privilege easier to enforce, reduce accidental cross-team changes, support different budgets and quotas, improve audit scoping, and allow backup, retention, tagging, and change-control policies to vary by operational domain.</p>
+<p>Do not record placeholder compartment OCIDs. BASH 03 discovers the real <code>Partner/LAD-01</code> compartment OCID and stores only the PoC compartment variables. The implementation runbook records the other compartment aliases later.</p>
 <h3>How <code>capture_oci_id</code> works</h3>
 <p><code>capture_oci_id</code> is a workbook helper function defined in <code>~/workbook/helpers.sh</code>. It is not part of OCI CLI. Use <code>capture_oci_id &lt;CLI_ENV_KEY&gt; &lt;oci command...&gt;</code> for create commands that return the new resource under <code>data.id</code>.</p>
 <p>When the helper runs, it:</p>
 <ul class="article-list">
 <li>Executes the OCI CLI command passed after the key with <code>--query 'data.id' --raw-output</code>.</li>
 <li>Writes the captured OCID output to a temporary text file under <code>~/workbook</code>.</li>
-<li>Calls <code>upsert_cli_env</code>, which validates that the command returned a non-empty value.</li>
+<li>Calls <code>upsert_cli_env</code> quietly, which validates that the command returned a non-empty value.</li>
 <li>Appends or updates <code>&lt;KEY&gt;=&lt;OCID&gt;</code> in <code>~/workbook/cli.env</code>.</li>
-<li>Exports the updated variable into the current shell.</li>
-<li>Prints the saved variable in the standard <code>VARIABLE | VALUE</code> table format.</li>
+<li>Exports the updated variable into the current shell without printing the standard variable table.</li>
 </ul>
       </section><section id="key-implementation-focus" class="article-section">
         <h2>Key Implementation Focus</h2>
