@@ -379,7 +379,7 @@ if [ "$DISCOVER_CLUSTER_HOSTNAME" = "true" ]; then
     &gt; "$DB_NODE_LIST_JSON"
 
   DB_NODE_OCID="$(
-    jq -r '.data[0].id // empty' "$DB_NODE_LIST_JSON"
+    jq -r '.data | sort_by(."host-name" // .hostname // "") | .[0].id // empty' "$DB_NODE_LIST_JSON"
   )"
 
   if [ -n "$DB_NODE_OCID" ]; then
@@ -396,8 +396,7 @@ if [ "$DISCOVER_CLUSTER_HOSTNAME" = "true" ]; then
     jq -rs '
       .[0].data."host-name"
       // .[0].data.hostname
-      // .[1].data[0]."host-name"
-      // .[1].data[0].hostname
+      // (.[1].data | sort_by(."host-name" // .hostname // "") | .[0]."host-name" // .[0].hostname)
       // empty
     ' "$DB_NODE_GET_JSON" "$DB_NODE_LIST_JSON"
   )"

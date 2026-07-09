@@ -44,7 +44,7 @@ POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
 printf 'This recovery will discover existing resources in /%s/%s and write %s.\n' "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" "$CLI_ENV"
 printf 'Confirm this compartment path? [y/N]: '; IFS= read -r ans
 case "$ans" in y|Y|yes|YES) ;; *) printf 'STOP: Recovery was not confirmed.\n' >&2; exit 1;; esac
-printf 'Enter CDB_ADMIN_PASSWORD [WelCome#2026_]: '; IFS= read -r CDB_ADMIN_PASSWORD
+printf 'Enter CDB_ADMIN_PASSWORD [Enter to use Default]: '; IFS= read -r CDB_ADMIN_PASSWORD
 CDB_ADMIN_PASSWORD="${CDB_ADMIN_PASSWORD:-WelCome#2026_}"
 
 phase 'Resolving compartment OCIDs'
@@ -189,7 +189,7 @@ oci db node list \
   --vm-cluster-id "$VM_CLUSTER_OCID" \
   --all \
   --output json > "$DB_NODE_LIST_JSON" 2>/dev/null || printf '{"data":[]}\n' > "$DB_NODE_LIST_JSON"
-DB_NODE_OCID="$(jq -r '.data[0].id // empty' "$DB_NODE_LIST_JSON" 2>/dev/null)"
+DB_NODE_OCID="$(jq -r '.data | sort_by(."host-name" // .hostname // "") | .[0].id // empty' "$DB_NODE_LIST_JSON" 2>/dev/null)"
 if ok "$DB_NODE_OCID"; then
   oci db node get \
     --region "$REGION" \
@@ -198,7 +198,7 @@ if ok "$DB_NODE_OCID"; then
 else
   printf '{}\n' > "$DB_NODE_GET_JSON"
 fi
-DB_NODE_HOSTNAME="$(jq -rs '.[0].data."host-name" // .[0].data.hostname // .[1].data[0]."host-name" // .[1].data[0].hostname // empty' "$DB_NODE_GET_JSON" "$DB_NODE_LIST_JSON" 2>/dev/null)"
+DB_NODE_HOSTNAME="$(jq -rs '.[0].data."host-name" // .[0].data.hostname // (.[1].data | sort_by(."host-name" // .hostname // "") | .[0]."host-name" // .[0].hostname) // empty' "$DB_NODE_GET_JSON" "$DB_NODE_LIST_JSON" 2>/dev/null)"
 case "$DB_NODE_HOSTNAME" in
   *.*) CLUSTER_FIRST_NODE_HOSTNAME="$DB_NODE_HOSTNAME" ;;
   ""|null) CLUSTER_FIRST_NODE_HOSTNAME="" ;;
