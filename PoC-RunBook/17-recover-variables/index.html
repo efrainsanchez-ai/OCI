@@ -54,7 +54,7 @@
       <section id="introduction" class="article-section">
         <h2>Introduction</h2>
         <p>This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, a different OCI user takes over, or the original <code>~/workbook/cli.env</code> file is no longer available. It does not recreate OCI resources. It discovers existing resources from OCI by using the same names, compartment assumptions, and discovery style used by the earlier workbooks in this series, especially Chapter 16.</p>
-<p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, helper file, environment loader, and empty <code>cli.env</code>. BASH 02 downloads the reusable discovery tool under <code>~/workbook/recovery-tools</code>, asks you to confirm the parent compartment and assigned compartment, then writes recovered variables back into <code>~/workbook/cli.env</code>.</p>
+<p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, helper file, environment loader, and a minimal export-enabled <code>cli.env</code>. BASH 02 downloads the reusable discovery tool under <code>~/workbook/recovery-tools</code>, asks you to confirm the parent compartment and assigned compartment, then writes recovered variables back into <code>~/workbook/cli.env</code>.</p>
 <p>The default compartment path is <code>(root)/Partner/LAD-01</code>. If your deployment used another assigned child compartment under <code>Partner</code>, enter that name when prompted. The script stops before discovery unless you confirm the resolved path.</p>
       </section><section id="what-gets-recovered" class="article-section">
         <h2>What gets recovered</h2>
@@ -146,19 +146,20 @@
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, <code>helpers.sh</code>, <code>env.sh</code>, and empty <code>cli.env</code> so recovery can run even when the Cloud Shell home directory was reset.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, <code>helpers.sh</code>, <code>env.sh</code>, and export-enabled <code>cli.env</code> so recovery can run even when the Cloud Shell home directory was reset.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb17_card01() {
 
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
-CLI_ENV="$WORKBOOK_DIR/cli.env"
-HELPERS_FILE="$WORKBOOK_DIR/helpers.sh"
-ENV_FILE="$WORKBOOK_DIR/env.sh"
+CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
+HELPERS_FILE="$WORKBOOK_DIR/helpers.sh"; ENV_FILE="$WORKBOOK_DIR/env.sh"
 
-mkdir -p "$WORKBOOK_DIR"
-chmod 700 "$WORKBOOK_DIR"
-: &gt; "$CLI_ENV"
+mkdir -p "$WORKBOOK_DIR"; chmod 700 "$WORKBOOK_DIR"
+cat &gt; "$CLI_ENV" &lt;&lt;'EOF'
+set -a
+set +a
+EOF
 chmod 600 "$CLI_ENV"
 
 cat &gt; "$HELPERS_FILE" &lt;&lt;'HELPERS'
@@ -166,38 +167,31 @@ WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 
 load_cli_env() {
-  if [ ! -f "$CLI_ENV" ]; then
-    printf '%s does not exist. Run BASH 01 in the Recover Variables workbook.\n' "$CLI_ENV" &gt;&amp;2
-    return 1
-  fi
-  set -a
+  [ -f "$CLI_ENV" ] || { printf '%s does not exist. Create ~/workbook/cli.env before continuing.\n' "$CLI_ENV" &gt;&amp;2; return 1; }
   . "$CLI_ENV"
-  set +a
 }
 
 upsert_cli_env() {
-  KEY="${1:-}"
-  VALUE="${2:-}"
-  if [ -z "$KEY" ]; then
-    printf 'cli.env key is missing. Use upsert_cli_env KEY VALUE.\n' &gt;&amp;2
-    return 1
-  fi
-  case "$KEY" in
-    ""|*[!A-Z0-9_]*)
-      printf 'Invalid cli.env key: %s\n' "$KEY" &gt;&amp;2
-      return 1
-      ;;
-  esac
-  mkdir -p "$WORKBOOK_DIR"
-  touch "$CLI_ENV"
-  if grep -q "^${KEY}=" "$CLI_ENV"; then
-    TMP_FILE="$(mktemp "$WORKBOOK_DIR/cli.env.XXXXXX")" || return 1
-    awk -v key="$KEY" -v value="$VALUE" 'BEGIN { done=0 } $0 ~ "^" key "=" { print key "=" value; done=1; next } { print } END { if (!done) print key "=" value }' "$CLI_ENV" &gt; "$TMP_FILE"
-    mv "$TMP_FILE" "$CLI_ENV"
-  else
-    printf '%s=%s\n' "$KEY" "$VALUE" &gt;&gt; "$CLI_ENV"
-  fi
+  KEY="${1:-}"; VALUE="${2:-}"
+  [ -n "$KEY" ] || { printf 'cli.env key is missing. Use upsert_cli_env KEY VALUE.\n' &gt;&amp;2; return 1; }
+  case "$KEY" in *[!A-Z0-9_]* ) printf 'Invalid cli.env key: %s\n' "$KEY" &gt;&amp;2; return 1;; esac
+  [ -n "$VALUE" ] &amp;&amp; [ "$VALUE" != "null" ] || { printf '%s was not resolved. Review the command that produced this value before continuing.\n' "$KEY" &gt;&amp;2; return 1; }
+  mkdir -p "$WORKBOOK_DIR"; touch "$CLI_ENV"; chmod 600 "$CLI_ENV"
+  [ -s "$CLI_ENV" ] || printf 'set -a\nset +a\n' &gt; "$CLI_ENV"
+  grep -qx 'set -a' "$CLI_ENV" || { TMP_ENV="$(mktemp "$WORKBOOK_DIR/cli-env.XXXXXX")"; { printf 'set -a\n'; cat "$CLI_ENV"; } &gt; "$TMP_ENV"; mv "$TMP_ENV" "$CLI_ENV"; }
+  grep -qx 'set +a' "$CLI_ENV" || printf 'set +a\n' &gt;&gt; "$CLI_ENV"
+  ESCAPED_VALUE="$(printf '%q' "$VALUE")"; TMP_ENV="$(mktemp "$WORKBOOK_DIR/cli-env.XXXXXX")"
+  awk -v k="$KEY" -v v="$ESCAPED_VALUE" 'BEGIN{p=k"=";d=0} index($0,p)==1{next} $0=="set +a"&amp;&amp;!d{print k"="v;d=1} {print} END{if(!d)print k"="v}' "$CLI_ENV" &gt; "$TMP_ENV"
+  mv "$TMP_ENV" "$CLI_ENV"; chmod 600 "$CLI_ENV"
   export "$KEY=$VALUE"
+  printf '%-18s | %s\n%-18s | %s\n%-18s | %s\n\n' \
+    "VARIABLE" "VALUE" "------------------" "-----" "$KEY" "$VALUE"
+}
+
+capture_oci_id() {
+  KEY="$1"; shift
+  VALUE="$("$@" --query 'data.id' --raw-output)" || { printf 'OCI command failed while resolving %s.\n' "$KEY" &gt;&amp;2; return 1; }
+  upsert_cli_env "$KEY" "$VALUE" &gt;/dev/null
 }
 HELPERS
 chmod 700 "$HELPERS_FILE"
@@ -230,8 +224,7 @@ PS1='$ '
 
 clear
 printf '%-18s | %s\n' \
-  "FIELD" "VALUE" \
-  "------------------" "-----" \
+  "FIELD" "VALUE" "------------------" "-----" \
   "WORKBOOK_DIR" "$WORKBOOK_DIR" \
   "CLI_ENV" "$CLI_ENV" \
   "HELPERS_FILE" "$HELPERS_FILE" \
@@ -396,6 +389,9 @@ printf '%-34s | %s\n' \
   "BASTION_PUBLIC_IP" "${BASTION_PUBLIC_IP:-}" \
   "ADMIN_BUCKET_NAME" "${ADMIN_BUCKET_NAME:-}" \
   "VM_CLUSTER_OCID" "${VM_CLUSTER_OCID:-}" \
+  "EXADATA_ENABLED_ECPU_COUNT" "${EXADATA_ENABLED_ECPU_COUNT:-}" \
+  "EXADATA_TOTAL_ECPU_COUNT" "${EXADATA_TOTAL_ECPU_COUNT:-}" \
+  "EXADATA_VM_FS_STORAGE_GB" "${EXADATA_VM_FS_STORAGE_GB:-}" \
   "DB_HOME_OCID" "${DB_HOME_OCID:-}" \
   "CDB_OCID" "${CDB_OCID:-}" \
   "PDB_OCID" "${PDB_OCID:-}" \
@@ -425,6 +421,9 @@ NSG_BASTION_OCID                   | &lt;bastion_nsg_ocid&gt;
 BASTION_VM_OCID                    | &lt;bastion_vm_ocid&gt;
 BASTION_PUBLIC_IP                  | &lt;bastion_public_ip&gt;
 VM_CLUSTER_OCID                    | &lt;vm_cluster_ocid&gt;
+EXADATA_ENABLED_ECPU_COUNT         | &lt;enabled_ecpu_count&gt;
+EXADATA_TOTAL_ECPU_COUNT           | &lt;total_ecpu_count&gt;
+EXADATA_VM_FS_STORAGE_GB           | &lt;vm_file_system_storage_gb&gt;
 CDB_OCID                           | &lt;cdb_ocid&gt;
 PDB_OCID                           | &lt;pdb_ocid&gt;
 DBMGMT_PRIVATE_ENDPOINT_OCID       | &lt;dbmgmt_private_endpoint_ocid&gt;
@@ -440,45 +439,14 @@ wb17_card03</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create and run a reusable executive report script that summarizes all recovered artifacts, counts recovered and missing variables, and writes the report to <code>~/workbook/recovery-executive-report.txt</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Summarize recovered artifacts, count recovered and missing variables from <code>~/workbook/recovery-status.tsv</code>, and write the report to <code>~/workbook/recovery-executive-report.txt</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb17_card04() {
 
-RECOVERY_DIR="$WORKBOOK_DIR/recovery-tools"
-REPORT_SCRIPT="$RECOVERY_DIR/recovery-executive-report.sh"
 REPORT_FILE="$WORKBOOK_DIR/recovery-executive-report.txt"
-mkdir -p "$RECOVERY_DIR"
-chmod 700 "$RECOVERY_DIR"
-
-cat &gt; "$REPORT_SCRIPT" &lt;&lt;'SCRIPT'
-#!/bin/sh
-
-. "$HOME/workbook/helpers.sh" || {
-  printf 'STOP: Unable to load %s.\n' "$HOME/workbook/helpers.sh" &gt;&amp;2
-  exit 1
-}
-load_cli_env || exit 1
-
-WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
-REPORT_FILE="${1:-$WORKBOOK_DIR/recovery-executive-report.txt}"
-
-ALL_VARIABLES="
-REGION TENANCY_ID POC_COMPARTMENT_OCID POC_PARENT_COMPARTMENT_NAME POC_COMPARTMENT_NAME
-VCN_NAME VCN_CIDR PARENT_COMPARTMENT_NAME POC_PARENT_COMPARTMENT_OCID PARENT_COMPARTMENT_OCID
-NETWORK_COMPARTMENT_OCID SECURITY_COMPARTMENT_OCID DATABASE_COMPARTMENT_OCID ADMIN_COMPARTMENT_OCID APPLICATION_COMPARTMENT_OCID LOG_COMPARTMENT_OCID
-VCN_OCID DEFAULT_SECURITY_LIST_OCID ALL_REGION_SERVICES_SERVICE_OCID SERVICE_CIDR_BLOCK_LABEL IGW_OCID SGW_OCID NAT_OCID RT_PUBLIC_OCID RT_PRIVATE_OCID SECURITY_LIST_BACKUP_OCID
-SUBNET_ADMIN_OCID SUBNET_DBCLIENT_OCID SUBNET_DB_BACKUP_OCID SUBNET_DBTOOLS_OCID SUBNET_PUBLIC_LB_OCID SUBNET_APPS_OCID
-NSG_EXADATA_CLIENT_OCID NSG_APPLICATIONS_OCID NSG_DBTOOLS_OCID NSG_BASTION_OCID NSG_PUBLIC_LB_OCID
-AVAILABILITY_DOMAIN BASTION_SHAPE OL9_MARKETPLACE_IMAGE_OCID SSH_PRIVATE_KEY_FILE SSH_PUBLIC_KEY_FILE BASTION_VM_OCID BASTION_PUBLIC_IP ADMIN_BUCKET_NAME
-EXADATA_SSH_PRIVATE_KEY_FILE EXADATA_SSH_PUBLIC_KEY_FILE VAULT_OCID EXADATA_STORAGE_GB EXADATA_AVAILABILITY_DOMAIN EXADATA_AD_NUMBER EXADB_SHAPE EXADB_SHAPE_ATTRIBUTE EXADB_SHAPE_FAMILY GI_MAJOR_VERSION GRID_IMAGE_ID EXADATA_SYSTEM_VERSION VM_CLUSTER_OCID VM_CLUSTER_STATUS EXADATA_TARGET_SYSTEM_VERSION DB_HOME_OCID DB_VERSION TOTAL_ECPU_PER_VM ENABLED_ECPU_PER_VM TARGET_MEMORY_GB_PER_VM
-CDB_NAME PDB_NAME CDB_ADMIN_PASSWORD CDB_OCID CDB_CHARACTER_SET CDB_CHARACTER_SET_MODE PDB_OCID
-PROTECTION_POLICY_NAME BACKUP_DESTINATION_TYPE BACKUP_RETENTION_POLICY_ON_TERMINATE REAL_TIME_DATA_PROTECTION_ENABLED RECOVERY_SERVICE_SUBNET_OCID PROTECTION_POLICY_OCID INITIAL_BACKUP_OCID
-CDB_CREDENTIAL_VAULT_NAME CDB_CREDENTIAL_KEY_NAME CDB_SYS_SECRET_NAME CDB_SYSTEM_SECRET_NAME CDB_CREDENTIAL_VAULT_OCID CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT CDB_CREDENTIAL_KEY_OCID CDB_SYS_SECRET_OCID CDB_SYSTEM_SECRET_OCID
-DBMGMT_PRIVATE_ENDPOINT_NAME DBMGMT_MANAGEMENT_TYPE DBMGMT_CREDENTIAL_USERNAME DBMGMT_PROTOCOL DBMGMT_PORT DBMGMT_ROLE DBMGMT_SECRET_POLICY_NAME DBMGMT_SYSTEM_SECRET_OCID DBMGMT_PASSWORD_SECRET_OCID DBMGMT_PRIVATE_ENDPOINT_OCID DBMGMT_IAM_HOME_REGION DBMGMT_SECRET_POLICY_COMPARTMENT_NAME DBMGMT_SECRET_POLICY_OCID DBMGMT_CDB_SERVICE_NAME
-EXADATA_HOSTNAME BASTION_SSH_USER OBJECT_STORAGE_NAMESPACE CLUSTER_SSH_USER EXADATA_DOMAIN CLUSTER_FIRST_NODE_HOSTNAME
-"
+STATUS_FILE="$WORKBOOK_DIR/recovery-status.tsv"
 
 section() {
   printf '\n%s\n' "$1"
@@ -486,8 +454,7 @@ section() {
 }
 
 row() {
-  label="$1"
-  key="$2"
+  label="$1"; key="$2"
   eval "value=\${$key:-}"
   if [ -n "$value" ]; then
     if [ "$key" = "CDB_ADMIN_PASSWORD" ]; then
@@ -500,16 +467,12 @@ row() {
   fi
 }
 
-count_found=0
-count_missing=0
-for key in $ALL_VARIABLES; do
-  eval "value=\${$key:-}"
-  if [ -n "$value" ]; then
-    count_found=$((count_found + 1))
-  else
-    count_missing=$((count_missing + 1))
-  fi
-done
+if [ -f "$STATUS_FILE" ]; then
+  count_found="$(awk -F '\t' '$2=="FOUND"{c++} END{print c+0}' "$STATUS_FILE")"
+  count_missing="$(awk -F '\t' '$2=="MISS"{c++} END{print c+0}' "$STATUS_FILE")"
+else
+  count_found="unknown"; count_missing="unknown"
+fi
 
 {
   printf '%s\n' "OCI PoC RunBook - Recover Variables Executive Report"
@@ -528,76 +491,39 @@ done
   row "Parent compartment" POC_PARENT_COMPARTMENT_OCID
   row "Assigned compartment" POC_COMPARTMENT_OCID
 
-  section "Network baseline artifacts"
-  row "VCN" VCN_OCID
-  row "Default security list" DEFAULT_SECURITY_LIST_OCID
-  row "Backup security list" SECURITY_LIST_BACKUP_OCID
-  row "Internet gateway" IGW_OCID
-  row "Service gateway" SGW_OCID
-  row "NAT gateway" NAT_OCID
-  row "Public route table" RT_PUBLIC_OCID
-  row "Private route table" RT_PRIVATE_OCID
-  row "Admin subnet" SUBNET_ADMIN_OCID
-  row "DB client subnet" SUBNET_DBCLIENT_OCID
-  row "DB backup subnet" SUBNET_DB_BACKUP_OCID
-  row "DB tools subnet" SUBNET_DBTOOLS_OCID
-  row "Public LB subnet" SUBNET_PUBLIC_LB_OCID
-  row "Applications subnet" SUBNET_APPS_OCID
-  row "Exadata client NSG" NSG_EXADATA_CLIENT_OCID
-  row "Applications NSG" NSG_APPLICATIONS_OCID
-  row "DB tools NSG" NSG_DBTOOLS_OCID
-  row "Bastion NSG" NSG_BASTION_OCID
-  row "Public LB NSG" NSG_PUBLIC_LB_OCID
-
-  section "Administration and bastion artifacts"
-  row "Bastion VM" BASTION_VM_OCID
-  row "Bastion public IP" BASTION_PUBLIC_IP
-  row "Admin object bucket" ADMIN_BUCKET_NAME
-  row "Bastion private key object" SSH_PRIVATE_KEY_FILE
-  row "Cluster private key object" EXADATA_SSH_PRIVATE_KEY_FILE
-
-  section "Exadata and database artifacts"
-  row "Storage vault" VAULT_OCID
-  row "VM cluster" VM_CLUSTER_OCID
-  row "VM cluster status" VM_CLUSTER_STATUS
-  row "DB home" DB_HOME_OCID
-  row "CDB" CDB_OCID
-  row "PDB" PDB_OCID
-  row "Cluster first node hostname" CLUSTER_FIRST_NODE_HOSTNAME
-
-  section "Backup and Recovery Service artifacts"
-  row "Recovery Service subnet" RECOVERY_SERVICE_SUBNET_OCID
-  row "Protection policy" PROTECTION_POLICY_OCID
-  row "Initial backup" INITIAL_BACKUP_OCID
-
-  section "Secrets and Database Management artifacts"
-  row "Credential vault" CDB_CREDENTIAL_VAULT_OCID
-  row "Credential key" CDB_CREDENTIAL_KEY_OCID
-  row "SYS secret" CDB_SYS_SECRET_OCID
-  row "SYSTEM secret" CDB_SYSTEM_SECRET_OCID
-  row "DBMGMT private endpoint" DBMGMT_PRIVATE_ENDPOINT_OCID
-  row "DBMGMT secret policy" DBMGMT_SECRET_POLICY_OCID
-  row "DBMGMT CDB service" DBMGMT_CDB_SERVICE_NAME
-
-  section "Recovered sensitive value"
+  section "Key recovered artifacts"
+  for item in \
+    "VCN|VCN_OCID" "Admin subnet|SUBNET_ADMIN_OCID" "Bastion VM|BASTION_VM_OCID" \
+    "Bastion public IP|BASTION_PUBLIC_IP" "Admin object bucket|ADMIN_BUCKET_NAME" \
+    "Storage vault|VAULT_OCID" "VM cluster|VM_CLUSTER_OCID" "VM cluster status|VM_CLUSTER_STATUS" \
+    "VM cluster name|EXADATA_CLUSTER_NAME" "Enabled ECPU count|EXADATA_ENABLED_ECPU_COUNT" \
+    "Total ECPU count|EXADATA_TOTAL_ECPU_COUNT" "VM file system storage GB|EXADATA_VM_FS_STORAGE_GB" \
+    "DB home|DB_HOME_OCID" "CDB|CDB_OCID" "PDB|PDB_OCID" \
+    "Recovery Service subnet|RECOVERY_SERVICE_SUBNET_OCID" "Protection policy|PROTECTION_POLICY_OCID" \
+    "Credential vault|CDB_CREDENTIAL_VAULT_OCID" "DBMGMT private endpoint|DBMGMT_PRIVATE_ENDPOINT_OCID" \
+    "Cluster first node hostname|CLUSTER_FIRST_NODE_HOSTNAME"; do
+    row "${item%%|*}" "${item#*|}"
+  done
   row "CDB admin password" CDB_ADMIN_PASSWORD
   printf '%s\n' "Note: CDB_ADMIN_PASSWORD was provided interactively and is masked in this report."
 
+  section "Recovered variable detail"
+  if [ -f "$STATUS_FILE" ]; then
+    awk -F '\t' '$2=="FOUND"{printf "%-34s | FOUND | %s\n",$1,$3}' "$STATUS_FILE"
+  else
+    printf 'recovery-status.tsv was not found. Run wb17_card02 first.\n'
+  fi
+
   section "Missing variable detail"
-  for key in $ALL_VARIABLES; do
-    eval "value=\${$key:-}"
-    if [ -z "$value" ]; then
-      printf '%s\n' "$key"
-    fi
-  done
+  if [ -f "$STATUS_FILE" ]; then
+    awk -F '\t' '$2=="MISS"{print $1}' "$STATUS_FILE"
+  else
+    printf 'recovery-status.tsv was not found. Run wb17_card02 first.\n'
+  fi
 } &gt; "$REPORT_FILE"
 
 clear
 cat "$REPORT_FILE"
-SCRIPT
-
-chmod 700 "$REPORT_SCRIPT"
-"$REPORT_SCRIPT" "$REPORT_FILE"
 printf '\n%s\n' "wb17_card04"
 }
 
