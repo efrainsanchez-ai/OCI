@@ -1,5 +1,8 @@
 #!/bin/bash
 
+SCRIPT_CREATED_AT="2026-07-10 11:22:05 CST"
+printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
+
 . "$HOME/workbook/helpers.sh" || exit 1
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
