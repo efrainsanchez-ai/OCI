@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_CREATED_AT="2026-07-10 11:50:45 CST"
+SCRIPT_CREATED_AT="2026-07-10 12:13:58 CST"
 printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
 
 . "$HOME/workbook/helpers.sh" || exit 1
@@ -112,6 +112,11 @@ DBMGMT_CDB_CONNECT_STRING="$(ociq oci db database get --region "$REGION" --datab
 ok "$DBMGMT_CDB_CONNECT_STRING" || DBMGMT_CDB_CONNECT_STRING="$(ociq oci db database get --region "$REGION" --database-id "$CDB_OCID" --query 'data."connection-strings"."all-connection-strings"."CDB Default"')"
 DBMGMT_CDB_SERVICE_NAME="$(printf '%s\n' "$DBMGMT_CDB_CONNECT_STRING" | sed -n 's/.*SERVICE_NAME=\([^)]*\)).*/\1/p' | sed -n '1p')"
 ok "$DBMGMT_CDB_SERVICE_NAME" || DBMGMT_CDB_SERVICE_NAME="$(printf '%s\n' "$DBMGMT_CDB_CONNECT_STRING" | sed 's/[?].*$//' | sed 's#.*/##' | sed 's/[[:space:]]*$//' | sed -n '1p')"
+EXADATA_DOMAIN="${EXADATA_DOMAIN:-}"
+if ok "$DBMGMT_CDB_SERVICE_NAME"; then
+  EXADATA_DOMAIN="${DBMGMT_CDB_SERVICE_NAME#*.}"
+  [ "$EXADATA_DOMAIN" = "$DBMGMT_CDB_SERVICE_NAME" ] && EXADATA_DOMAIN=""
+fi
 PDB_OCID="$(ociq oci db pluggable-database list --region "$REGION" --database-id "$CDB_OCID" --all --query "data[?\"pdb-name\"=='$PDB_NAME'].id | [0]")"
 DB_VERSION="$(ociq oci db db-home get --region "$REGION" --db-home-id "$DB_HOME_OCID" --query 'data."db-version"')"
 CDB_CHARACTER_SET="$(ociq oci db database get --region "$REGION" --database-id "$CDB_OCID" --query 'data."character-set"')"
@@ -119,7 +124,12 @@ CDB_CHARACTER_SET_MODE=EXPLICIT
 DB_NODE_LIST_JSON="$JSON_DIR/recovered-db-node-list.json"
 DB_NODE_GET_JSON="$JSON_DIR/recovered-db-node-get.json"
 CLUSTER_NODE_HOSTNAMES_FILE="$REPORT_DIR/recovered-cluster-node-hostnames.txt"
-oci db node list   --region "$REGION"   --compartment-id "$POC_COMPARTMENT_OCID"   --vm-cluster-id "$VM_CLUSTER_OCID"   --all   --output json > "$DB_NODE_LIST_JSON" 2>/dev/null || printf '{"data":[]}\n' > "$DB_NODE_LIST_JSON"
+oci db node list \
+  --region "$REGION" \
+  --compartment-id "$POC_COMPARTMENT_OCID" \
+  --vm-cluster-id "$VM_CLUSTER_OCID" \
+  --all \
+  --output json > "$DB_NODE_LIST_JSON" 2>/dev/null || printf '{"data":[]}\n' > "$DB_NODE_LIST_JSON"
 jq -r --arg domain "$EXADATA_DOMAIN" '
   .data | sort_by(."host-name" // .hostname // "")[]
   | (."host-name" // .hostname // empty) as $host
@@ -129,7 +139,10 @@ jq -r --arg domain "$EXADATA_DOMAIN" '
 DB_NODE_HOSTNAME="$(sed -n '1p' "$CLUSTER_NODE_HOSTNAMES_FILE")"
 DB_NODE_OCID="$(jq -r '.data | sort_by(."host-name" // .hostname // "") | .[0].id // empty' "$DB_NODE_LIST_JSON" 2>/dev/null)"
 if ok "$DB_NODE_OCID"; then
-  oci db node get     --region "$REGION"     --db-node-id "$DB_NODE_OCID"     --output json > "$DB_NODE_GET_JSON" 2>/dev/null || printf '{}\n' > "$DB_NODE_GET_JSON"
+  oci db node get \
+    --region "$REGION" \
+    --db-node-id "$DB_NODE_OCID" \
+    --output json > "$DB_NODE_GET_JSON" 2>/dev/null || printf '{}\n' > "$DB_NODE_GET_JSON"
 else
   printf '{}\n' > "$DB_NODE_GET_JSON"
 fi
@@ -143,6 +156,7 @@ else
   note "Node name: <not_found>"
 fi
 note "CDB: ${CDB_OCID:-<not_found>}"
+note "PDB: ${PDB_OCID:-<not_found>}"
 
 phase 'Discovering backup, Vault, and Database Management artifacts'
 CDB_CREDENTIAL_VAULT_OCID="$(ociq oci kms management vault list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --all --query "data[?\"display-name\"=='$CDB_CREDENTIAL_VAULT_NAME']|[0].id")"
@@ -223,10 +237,6 @@ case "$EXADATA_AD_NUMBER" in
 esac
 SSH_PRIVATE_KEY_FILE=bastion-01_rsa; SSH_PUBLIC_KEY_FILE=bastion-01_rsa.pub; EXADATA_SSH_PRIVATE_KEY_FILE=vmcluster-01_rsa; EXADATA_SSH_PUBLIC_KEY_FILE=vmcluster-01_rsa.pub
 EXADATA_HOSTNAME=exasc01; BASTION_SSH_USER=opc; CLUSTER_SSH_USER=opc; OBJECT_STORAGE_NAMESPACE="$(ociq oci os ns get --region "$REGION" --query data)"
-if ok "$DBMGMT_CDB_SERVICE_NAME"; then
-  EXADATA_DOMAIN="${DBMGMT_CDB_SERVICE_NAME#*.}"
-  [ "$EXADATA_DOMAIN" = "$DBMGMT_CDB_SERVICE_NAME" ] && EXADATA_DOMAIN=""
-fi
 phase 'Discovering File Storage artifacts'
 FSS_NAME="${FSS_NAME:-FileSystem-01}"
 FSS_EXPORT_PATH="${FSS_EXPORT_PATH:-/FileSystem-01}"
