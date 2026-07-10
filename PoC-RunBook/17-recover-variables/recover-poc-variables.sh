@@ -237,15 +237,33 @@ FSS_CLUSTER_MOUNT_HOST="${FSS_CLUSTER_MOUNT_HOST:-$FSS_DBCLIENT_MOUNT_HOST}"
 FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-all-nodes.sh}"
 FSS_AVAILABILITY_DOMAIN="${FSS_AVAILABILITY_DOMAIN:-${EXADATA_AVAILABILITY_DOMAIN:-}}"
 FSS_NSG_OCID="$(lookup_nsg "$FSS_NSG_NAME")"
-FSS_FILE_SYSTEM_OCID="$(
-  oci fs file-system list     --region "$REGION"     --availability-domain "$FSS_AVAILABILITY_DOMAIN"     --compartment-id "$POC_COMPARTMENT_OCID"     --display-name "$FSS_NAME"     --lifecycle-state ACTIVE     --query 'data[0].id'     --raw-output 2>/dev/null || true
-)"
+FSS_AD_LIST="$(oci iam availability-domain list --region "$REGION" --compartment-id "$TENANCY_ID" --query 'data[].name' --raw-output 2>/dev/null || true)"
+if ok "$FSS_AVAILABILITY_DOMAIN"; then
+  FSS_AD_LIST="$(printf '%s
+%s
+' "$FSS_AVAILABILITY_DOMAIN" "$FSS_AD_LIST" | awk 'NF && !seen[$0]++')"
+fi
+
+FSS_FILE_SYSTEM_OCID=""
+for candidate_ad in $FSS_AD_LIST; do
+  FSS_FILE_SYSTEM_OCID="$(
+    oci fs file-system list       --region "$REGION"       --availability-domain "$candidate_ad"       --compartment-id "$POC_COMPARTMENT_OCID"       --display-name "$FSS_NAME"       --lifecycle-state ACTIVE       --query 'data[0].id'       --raw-output 2>/dev/null || true
+  )"
+  if ok "$FSS_FILE_SYSTEM_OCID"; then
+    FSS_AVAILABILITY_DOMAIN="$candidate_ad"
+    break
+  fi
+done
 
 recover_fss_mount_target() {
   target_name="$1"; target_key="$2"; export_set_key="$3"; export_key="$4"
-  target_ocid="$(
-    oci fs mount-target list       --region "$REGION"       --availability-domain "$FSS_AVAILABILITY_DOMAIN"       --compartment-id "$POC_COMPARTMENT_OCID"       --display-name "$target_name"       --lifecycle-state ACTIVE       --query 'data[0].id'       --raw-output 2>/dev/null || true
-  )"
+  target_ocid=""
+  for candidate_ad in $FSS_AD_LIST; do
+    target_ocid="$(
+      oci fs mount-target list         --region "$REGION"         --availability-domain "$candidate_ad"         --compartment-id "$POC_COMPARTMENT_OCID"         --display-name "$target_name"         --lifecycle-state ACTIVE         --query 'data[0].id'         --raw-output 2>/dev/null || true
+    )"
+    ok "$target_ocid" && break
+  done
   export_set_ocid=""
   export_ocid=""
   if ok "$target_ocid"; then
