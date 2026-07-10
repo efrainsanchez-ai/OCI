@@ -322,7 +322,7 @@ wb17_card02</code></pre>
   </div>
   <pre class="code-scroll"><code>Downloading recovery script ...
 Source: https://efrainsanchez-ai.github.io/OCI/PoC-RunBook/17-recover-variables/recover-poc-variables.sh
-Recovery script created: 2026-07-10 11:41:22 CST
+Recovery script created: 2026-07-10 11:50:45 CST
 
 Reading active OCI CLI profile ...
   - Region candidate: &lt;region&gt;
@@ -339,11 +339,24 @@ Discovering network and bastion artifacts ...
 
 Discovering Exadata and database artifacts ...
   - VM cluster: &lt;vm_cluster_ocid&gt;
+  - Node name: exasc011-fxafi.client.poc.oraclevcn.com
+  - Node name: exasc012-ahuip.client.poc.oraclevcn.com
   - CDB: &lt;cdb_ocid&gt;
   - PDB: &lt;pdb_ocid&gt;
 
 Discovering backup, Vault, and Database Management artifacts ...
+  - Credential vault: &lt;credential_vault_ocid&gt;
+  - Credential key: &lt;credential_key_ocid&gt;
+  - SYS secret: &lt;sys_secret_ocid&gt;
+  - SYSTEM secret: &lt;system_secret_ocid&gt;
+  - Recovery Service subnet: &lt;recovery_service_subnet_ocid&gt;
+  - Protection policy: &lt;protection_policy_ocid&gt;
+  - Initial backup: &lt;initial_backup_ocid&gt;
   - DB Management private endpoint: &lt;dbmgmt_private_endpoint_ocid&gt;
+
+Discovering File Storage artifacts ...
+  - File Storage file system: &lt;file_system_ocid&gt;
+  - File Storage db client mount target: &lt;dbclient_mount_target_ocid&gt;
   - Cluster first node hostname: &lt;cluster_first_node_hostname&gt;
 
 Saving recovered variables ...

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_CREATED_AT="2026-07-10 11:41:22 CST"
+SCRIPT_CREATED_AT="2026-07-10 11:50:45 CST"
 printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
 
 . "$HOME/workbook/helpers.sh" || exit 1
@@ -116,7 +116,32 @@ PDB_OCID="$(ociq oci db pluggable-database list --region "$REGION" --database-id
 DB_VERSION="$(ociq oci db db-home get --region "$REGION" --db-home-id "$DB_HOME_OCID" --query 'data."db-version"')"
 CDB_CHARACTER_SET="$(ociq oci db database get --region "$REGION" --database-id "$CDB_OCID" --query 'data."character-set"')"
 CDB_CHARACTER_SET_MODE=EXPLICIT
+DB_NODE_LIST_JSON="$JSON_DIR/recovered-db-node-list.json"
+DB_NODE_GET_JSON="$JSON_DIR/recovered-db-node-get.json"
+CLUSTER_NODE_HOSTNAMES_FILE="$REPORT_DIR/recovered-cluster-node-hostnames.txt"
+oci db node list   --region "$REGION"   --compartment-id "$POC_COMPARTMENT_OCID"   --vm-cluster-id "$VM_CLUSTER_OCID"   --all   --output json > "$DB_NODE_LIST_JSON" 2>/dev/null || printf '{"data":[]}\n' > "$DB_NODE_LIST_JSON"
+jq -r --arg domain "$EXADATA_DOMAIN" '
+  .data | sort_by(."host-name" // .hostname // "")[]
+  | (."host-name" // .hostname // empty) as $host
+  | select($host != "")
+  | if ($host | contains(".")) then $host elif $domain != "" then "\($host).\($domain)" else $host end
+' "$DB_NODE_LIST_JSON" > "$CLUSTER_NODE_HOSTNAMES_FILE"
+DB_NODE_HOSTNAME="$(sed -n '1p' "$CLUSTER_NODE_HOSTNAMES_FILE")"
+DB_NODE_OCID="$(jq -r '.data | sort_by(."host-name" // .hostname // "") | .[0].id // empty' "$DB_NODE_LIST_JSON" 2>/dev/null)"
+if ok "$DB_NODE_OCID"; then
+  oci db node get     --region "$REGION"     --db-node-id "$DB_NODE_OCID"     --output json > "$DB_NODE_GET_JSON" 2>/dev/null || printf '{}\n' > "$DB_NODE_GET_JSON"
+else
+  printf '{}\n' > "$DB_NODE_GET_JSON"
+fi
+CLUSTER_FIRST_NODE_HOSTNAME="$DB_NODE_HOSTNAME"
 note "VM cluster: ${VM_CLUSTER_OCID:-<not_found>}"
+if [ -s "$CLUSTER_NODE_HOSTNAMES_FILE" ]; then
+  while IFS= read -r node_name; do
+    [ -n "$node_name" ] && note "Node name: $node_name"
+  done < "$CLUSTER_NODE_HOSTNAMES_FILE"
+else
+  note "Node name: <not_found>"
+fi
 note "CDB: ${CDB_OCID:-<not_found>}"
 
 phase 'Discovering backup, Vault, and Database Management artifacts'
@@ -171,6 +196,14 @@ INITIAL_BACKUP_OCID="$(
 DBMGMT_MANAGEMENT_TYPE=ADVANCED; DBMGMT_CREDENTIAL_USERNAME=SYSTEM; DBMGMT_PROTOCOL=TCP; DBMGMT_PORT=1521; DBMGMT_ROLE=NORMAL; DBMGMT_SECRET_POLICY_NAME=DBMgmt_Resource_Policy
 DBMGMT_SYSTEM_SECRET_OCID="$CDB_SYSTEM_SECRET_OCID"; DBMGMT_PASSWORD_SECRET_OCID="$CDB_SYSTEM_SECRET_OCID"; DBMGMT_IAM_HOME_REGION=us-phoenix-1; DBMGMT_SECRET_POLICY_COMPARTMENT_NAME="$POC_COMPARTMENT_NAME"
 DBMGMT_SECRET_POLICY_OCID="$(ociq oci iam policy list --region "$DBMGMT_IAM_HOME_REGION" --compartment-id "$POC_COMPARTMENT_OCID" --name "$DBMGMT_SECRET_POLICY_NAME" --all --query 'data[0].id')"
+note "Credential vault: ${CDB_CREDENTIAL_VAULT_OCID:-<not_found>}"
+note "Credential key: ${CDB_CREDENTIAL_KEY_OCID:-<not_found>}"
+note "SYS secret: ${CDB_SYS_SECRET_OCID:-<not_found>}"
+note "SYSTEM secret: ${CDB_SYSTEM_SECRET_OCID:-<not_found>}"
+note "Recovery Service subnet: ${RECOVERY_SERVICE_SUBNET_OCID:-<not_found>}"
+note "Protection policy: ${PROTECTION_POLICY_OCID:-<not_found>}"
+note "Initial backup: ${INITIAL_BACKUP_OCID:-<not_found>}"
+note "DB Management private endpoint: ${DBMGMT_PRIVATE_ENDPOINT_OCID:-<not_found>}"
 
 AVAILABILITY_DOMAIN="$(ociq oci iam availability-domain list --region "$REGION" --compartment-id "$TENANCY_ID" --query 'data[0].name')"
 EXADATA_AVAILABILITY_DOMAIN="$(ociq oci iam availability-domain list --region "$REGION" --compartment-id "$TENANCY_ID" --query 'data[1].name')"
@@ -194,30 +227,6 @@ if ok "$DBMGMT_CDB_SERVICE_NAME"; then
   EXADATA_DOMAIN="${DBMGMT_CDB_SERVICE_NAME#*.}"
   [ "$EXADATA_DOMAIN" = "$DBMGMT_CDB_SERVICE_NAME" ] && EXADATA_DOMAIN=""
 fi
-DB_NODE_LIST_JSON="$JSON_DIR/recovered-db-node-list.json"
-DB_NODE_GET_JSON="$JSON_DIR/recovered-db-node-get.json"
-oci db node list \
-  --region "$REGION" \
-  --compartment-id "$POC_COMPARTMENT_OCID" \
-  --vm-cluster-id "$VM_CLUSTER_OCID" \
-  --all \
-  --output json > "$DB_NODE_LIST_JSON" 2>/dev/null || printf '{"data":[]}\n' > "$DB_NODE_LIST_JSON"
-DB_NODE_OCID="$(jq -r '.data | sort_by(."host-name" // .hostname // "") | .[0].id // empty' "$DB_NODE_LIST_JSON" 2>/dev/null)"
-if ok "$DB_NODE_OCID"; then
-  oci db node get \
-    --region "$REGION" \
-    --db-node-id "$DB_NODE_OCID" \
-    --output json > "$DB_NODE_GET_JSON" 2>/dev/null || printf '{}\n' > "$DB_NODE_GET_JSON"
-else
-  printf '{}\n' > "$DB_NODE_GET_JSON"
-fi
-DB_NODE_HOSTNAME="$(jq -rs '.[0].data."host-name" // .[0].data.hostname // (.[1].data | sort_by(."host-name" // .hostname // "") | .[0]."host-name" // .[0].hostname) // empty' "$DB_NODE_GET_JSON" "$DB_NODE_LIST_JSON" 2>/dev/null)"
-case "$DB_NODE_HOSTNAME" in
-  *.*) CLUSTER_FIRST_NODE_HOSTNAME="$DB_NODE_HOSTNAME" ;;
-  ""|null) CLUSTER_FIRST_NODE_HOSTNAME="" ;;
-  *) ok "$EXADATA_DOMAIN" && CLUSTER_FIRST_NODE_HOSTNAME="$DB_NODE_HOSTNAME.$EXADATA_DOMAIN" || CLUSTER_FIRST_NODE_HOSTNAME="$DB_NODE_HOSTNAME" ;;
-esac
-
 phase 'Discovering File Storage artifacts'
 FSS_NAME="${FSS_NAME:-FileSystem-01}"
 FSS_EXPORT_PATH="${FSS_EXPORT_PATH:-/FileSystem-01}"
@@ -291,7 +300,6 @@ FSS_EXPORT_SET_OCID="$FSS_ADMIN_EXPORT_SET_OCID"
 FSS_EXPORT_OCID="$FSS_ADMIN_EXPORT_OCID"
 note "File Storage file system: ${FSS_FILE_SYSTEM_OCID:-<not_found>}"
 note "File Storage db client mount target: ${FSS_DBCLIENT_MOUNT_TARGET_OCID:-<not_found>}"
-note "DB Management private endpoint: ${DBMGMT_PRIVATE_ENDPOINT_OCID:-<not_found>}"
 note "Cluster first node hostname: ${CLUSTER_FIRST_NODE_HOSTNAME:-<not_found>}"
 
 phase 'Saving recovered variables'
