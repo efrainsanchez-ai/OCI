@@ -89,6 +89,10 @@
 <td>Chapter 12, Chapter 13, and Chapter 14</td>
 <td>Recovery Service subnet, protection policy, initial backup, Vault, key, secret, Database Management private endpoint, and Database Management policy variables when those resources exist</td>
 </tr>
+<tr>
+<td>Chapter 15</td>
+<td>File Storage defaults, file system OCID, mount target OCIDs, export set OCIDs, export OCIDs, and mount host names when File Storage resources exist</td>
+</tr>
 </tbody></table></div>
 <p>Passwords are intentionally not readable back from OCI after they are entered. The recovery script therefore asks for <code>CDB_ADMIN_PASSWORD</code> and requires a non-empty value. The value is saved to <code>~/workbook/cli.env</code> but masked in terminal output and reports.</p>
       </section><section id="recovery-defaults" class="article-section">
@@ -403,7 +407,10 @@ printf '%-34s | %s\n' \
   "DB_HOME_OCID" "${DB_HOME_OCID:-}" \
   "CDB_OCID" "${CDB_OCID:-}" \
   "PDB_OCID" "${PDB_OCID:-}" \
-  "DBMGMT_PRIVATE_ENDPOINT_OCID" "${DBMGMT_PRIVATE_ENDPOINT_OCID:-}"
+  "DBMGMT_PRIVATE_ENDPOINT_OCID" "${DBMGMT_PRIVATE_ENDPOINT_OCID:-}" \
+  "FSS_FILE_SYSTEM_OCID" "${FSS_FILE_SYSTEM_OCID:-}" \
+  "FSS_DBCLIENT_MOUNT_TARGET_OCID" "${FSS_DBCLIENT_MOUNT_TARGET_OCID:-}" \
+  "FSS_DBCLIENT_EXPORT_OCID" "${FSS_DBCLIENT_EXPORT_OCID:-}"
 printf '\n%s\n' "wb17_card03"
 }
 
@@ -435,6 +442,9 @@ EXADATA_VM_FS_STORAGE_GB           | &lt;vm_file_system_storage_gb&gt;
 CDB_OCID                           | &lt;cdb_ocid&gt;
 PDB_OCID                           | &lt;pdb_ocid&gt;
 DBMGMT_PRIVATE_ENDPOINT_OCID       | &lt;dbmgmt_private_endpoint_ocid&gt;
+FSS_FILE_SYSTEM_OCID                | &lt;file_system_ocid&gt;
+FSS_DBCLIENT_MOUNT_TARGET_OCID      | &lt;dbclient_mount_target_ocid&gt;
+FSS_DBCLIENT_EXPORT_OCID            | &lt;dbclient_export_ocid&gt;
 
 wb17_card03</code></pre>
 </div>
@@ -533,13 +543,17 @@ wb17_card04</code></pre>
   </div>
   <pre class="code-scroll"><code>Opening bastion SSH session.
 When the bastion prompt appears, run: exit
-Reusable script: /home/&lt;cloud_shell_user&gt;/workbook/bin/connect-bastion-vm.sh
+Reusable script: /home/EFRAIN_SAN/workbook/bin/connect-bastion-vm.sh
 
-Opening bastion SSH session to opc@&lt;bastion_public_ip&gt;
+Opening bastion SSH session to opc@132.145.169.254
 When finished, run: exit
-[opc@bastion-01 ~]$
+Last login: Fri Jul 10 16:19:42 2026 from 129.146.198.242
+[opc@bastion-01 ~]$ exit
+logout
+Connection to 132.145.169.254 closed.
 
-wb17_card04</code></pre>
+wb17_card04
+$</code></pre>
 </div>
       </section><section id="bash-05-create-reusable-cluster-node-ssh-script" class="article-section">
         <h2>BASH 05 - Create reusable cluster node SSH script</h2>
@@ -682,25 +696,38 @@ wb17_card05</code></pre>
   </div>
   <pre class="code-scroll"><code>FIELD                              | VALUE
 ---------------------------------- | -----
-CONNECT_SCRIPT                     | /home/&lt;cloud_shell_user&gt;/workbook/bin/connect-cluster-node.sh
-NODE_1                             | exasc011-&lt;suffix&gt;.client.poc.oraclevcn.com
-NODE_2                             | exasc012-&lt;suffix&gt;.client.poc.oraclevcn.com
+CONNECT_SCRIPT                     | /home/EFRAIN_SAN/workbook/bin/connect-cluster-node.sh
+NODE_1                             | exasc011-fxafi.client.poc.oraclevcn.com
+NODE_2                             | exasc012-ahuip.client.poc.oraclevcn.com
 CONNECT_NODE_1                     | connect-cluster-node.sh 1 oracle
 CONNECT_NODE_2                     | connect-cluster-node.sh 2 oracle
 
-wb17_card05</code></pre>
+wb17_card05
+$ connect-cluster-node.sh 1 oracle
+Opening cluster node 1 through bastion: exasc011-fxafi.client.poc.oraclevcn.com as oracle
+[oracle@exasc011-fxafi ~]$ exit
+logout
+Connection to exasc011-fxafi.client.poc.oraclevcn.com closed.
+Connection to 132.145.169.254 closed.
+$ 
+$ connect-cluster-node.sh 2 oracle
+Opening cluster node 2 through bastion: exasc012-ahuip.client.poc.oraclevcn.com as oracle
+[oracle@exasc012-ahuip ~]$ exit
+logout
+Connection to exasc012-ahuip.client.poc.oraclevcn.com closed.
+Connection to 132.145.169.254 closed.</code></pre>
 </div>
       </section><section id="bash-06-mount-file-storage-on-exadata-vm-cluster-nodes" class="article-section">
         <h2>BASH 06 - Mount File Storage on Exadata VM cluster nodes</h2>
         <h3>BASH 06 - Mount File Storage on Exadata VM cluster nodes</h3>
-<p>Run Chapter 15 BASH 01 through BASH 03 first if the <code>FSS_*</code> variables are not present in <code>~/workbook/cli.env</code>.</p>
+<p>This recovery card uses the same default File Storage values as Chapter 15 BASH 01 when the <code>FSS_*</code> variables are not present in <code>~/workbook/cli.env</code>.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Reuse the Chapter 15 BASH 05 mount pattern from recovered variables, create <code>~/workbook/bin/mount-filesystem-cluster.sh</code>, copy the all-node mount helper to the bastion VM, and mount the File Storage export on every discovered Exadata VM cluster node.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Reuse the Chapter 15 BASH 05 mount pattern from recovered variables, derive the standard File Storage defaults when needed, create <code>~/workbook/bin/mount-filesystem-cluster.sh</code>, copy the all-node mount helper to the bastion VM, and mount the File Storage export on every discovered Exadata VM cluster node.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
@@ -714,6 +741,13 @@ DATABASE_COMPARTMENT_OCID="${DATABASE_COMPARTMENT_OCID:-${POC_COMPARTMENT_OCID:-
 BASTION_KEY_PATH="$KEY_DIR/$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
 CLUSTER_KEY_PATH="$KEY_DIR/$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-}")"
 CLUSTER_KEY_NAME="$(basename "$CLUSTER_KEY_PATH")"
+FSS_NAME="${FSS_NAME:-FileSystem-01}"
+FSS_EXPORT_PATH="${FSS_EXPORT_PATH:-/FileSystem-01}"
+FSS_MOUNT_POINT="${FSS_MOUNT_POINT:-/mnt/FileSystem-01}"
+FSS_MOUNT_TARGET_HOST_LABEL="${FSS_MOUNT_TARGET_HOST_LABEL:-fs01}"
+FSS_DBCLIENT_SUBNET_DNS_LABEL="${FSS_DBCLIENT_SUBNET_DNS_LABEL:-client}"
+FSS_VCN_DNS_LABEL="${FSS_VCN_DNS_LABEL:-poc}"
+FSS_DBCLIENT_MOUNT_HOST="${FSS_DBCLIENT_MOUNT_HOST:-$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_DBCLIENT_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com}"
 FSS_CLUSTER_MOUNT_HOST="${FSS_CLUSTER_MOUNT_HOST:-${FSS_DBCLIENT_MOUNT_HOST:-}}"
 FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-all-nodes.sh}"
 DB_NODE_LIST_JSON="$JSON_DIR/fss-db-node-list.json"
@@ -735,7 +769,14 @@ for name in REGION DATABASE_COMPARTMENT_OCID VM_CLUSTER_OCID BASTION_PUBLIC_IP S
     missing=1
   fi
 done
-[ "$missing" -eq 0 ] || { printf 'Run Chapter 15 BASH 01 through BASH 03 before mounting File Storage.\n' &gt;&amp;2; return 1; }
+[ "$missing" -eq 0 ] || { printf 'Run Chapter 15 BASH 02 and BASH 03 if File Storage resources have not been created and validated.\n' &gt;&amp;2; return 1; }
+
+for item in \
+  "FSS_NAME|$FSS_NAME" "FSS_EXPORT_PATH|$FSS_EXPORT_PATH" "FSS_MOUNT_POINT|$FSS_MOUNT_POINT" \
+  "FSS_DBCLIENT_MOUNT_HOST|$FSS_DBCLIENT_MOUNT_HOST" "FSS_CLUSTER_MOUNT_HOST|$FSS_CLUSTER_MOUNT_HOST" \
+  "FSS_REMOTE_SCRIPT_NAME|$FSS_REMOTE_SCRIPT_NAME"; do
+  upsert_cli_env "${item%%|*}" "${item#*|}" &gt;/dev/null
+done
 
 mkdir -p "$KEY_DIR" "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
 for file_path in "$BASTION_KEY_PATH" "$CLUSTER_KEY_PATH"; do
@@ -771,15 +812,15 @@ REMOTE_TMP="\$(mktemp)"
 cat &gt; "\$REMOTE_TMP" &lt;&lt;'REMOTE_SCRIPT'
 #!/bin/bash
 set -e
-CLUSTER_KEY="$HOME/keys/$CLUSTER_KEY_NAME"
-CLUSTER_HOSTS_FILE="$HOME/admin/filesystem-01-cluster-hosts.txt"
-[ -s "$CLUSTER_HOSTS_FILE" ] || { printf 'STOP: Missing cluster host list on bastion: %s\n' "$CLUSTER_HOSTS_FILE" &gt;&amp;2; exit 1; }
-[ -f "$CLUSTER_KEY" ] || { printf 'STOP: Missing cluster key on bastion: %s\n' "$CLUSTER_KEY" &gt;&amp;2; exit 1; }
-chmod 700 "$HOME/keys" "$CLUSTER_KEY"
+CLUSTER_KEY="\$HOME/keys/$CLUSTER_KEY_NAME"
+CLUSTER_HOSTS_FILE="\$HOME/admin/filesystem-01-cluster-hosts.txt"
+[ -s "\$CLUSTER_HOSTS_FILE" ] || { printf 'STOP: Missing cluster host list on bastion: %s\n' "\$CLUSTER_HOSTS_FILE" &gt;&amp;2; exit 1; }
+[ -f "\$CLUSTER_KEY" ] || { printf 'STOP: Missing cluster key on bastion: %s\n' "\$CLUSTER_KEY" &gt;&amp;2; exit 1; }
+chmod 700 "\$HOME/keys" "\$CLUSTER_KEY"
 while IFS= read -r TARGET_HOST; do
-  [ -n "$TARGET_HOST" ] || continue
-  printf 'Checking File Storage mount on %s ...\n' "$TARGET_HOST"
-  ssh -i "$CLUSTER_KEY" -o StrictHostKeyChecking=accept-new "opc@$TARGET_HOST" 'bash -s' &lt;&lt;'NODE_SCRIPT'
+  [ -n "\$TARGET_HOST" ] || continue
+  printf 'Checking File Storage mount on %s ...\n' "\$TARGET_HOST"
+  ssh -i "\$CLUSTER_KEY" -o StrictHostKeyChecking=accept-new "opc@\$TARGET_HOST" 'bash -s' &lt;&lt;'NODE_SCRIPT'
 set -e
 sudo mkdir -p '$FSS_MOUNT_POINT'
 if ! command -v mount.nfs &gt;/dev/null 2&gt;&amp;1; then
@@ -796,7 +837,7 @@ ls -la '$FSS_MOUNT_POINT'
 df -h '$FSS_MOUNT_POINT'
 du -hs '$FSS_MOUNT_POINT'
 NODE_SCRIPT
-done &lt; "$CLUSTER_HOSTS_FILE"
+done &lt; "\$CLUSTER_HOSTS_FILE"
 REMOTE_SCRIPT
 chmod 700 "\$REMOTE_TMP"
 ssh -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "opc@\$BASTION_PUBLIC_IP" "mkdir -p ~/admin ~/keys &amp;&amp; chmod 700 ~/admin ~/keys"
@@ -825,12 +866,31 @@ wb17_card06</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the reusable mount script is created and each VM cluster node validates the File Storage mount.</span>
   </div>
-  <pre class="code-scroll"><code>Cluster File Storage mount script: /home/&lt;cloud_shell_user&gt;/workbook/bin/mount-filesystem-cluster.sh
+  <pre class="code-scroll"><code>Cluster File Storage mount script: /home/EFRAIN_SAN/workbook/bin/mount-filesystem-cluster.sh
 Remote bastion script: ~/admin/configure-filesystem-01-all-nodes.sh
-Checking File Storage mount on exasc011-&lt;suffix&gt;.client.poc.oraclevcn.com ...
-Mounting File Storage at /mnt/FileSystem-01 ...
-Checking File Storage mount on exasc012-&lt;suffix&gt;.client.poc.oraclevcn.com ...
-Mounting File Storage at /mnt/FileSystem-01 ...
+vmcluster-01_rsa                                                                                                                 100% 1823    34.3KB/s   00:00    
+filesystem-01-cluster-hosts.txt                                                                                                  100%   80     1.5KB/s   00:00    
+tmp.ZWcIdOrazC                                                                                                                   100% 1298    24.1KB/s   00:00    
+Checking File Storage mount on exasc011-fxafi.client.poc.oraclevcn.com ...
+File Storage is already mounted at /mnt/FileSystem-01.
+total 1
+drwxr-xr-x. 3 oracle oinstall  1 Jul  7 17:22 .
+drwxr-xr-x. 3 root   root     27 Jul  7 17:20 ..
+drwxr-xr-x. 2 oracle oinstall  0 Jul 10 16:39 .snapshot
+drwxr-xr-x. 3 oracle oinstall  1 Jul  7 17:23 DataPump
+Filesystem                                    Size  Used Avail Use% Mounted on
+fs01.client.poc.oraclevcn.com:/FileSystem-01  8.0E     0  8.0E   0% /mnt/FileSystem-01
+1.5K    /mnt/FileSystem-01
+Checking File Storage mount on exasc012-ahuip.client.poc.oraclevcn.com ...
+File Storage is already mounted at /mnt/FileSystem-01.
+total 1
+drwxr-xr-x. 3 oracle oinstall  1 Jul  7 17:22 .
+drwxr-xr-x. 3 root   root     27 Jul  7 17:20 ..
+drwxr-xr-x. 2 oracle oinstall  0 Jul 10 16:39 .snapshot
+drwxr-xr-x. 3 oracle oinstall  1 Jul  7 17:23 DataPump
+Filesystem                                    Size  Used Avail Use% Mounted on
+fs01.client.poc.oraclevcn.com:/FileSystem-01  8.0E     0  8.0E   0% /mnt/FileSystem-01
+1.5K    /mnt/FileSystem-01
 
 wb17_card06</code></pre>
 </div>
@@ -908,7 +968,8 @@ fi
     "DB home|DB_HOME_OCID" "CDB|CDB_OCID" "PDB|PDB_OCID" \
     "Recovery Service subnet|RECOVERY_SERVICE_SUBNET_OCID" "Protection policy|PROTECTION_POLICY_OCID" \
     "Credential vault|CDB_CREDENTIAL_VAULT_OCID" "DBMGMT private endpoint|DBMGMT_PRIVATE_ENDPOINT_OCID" \
-    "Cluster first node hostname|CLUSTER_FIRST_NODE_HOSTNAME"; do
+    "File Storage file system|FSS_FILE_SYSTEM_OCID" "File Storage db client mount target|FSS_DBCLIENT_MOUNT_TARGET_OCID" \
+    "File Storage db client export|FSS_DBCLIENT_EXPORT_OCID" "Cluster first node hostname|CLUSTER_FIRST_NODE_HOSTNAME"; do
     row "${item%%|*}" "${item#*|}"
   done
   row "CDB admin password" CDB_ADMIN_PASSWORD
@@ -924,6 +985,9 @@ fi
   section "Missing variable detail"
   if [ -f "$STATUS_FILE" ]; then
     awk -F '\t' '$2=="MISS"{print $1}' "$STATUS_FILE"
+    if [ "$count_missing" = "0" ]; then
+      printf '%s\n' "Note: No missing variables were reported by recovery-status.tsv."
+    fi
   else
     printf '%s was not found. Run wb17_card02 first.\n' "$STATUS_FILE"
   fi
@@ -965,6 +1029,15 @@ Assigned compartment               | FOUND | &lt;poc_compartment_ocid&gt;
 Recovered sensitive value
 ----------------------------------------
 CDB admin password                 | FOUND | &lt;stored_in_cli_env&gt;
+
+Recovered variable detail
+----------------------------------------
+...
+CLUSTER_FIRST_NODE_HOSTNAME        | FOUND | exasc011-fxafi.client.poc.oraclevcn.com
+
+Missing variable detail
+----------------------------------------
+Note: No missing variables were reported by recovery-status.tsv.
 
 wb17_card07</code></pre>
 </div>
