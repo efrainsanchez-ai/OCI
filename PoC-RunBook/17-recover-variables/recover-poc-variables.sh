@@ -225,7 +225,7 @@ FSS_MOUNT_POINT="${FSS_MOUNT_POINT:-/mnt/FileSystem-01}"
 FSS_ADMIN_MOUNT_TARGET_NAME="${FSS_ADMIN_MOUNT_TARGET_NAME:-mt-FileSystem-01-admin}"
 FSS_DBCLIENT_MOUNT_TARGET_NAME="${FSS_DBCLIENT_MOUNT_TARGET_NAME:-mt-FileSystem-01-dbclient}"
 FSS_APPS_MOUNT_TARGET_NAME="${FSS_APPS_MOUNT_TARGET_NAME:-mt-FileSystem-01-apps}"
-FSS_MOUNT_TARGET_NAME="${FSS_MOUNT_TARGET_NAME:-$FSS_ADMIN_MOUNT_TARGET_NAME}"
+FSS_MOUNT_TARGET_NAME="${FSS_MOUNT_TARGET_NAME:-mt-FileSystem-01}"
 FSS_MOUNT_TARGET_HOST_LABEL="${FSS_MOUNT_TARGET_HOST_LABEL:-fs01}"
 FSS_NSG_NAME="${FSS_NSG_NAME:-nsg-file-storage}"
 FSS_ADMIN_SUBNET_DNS_LABEL="${FSS_ADMIN_SUBNET_DNS_LABEL:-admin}"
@@ -237,21 +237,21 @@ FSS_DBCLIENT_MOUNT_HOST="${FSS_DBCLIENT_MOUNT_HOST:-$FSS_MOUNT_TARGET_HOST_LABEL
 FSS_APPS_MOUNT_HOST="${FSS_APPS_MOUNT_HOST:-$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_APPS_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com}"
 FSS_MOUNT_HOST="${FSS_MOUNT_HOST:-$FSS_ADMIN_MOUNT_HOST}"
 FSS_CLUSTER_MOUNT_HOST="${FSS_CLUSTER_MOUNT_HOST:-$FSS_DBCLIENT_MOUNT_HOST}"
-FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-all-nodes.sh}"
-FSS_AVAILABILITY_DOMAIN="${FSS_AVAILABILITY_DOMAIN:-${EXADATA_AVAILABILITY_DOMAIN:-}}"
+FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-mount.sh}"
+FSS_AVAILABILITY_DOMAIN="${FSS_AVAILABILITY_DOMAIN:-${AVAILABILITY_DOMAIN:-${EXADATA_AVAILABILITY_DOMAIN:-}}}"
 FSS_NSG_OCID="$(lookup_nsg "$FSS_NSG_NAME")"
-FSS_AD_LIST="$(oci iam availability-domain list --region "$REGION" --compartment-id "$TENANCY_ID" --query 'data[].name' --raw-output 2>/dev/null || true)"
-if ok "$FSS_AVAILABILITY_DOMAIN"; then
-  FSS_AD_LIST="$(printf '%s
-%s
-' "$FSS_AVAILABILITY_DOMAIN" "$FSS_AD_LIST" | awk 'NF && !seen[$0]++')"
-fi
+FSS_AD_LIST="$({
+  ok "$FSS_AVAILABILITY_DOMAIN" && printf '%s
+' "$FSS_AVAILABILITY_DOMAIN"
+  oci iam availability-domain list     --region "$REGION"     --compartment-id "$TENANCY_ID"     --output json 2>/dev/null     | jq -r '.data[]?.name // empty' 2>/dev/null || true
+} | awk 'NF && !seen[$0]++')"
 
 FSS_FILE_SYSTEM_OCID=""
 for candidate_ad in $FSS_AD_LIST; do
-  FSS_FILE_SYSTEM_OCID="$(
-    oci fs file-system list       --region "$REGION"       --availability-domain "$candidate_ad"       --compartment-id "$POC_COMPARTMENT_OCID"       --display-name "$FSS_NAME"       --lifecycle-state ACTIVE       --query 'data[0].id'       --raw-output 2>/dev/null || true
-  )"
+  FSS_FILE_SYSTEM_JSON="$JSON_DIR/recovered-fss-file-system-${candidate_ad##*:}.json"
+  oci fs file-system list     --region "$REGION"     --availability-domain "$candidate_ad"     --compartment-id "$POC_COMPARTMENT_OCID"     --lifecycle-state ACTIVE     --output json > "$FSS_FILE_SYSTEM_JSON" 2>/dev/null || printf '{"data":[]}
+' > "$FSS_FILE_SYSTEM_JSON"
+  FSS_FILE_SYSTEM_OCID="$(jq -r --arg name "$FSS_NAME" '.data[]? | select(."display-name" == $name) | .id' "$FSS_FILE_SYSTEM_JSON" 2>/dev/null | sed -n '1p')"
   if ok "$FSS_FILE_SYSTEM_OCID"; then
     FSS_AVAILABILITY_DOMAIN="$candidate_ad"
     break
@@ -262,9 +262,10 @@ recover_fss_mount_target() {
   target_name="$1"; target_key="$2"; export_set_key="$3"; export_key="$4"
   target_ocid=""
   for candidate_ad in $FSS_AD_LIST; do
-    target_ocid="$(
-      oci fs mount-target list         --region "$REGION"         --availability-domain "$candidate_ad"         --compartment-id "$POC_COMPARTMENT_OCID"         --display-name "$target_name"         --lifecycle-state ACTIVE         --query 'data[0].id'         --raw-output 2>/dev/null || true
-    )"
+    target_json="$JSON_DIR/recovered-fss-mount-target-${target_name}-${candidate_ad##*:}.json"
+    oci fs mount-target list       --region "$REGION"       --availability-domain "$candidate_ad"       --compartment-id "$POC_COMPARTMENT_OCID"       --lifecycle-state ACTIVE       --output json > "$target_json" 2>/dev/null || printf '{"data":[]}
+' > "$target_json"
+    target_ocid="$(jq -r --arg name "$target_name" '.data[]? | select(."display-name" == $name) | .id' "$target_json" 2>/dev/null | sed -n '1p')"
     ok "$target_ocid" && break
   done
   export_set_ocid=""
