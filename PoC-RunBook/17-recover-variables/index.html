@@ -45,7 +45,7 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#introduction">Introduction</a></li><li><a href="#what-gets-recovered">What gets recovered</a></li><li><a href="#recovery-defaults">Recovery defaults</a></li><li><a href="#bash-01-recreate-workbook-helpers">BASH 01 - Recreate workbook helpers</a></li><li><a href="#bash-02-download-and-run-recovery-discovery-tools">BASH 02 - Download and run recovery discovery tools</a></li><li><a href="#bash-03-validate-recovered-variables">BASH 03 - Validate recovered variables</a></li><li><a href="#bash-04-create-executive-recovery-report">BASH 04 - Create executive recovery report</a></li><li><a href="#reuse-notes">Reuse notes</a></li></ol>
+      <ol><li><a href="#introduction">Introduction</a></li><li><a href="#what-gets-recovered">What gets recovered</a></li><li><a href="#recovery-defaults">Recovery defaults</a></li><li><a href="#bash-01-recreate-workbook-helpers">BASH 01 - Recreate workbook helpers</a></li><li><a href="#bash-02-download-and-run-recovery-discovery-tools">BASH 02 - Download and run recovery discovery tools</a></li><li><a href="#bash-03-validate-recovered-variables">BASH 03 - Validate recovered variables</a></li><li><a href="#bash-04-create-reusable-bastion-ssh-script">BASH 04 - Create reusable bastion SSH script</a></li><li><a href="#bash-05-create-reusable-cluster-node-ssh-script">BASH 05 - Create reusable cluster node SSH script</a></li><li><a href="#bash-06-mount-file-storage-on-exadata-vm-cluster-nodes">BASH 06 - Mount File Storage on Exadata VM cluster nodes</a></li><li><a href="#bash-07-create-executive-recovery-report">BASH 07 - Create executive recovery report</a></li><li><a href="#reuse-notes">Reuse notes</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
@@ -54,7 +54,7 @@
       <section id="introduction" class="article-section">
         <h2>Introduction</h2>
         <p>This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, a different OCI user takes over, or the original <code>~/workbook/cli.env</code> file is no longer available. It does not recreate OCI resources. It discovers existing resources from OCI by using the same names, compartment assumptions, and discovery style used by the earlier workbooks in this series, especially Chapter 16.</p>
-<p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, helper file, environment loader, and a minimal export-enabled <code>cli.env</code>. BASH 02 downloads the reusable discovery tool under <code>~/workbook/recovery-tools</code>, asks you to confirm the parent compartment and assigned compartment, then writes recovered variables back into <code>~/workbook/cli.env</code>.</p>
+<p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, stores shell scripts under <code>~/workbook/bin</code>, creates compatibility symlinks for <code>env.sh</code> and <code>helpers.sh</code>, and creates a minimal export-enabled <code>cli.env</code>. BASH 02 downloads the reusable discovery tool under <code>~/workbook/bin</code>, asks you to confirm the parent compartment and assigned compartment, then writes recovered variables back into <code>~/workbook/cli.env</code>. Text reports are stored under <code>~/workbook/reports</code>, and JSON discovery files are stored under <code>~/workbook/json</code>.</p>
 <p>The default compartment path is <code>(root)/Partner/LAD-01</code>. If your deployment used another assigned child compartment under <code>Partner</code>, enter that name when prompted. The script stops before discovery unless you confirm the resolved path.</p>
       </section><section id="what-gets-recovered" class="article-section">
         <h2>What gets recovered</h2>
@@ -146,16 +146,17 @@
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, <code>helpers.sh</code>, <code>env.sh</code>, and export-enabled <code>cli.env</code> so recovery can run even when the Cloud Shell home directory was reset.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, store <code>helpers.sh</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, create compatibility symlinks, and create export-enabled <code>cli.env</code> so recovery can run even when the Cloud Shell home directory was reset.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb17_card01() {
 
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
-HELPERS_FILE="$WORKBOOK_DIR/helpers.sh"; ENV_FILE="$WORKBOOK_DIR/env.sh"
+BIN_DIR="$WORKBOOK_DIR/bin"
+HELPERS_FILE="$BIN_DIR/helpers.sh"; ENV_FILE="$BIN_DIR/env.sh"
 
-mkdir -p "$WORKBOOK_DIR"; chmod 700 "$WORKBOOK_DIR"
+mkdir -p "$WORKBOOK_DIR" "$BIN_DIR"; chmod 700 "$WORKBOOK_DIR" "$BIN_DIR"
 cat &gt; "$CLI_ENV" &lt;&lt;'EOF'
 set -a
 set +a
@@ -200,6 +201,7 @@ cat &gt; "$ENV_FILE" &lt;&lt;'EOF'
 cd ~/workbook || return 1
 . ./helpers.sh || return 1
 load_cli_env || return 1
+PATH="$HOME/workbook/bin:$PATH"
 PS1='$ '
 
 if [ "${1:-}" = "--quiet" ]; then
@@ -218,6 +220,8 @@ printf '%-28s | %s\n' \
   "CDB_OCID" "${CDB_OCID:-}"
 EOF
 chmod 700 "$ENV_FILE"
+ln -sfn "bin/helpers.sh" "$WORKBOOK_DIR/helpers.sh"
+ln -sfn "bin/env.sh" "$WORKBOOK_DIR/env.sh"
 
 . "$HELPERS_FILE"
 PS1='$ '
@@ -227,6 +231,7 @@ printf '%-18s | %s\n' \
   "FIELD" "VALUE" "------------------" "-----" \
   "WORKBOOK_DIR" "$WORKBOOK_DIR" \
   "CLI_ENV" "$CLI_ENV" \
+  "BIN_DIR" "$BIN_DIR" \
   "HELPERS_FILE" "$HELPERS_FILE" \
   "ENV_FILE" "$ENV_FILE" \
   "PROMPT" "$PS1"
@@ -247,8 +252,9 @@ wb17_card01</code></pre>
 ------------------ | -----
 WORKBOOK_DIR       | /home/&lt;cloud_shell_user&gt;/workbook
 CLI_ENV            | /home/&lt;cloud_shell_user&gt;/workbook/cli.env
-HELPERS_FILE       | /home/&lt;cloud_shell_user&gt;/workbook/helpers.sh
-ENV_FILE           | /home/&lt;cloud_shell_user&gt;/workbook/env.sh
+BIN_DIR            | /home/&lt;cloud_shell_user&gt;/workbook/bin
+HELPERS_FILE       | /home/&lt;cloud_shell_user&gt;/workbook/bin/helpers.sh
+ENV_FILE           | /home/&lt;cloud_shell_user&gt;/workbook/bin/env.sh
 PROMPT             | $ 
 
 wb17_card01</code></pre>
@@ -262,21 +268,22 @@ wb17_card01</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Download the maintained recovery script into <code>~/workbook/recovery-tools</code>, confirm the parent and assigned compartment, discover existing OCI resources from their workbook names, show recovery status feedback while discovery runs, and save recovered values to <code>~/workbook/cli.env</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Download the maintained recovery script into <code>~/workbook/bin</code>, confirm the parent and assigned compartment, discover existing OCI resources from their workbook names, show recovery status feedback while discovery runs, and save recovered values to <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb17_card02() {
 
 clear
-RECOVERY_DIR="$WORKBOOK_DIR/recovery-tools"
-RECOVERY_SCRIPT="$RECOVERY_DIR/recover-poc-variables.sh"
-RECOVERY_REPORT="$WORKBOOK_DIR/recovered-variable-summary.txt"
+BIN_DIR="$WORKBOOK_DIR/bin"
+RECOVERY_SCRIPT="$BIN_DIR/recover-poc-variables.sh"
+REPORT_DIR="$WORKBOOK_DIR/reports"
+RECOVERY_REPORT="$REPORT_DIR/recovered-variable-summary.txt"
 DEFAULT_RECOVERY_URL="https://efrainsanchez-ai.github.io/OCI/PoC-RunBook/17-recover-variables/recover-poc-variables.sh"
 RECOVERY_URL="$DEFAULT_RECOVERY_URL"
 
-mkdir -p "$RECOVERY_DIR"
-chmod 700 "$RECOVERY_DIR"
+mkdir -p "$BIN_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR" "$REPORT_DIR"
 
 printf 'Downloading recovery script ...\n'
 printf 'Source: %s\n' "$RECOVERY_URL"
@@ -307,7 +314,7 @@ wb17_card02</code></pre>
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the recovery phase feedback, compact status summary, and missing-variable list, then run BASH 04 for the full inventory.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the recovery phase feedback, compact status summary, and missing-variable list, then run BASH 07 for the full inventory.</span>
   </div>
   <pre class="code-scroll"><code>Downloading recovery script ...
 Source: https://efrainsanchez-ai.github.io/OCI/PoC-RunBook/17-recover-variables/recover-poc-variables.sh
@@ -341,7 +348,7 @@ FIELD                              | VALUE
 RECOVERY_STATUS                    | complete
 RECOVERED_VARIABLES                | &lt;count&gt;
 MISSING_VARIABLES                  | &lt;count&gt;
-RECOVERY_STATUS_FILE               | /home/&lt;cloud_shell_user&gt;/workbook/recovery-status.tsv
+RECOVERY_STATUS_FILE               | /home/&lt;cloud_shell_user&gt;/workbook/reports/recovery-status.tsv
 CLI_ENV                            | /home/&lt;cloud_shell_user&gt;/workbook/cli.env
 VCN_OCID                           | &lt;vcn_ocid&gt;
 VM_CLUSTER_OCID                    | &lt;vm_cluster_ocid&gt;
@@ -351,7 +358,7 @@ CLUSTER_FIRST_NODE_HOSTNAME        | &lt;cluster_first_node_hostname&gt;
 Missing variables:
   - &lt;missing_variable_name&gt;
 
-Detailed inventory: run wb17_card04.
+Detailed inventory: run wb17_card07.
 Recovered variables were saved to /home/&lt;cloud_shell_user&gt;/workbook/cli.env.
 
 wb17_card02</code></pre>
@@ -431,23 +438,422 @@ DBMGMT_PRIVATE_ENDPOINT_OCID       | &lt;dbmgmt_private_endpoint_ocid&gt;
 
 wb17_card03</code></pre>
 </div>
-      </section><section id="bash-04-create-executive-recovery-report" class="article-section">
-        <h2>BASH 04 - Create executive recovery report</h2>
-        <h3>BASH 04 - Create executive recovery report</h3>
+      </section><section id="bash-04-create-reusable-bastion-ssh-script" class="article-section">
+        <h2>BASH 04 - Create reusable bastion SSH script</h2>
+        <h3>BASH 04 - Create reusable bastion SSH script</h3>
+<p>This card follows the same connection pattern used by Chapter 11 BASH 02. In a recovered Cloud Shell, <code>~/workbook/cli.env</code> can contain <code>ADMIN_BUCKET_NAME</code>, <code>SSH_PRIVATE_KEY_FILE</code>, and <code>BASTION_PUBLIC_IP</code> while the local <code>~/keys</code> directory is empty, so this card downloads the private key object before creating the reusable connection script.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Summarize recovered artifacts, count recovered and missing variables from <code>~/workbook/recovery-status.tsv</code>, and write the report to <code>~/workbook/recovery-executive-report.txt</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Recreate the bastion SSH private key under <code>~/keys</code> when needed, create <code>~/workbook/bin/connect-bastion-vm.sh</code> using the recovered bastion values, and open the bastion SSH session.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb17_card04() {
 
-REPORT_FILE="$WORKBOOK_DIR/recovery-executive-report.txt"
-STATUS_FILE="$WORKBOOK_DIR/recovery-status.tsv"
+KEY_DIR="$HOME/keys"
+BASTION_SSH_USER="${BASTION_SSH_USER:-opc}"
+BASTION_KEY_OBJECT_NAME="$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
+BASTION_PRIVATE_KEY_PATH="$KEY_DIR/$BASTION_KEY_OBJECT_NAME"
+BIN_DIR="$WORKBOOK_DIR/bin"
+BASTION_CONNECT_SCRIPT="$BIN_DIR/connect-bastion-vm.sh"
+missing=0
+
+for name in REGION ADMIN_BUCKET_NAME OBJECT_STORAGE_NAMESPACE BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    printf 'STOP: Missing required variable: %s\n' "$name" &gt;&amp;2
+    missing=1
+  fi
+done
+[ "$missing" -eq 0 ] || { printf 'Run wb17_card02 and wb17_card03 before creating the bastion SSH script.\n' &gt;&amp;2; return 1; }
+
+mkdir -p "$KEY_DIR" "$BIN_DIR"
+chmod 700 "$KEY_DIR" "$BIN_DIR"
+if [ ! -s "$BASTION_PRIVATE_KEY_PATH" ]; then
+  printf 'Downloading bastion private key object: %s ...\n' "$BASTION_KEY_OBJECT_NAME"
+  oci os object get \
+    --region "$REGION" \
+    --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+    --bucket-name "$ADMIN_BUCKET_NAME" \
+    --name "$BASTION_KEY_OBJECT_NAME" \
+    --file "$BASTION_PRIVATE_KEY_PATH"
+fi
+
+if [ ! -s "$BASTION_PRIVATE_KEY_PATH" ]; then
+  clear
+  printf 'STOP: Missing bastion private key: %s\n' "$BASTION_PRIVATE_KEY_PATH" &gt;&amp;2
+  return 1
+fi
+chmod 600 "$BASTION_PRIVATE_KEY_PATH"
+upsert_cli_env BASTION_SSH_USER "$BASTION_SSH_USER" &gt;/dev/null
+
+cat &gt; "$BASTION_CONNECT_SCRIPT" &lt;&lt;SCRIPT
+#!/bin/sh
+BASTION_USER='$BASTION_SSH_USER'
+BASTION_HOST='$BASTION_PUBLIC_IP'
+BASTION_KEY_NAME='$BASTION_KEY_OBJECT_NAME'
+BASTION_KEY_PATH="\$HOME/keys/\$BASTION_KEY_NAME"
+
+connect_bastion_vm() {
+  [ -f "\$BASTION_KEY_PATH" ] || { printf 'STOP: Missing bastion key: %s\n' "\$BASTION_KEY_PATH" &gt;&amp;2; return 1; }
+  chmod 700 "\$HOME/keys" "\$BASTION_KEY_PATH"
+  printf 'Opening bastion SSH session to %s@%s\n' "\$BASTION_USER" "\$BASTION_HOST"
+  printf 'When finished, run: exit\n'
+  ssh -i "\$BASTION_KEY_PATH" "\$BASTION_USER@\$BASTION_HOST"
+}
+
+connect_bastion_vm
+SCRIPT
+chmod 700 "$BASTION_CONNECT_SCRIPT"
+if ! grep -q '$HOME/workbook/bin' "$WORKBOOK_DIR/env.sh" 2&gt;/dev/null; then
+  printf 'PATH="$HOME/workbook/bin:$PATH"\n' &gt;&gt; "$WORKBOOK_DIR/env.sh"
+fi
+
+clear
+printf '%s\n' "Opening bastion SSH session."
+printf '%s\n' "When the bastion prompt appears, run: exit"
+printf 'Reusable script: %s\n\n' "$BASTION_CONNECT_SCRIPT"
+"$BASTION_CONNECT_SCRIPT"
+printf '\n%s\n' "wb17_card04"
+}
+
+wb17_card04</code></pre>
+</div>
+<h3>OUTPUT 04 - Expected bastion SSH script output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the reusable bastion SSH script was created and the bastion SSH session opens.</span>
+  </div>
+  <pre class="code-scroll"><code>Opening bastion SSH session.
+When the bastion prompt appears, run: exit
+Reusable script: /home/&lt;cloud_shell_user&gt;/workbook/bin/connect-bastion-vm.sh
+
+Opening bastion SSH session to opc@&lt;bastion_public_ip&gt;
+When finished, run: exit
+[opc@bastion-01 ~]$
+
+wb17_card04</code></pre>
+</div>
+      </section><section id="bash-05-create-reusable-cluster-node-ssh-script" class="article-section">
+        <h2>BASH 05 - Create reusable cluster node SSH script</h2>
+        <h3>BASH 05 - Create reusable cluster node SSH script</h3>
+<p>This card follows the Chapter 11 BASH 03 jump-host pattern. It does not open both node sessions automatically because each SSH session is interactive; it prints the exact commands to connect to node 1 or node 2.</p>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Discover the first and second Exadata VM cluster node hostnames, copy the cluster SSH key and second-hop helper to the bastion VM, and create <code>~/workbook/bin/connect-cluster-node.sh</code> for reusable node access through the bastion.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb17_card05() {
+
+KEY_DIR="$HOME/keys"
+BIN_DIR="$WORKBOOK_DIR/bin"
+REPORT_DIR="$WORKBOOK_DIR/reports"
+JSON_DIR="$WORKBOOK_DIR/json"
+BASTION_SSH_USER="${BASTION_SSH_USER:-opc}"
+CLUSTER_SSH_USER="${CLUSTER_SSH_USER:-opc}"
+TARGET_OS_USER="${TARGET_OS_USER:-oracle}"
+DATABASE_COMPARTMENT_OCID="${DATABASE_COMPARTMENT_OCID:-${POC_COMPARTMENT_OCID:-}}"
+BASTION_KEY_PATH="$KEY_DIR/$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
+CLUSTER_KEY_PATH="$KEY_DIR/$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-}")"
+CLUSTER_KEY_NAME="$(basename "$CLUSTER_KEY_PATH")"
+DB_NODE_LIST_JSON="$JSON_DIR/recovered-db-node-list.json"
+CLUSTER_HOSTS_FILE="$REPORT_DIR/recovered-cluster-hosts.txt"
+LOCAL_CONNECT_SCRIPT="$BIN_DIR/connect-cluster-node.sh"
+SECOND_HOP_SCRIPT="$BIN_DIR/connect-cluster-node-remote.sh"
+REMOTE_SECOND_HOP_SCRIPT="~/keys/connect-cluster-node.sh"
+EXADATA_DOMAIN="${EXADATA_DOMAIN:-}"
+
+if [ -z "$EXADATA_DOMAIN" ] &amp;&amp; [ -n "${DBMGMT_CDB_SERVICE_NAME:-}" ]; then
+  EXADATA_DOMAIN="${DBMGMT_CDB_SERVICE_NAME#*.}"
+fi
+
+missing=0
+for name in REGION DATABASE_COMPARTMENT_OCID VM_CLUSTER_OCID BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE EXADATA_SSH_PRIVATE_KEY_FILE; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    printf 'STOP: Missing required variable: %s\n' "$name" &gt;&amp;2
+    missing=1
+  fi
+done
+[ "$missing" -eq 0 ] || return 1
+
+mkdir -p "$KEY_DIR" "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$KEY_DIR" "$BIN_DIR"
+for file_path in "$BASTION_KEY_PATH" "$CLUSTER_KEY_PATH"; do
+  if [ ! -s "$file_path" ]; then
+    printf 'STOP: Missing SSH key file: %s\n' "$file_path" &gt;&amp;2
+    printf 'Run wb17_card04 first so keys are restored under ~/keys.\n' &gt;&amp;2
+    return 1
+  fi
+done
+chmod 600 "$BASTION_KEY_PATH" "$CLUSTER_KEY_PATH"
+
+oci db node list \
+  --region "$REGION" \
+  --compartment-id "$DATABASE_COMPARTMENT_OCID" \
+  --vm-cluster-id "$VM_CLUSTER_OCID" \
+  --all \
+  --output json \
+  &gt; "$DB_NODE_LIST_JSON"
+
+jq -r --arg domain "$EXADATA_DOMAIN" '
+  .data | sort_by(."host-name" // .hostname // "")[]
+  | (."host-name" // .hostname // empty) as $host
+  | select($host != "")
+  | if ($host | contains(".")) then $host elif $domain != "" then "\($host).\($domain)" else $host end
+' "$DB_NODE_LIST_JSON" &gt; "$CLUSTER_HOSTS_FILE"
+
+if [ "$(wc -l &lt; "$CLUSTER_HOSTS_FILE" | tr -d ' ')" -lt 2 ]; then
+  printf 'STOP: Expected at least two VM cluster nodes in %s.\n' "$CLUSTER_HOSTS_FILE" &gt;&amp;2
+  return 1
+fi
+
+cat &gt; "$SECOND_HOP_SCRIPT" &lt;&lt;SCRIPT
+#!/bin/sh
+CLUSTER_KEY="\$HOME/keys/$CLUSTER_KEY_NAME"
+TARGET_HOST="\$1"
+TARGET_OS_USER="\${2:-$TARGET_OS_USER}"
+CLUSTER_LOGIN_USER="$CLUSTER_SSH_USER"
+[ -n "\$TARGET_HOST" ] || { printf 'STOP: target host is required.\n' &gt;&amp;2; exit 1; }
+[ -f "\$CLUSTER_KEY" ] || { printf 'STOP: Missing cluster key on bastion: %s\n' "\$CLUSTER_KEY" &gt;&amp;2; exit 1; }
+chmod 700 "\$HOME/keys" "\$CLUSTER_KEY"
+if [ "\$TARGET_OS_USER" = "\$CLUSTER_LOGIN_USER" ]; then
+  ssh -tt -i "\$CLUSTER_KEY" -o StrictHostKeyChecking=accept-new "\$CLUSTER_LOGIN_USER@\$TARGET_HOST"
+else
+  ssh -tt -i "\$CLUSTER_KEY" -o StrictHostKeyChecking=accept-new "\$CLUSTER_LOGIN_USER@\$TARGET_HOST" "sudo -iu \$TARGET_OS_USER"
+fi
+SCRIPT
+chmod 700 "$SECOND_HOP_SCRIPT"
+
+cat &gt; "$LOCAL_CONNECT_SCRIPT" &lt;&lt;SCRIPT
+#!/bin/sh
+BASTION_USER="$BASTION_SSH_USER"
+BASTION_HOST="$BASTION_PUBLIC_IP"
+BASTION_KEY="$BASTION_KEY_PATH"
+CLUSTER_HOSTS_FILE="$CLUSTER_HOSTS_FILE"
+REMOTE_SCRIPT="$REMOTE_SECOND_HOP_SCRIPT"
+node_number="\${1:-1}"
+target_os_user="\${2:-$TARGET_OS_USER}"
+target_host="\$(sed -n "\${node_number}p" "\$CLUSTER_HOSTS_FILE")"
+[ -n "\$target_host" ] || { printf 'STOP: No cluster host found for node %s.\n' "\$node_number" &gt;&amp;2; exit 1; }
+printf 'Opening cluster node %s through bastion: %s as %s\n' "\$node_number" "\$target_host" "\$target_os_user"
+ssh -tt -i "\$BASTION_KEY" -o StrictHostKeyChecking=accept-new "\$BASTION_USER@\$BASTION_HOST" "\$REMOTE_SCRIPT '\$target_host' '\$target_os_user'"
+SCRIPT
+chmod 700 "$LOCAL_CONNECT_SCRIPT"
+
+ssh -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" "mkdir -p ~/keys &amp;&amp; chmod 700 ~/keys"
+scp -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$CLUSTER_KEY_PATH" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP:~/keys/$CLUSTER_KEY_NAME"
+scp -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$SECOND_HOP_SCRIPT" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP:$REMOTE_SECOND_HOP_SCRIPT"
+ssh -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" "chmod 700 ~/keys ~/keys/$CLUSTER_KEY_NAME $REMOTE_SECOND_HOP_SCRIPT"
+
+clear
+printf '%-34s | %s\n' \
+  "FIELD" "VALUE" \
+  "----------------------------------" "-----" \
+  "CONNECT_SCRIPT" "$LOCAL_CONNECT_SCRIPT" \
+  "NODE_1" "$(sed -n '1p' "$CLUSTER_HOSTS_FILE")" \
+  "NODE_2" "$(sed -n '2p' "$CLUSTER_HOSTS_FILE")" \
+  "CONNECT_NODE_1" "connect-cluster-node.sh 1 oracle" \
+  "CONNECT_NODE_2" "connect-cluster-node.sh 2 oracle"
+printf '\n%s\n' "wb17_card05"
+}
+
+wb17_card05</code></pre>
+</div>
+<h3>OUTPUT 05 - Expected cluster node SSH script output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the reusable cluster SSH script was created and shows commands for both Exadata VM cluster nodes.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                              | VALUE
+---------------------------------- | -----
+CONNECT_SCRIPT                     | /home/&lt;cloud_shell_user&gt;/workbook/bin/connect-cluster-node.sh
+NODE_1                             | exasc011-&lt;suffix&gt;.client.poc.oraclevcn.com
+NODE_2                             | exasc012-&lt;suffix&gt;.client.poc.oraclevcn.com
+CONNECT_NODE_1                     | connect-cluster-node.sh 1 oracle
+CONNECT_NODE_2                     | connect-cluster-node.sh 2 oracle
+
+wb17_card05</code></pre>
+</div>
+      </section><section id="bash-06-mount-file-storage-on-exadata-vm-cluster-nodes" class="article-section">
+        <h2>BASH 06 - Mount File Storage on Exadata VM cluster nodes</h2>
+        <h3>BASH 06 - Mount File Storage on Exadata VM cluster nodes</h3>
+<p>Run Chapter 15 BASH 01 through BASH 03 first if the <code>FSS_*</code> variables are not present in <code>~/workbook/cli.env</code>.</p>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Reuse the Chapter 15 BASH 05 mount pattern from recovered variables, create <code>~/workbook/bin/mount-filesystem-cluster.sh</code>, copy the all-node mount helper to the bastion VM, and mount the File Storage export on every discovered Exadata VM cluster node.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb17_card06() {
+
+KEY_DIR="$HOME/keys"
+BIN_DIR="$WORKBOOK_DIR/bin"
+REPORT_DIR="$WORKBOOK_DIR/reports"
+JSON_DIR="$WORKBOOK_DIR/json"
+DATABASE_COMPARTMENT_OCID="${DATABASE_COMPARTMENT_OCID:-${POC_COMPARTMENT_OCID:-}}"
+BASTION_KEY_PATH="$KEY_DIR/$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
+CLUSTER_KEY_PATH="$KEY_DIR/$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-}")"
+CLUSTER_KEY_NAME="$(basename "$CLUSTER_KEY_PATH")"
+FSS_CLUSTER_MOUNT_HOST="${FSS_CLUSTER_MOUNT_HOST:-${FSS_DBCLIENT_MOUNT_HOST:-}}"
+FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-all-nodes.sh}"
+DB_NODE_LIST_JSON="$JSON_DIR/fss-db-node-list.json"
+CLUSTER_HOSTS_FILE="$REPORT_DIR/filesystem-01-cluster-hosts.txt"
+LOCAL_MOUNT_SCRIPT="$BIN_DIR/mount-filesystem-cluster.sh"
+REMOTE_MOUNT_SCRIPT="~/admin/$FSS_REMOTE_SCRIPT_NAME"
+REMOTE_HOSTS_FILE="~/admin/filesystem-01-cluster-hosts.txt"
+EXADATA_DOMAIN="${EXADATA_DOMAIN:-}"
+
+if [ -z "$EXADATA_DOMAIN" ] &amp;&amp; [ -n "${DBMGMT_CDB_SERVICE_NAME:-}" ]; then
+  EXADATA_DOMAIN="${DBMGMT_CDB_SERVICE_NAME#*.}"
+fi
+
+missing=0
+for name in REGION DATABASE_COMPARTMENT_OCID VM_CLUSTER_OCID BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE EXADATA_SSH_PRIVATE_KEY_FILE FSS_CLUSTER_MOUNT_HOST FSS_EXPORT_PATH FSS_MOUNT_POINT; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    printf 'STOP: Missing required variable: %s\n' "$name" &gt;&amp;2
+    missing=1
+  fi
+done
+[ "$missing" -eq 0 ] || { printf 'Run Chapter 15 BASH 01 through BASH 03 before mounting File Storage.\n' &gt;&amp;2; return 1; }
+
+mkdir -p "$KEY_DIR" "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+for file_path in "$BASTION_KEY_PATH" "$CLUSTER_KEY_PATH"; do
+  [ -s "$file_path" ] || { printf 'STOP: Missing SSH key file: %s\n' "$file_path" &gt;&amp;2; return 1; }
+done
+chmod 600 "$BASTION_KEY_PATH" "$CLUSTER_KEY_PATH"
+
+cat &gt; "$LOCAL_MOUNT_SCRIPT" &lt;&lt;SCRIPT
+#!/bin/bash
+set -e
+REGION="$REGION"
+DATABASE_COMPARTMENT_OCID="$DATABASE_COMPARTMENT_OCID"
+VM_CLUSTER_OCID="$VM_CLUSTER_OCID"
+BASTION_PUBLIC_IP="$BASTION_PUBLIC_IP"
+BASTION_KEY_PATH="$BASTION_KEY_PATH"
+CLUSTER_KEY_PATH="$CLUSTER_KEY_PATH"
+CLUSTER_KEY_NAME="$CLUSTER_KEY_NAME"
+DB_NODE_LIST_JSON="$DB_NODE_LIST_JSON"
+CLUSTER_HOSTS_FILE="$CLUSTER_HOSTS_FILE"
+REMOTE_MOUNT_SCRIPT="$REMOTE_MOUNT_SCRIPT"
+REMOTE_HOSTS_FILE="$REMOTE_HOSTS_FILE"
+EXADATA_DOMAIN="$EXADATA_DOMAIN"
+oci db node list \
+  --region "\$REGION" \
+  --compartment-id "\$DATABASE_COMPARTMENT_OCID" \
+  --vm-cluster-id "\$VM_CLUSTER_OCID" \
+  --all \
+  --output json \
+  &gt; "\$DB_NODE_LIST_JSON"
+jq -r --arg domain "\$EXADATA_DOMAIN" '.data | sort_by(."host-name" // .hostname // "")[] | (."host-name" // .hostname // empty) as \$host | select(\$host != "") | if (\$host | contains(".")) then \$host elif \$domain != "" then "\(\$host).\(\$domain)" else \$host end' "\$DB_NODE_LIST_JSON" &gt; "\$CLUSTER_HOSTS_FILE"
+[ -s "\$CLUSTER_HOSTS_FILE" ] || { printf 'STOP: No VM cluster node hostnames were discovered.\n' &gt;&amp;2; exit 1; }
+REMOTE_TMP="\$(mktemp)"
+cat &gt; "\$REMOTE_TMP" &lt;&lt;'REMOTE_SCRIPT'
+#!/bin/bash
+set -e
+CLUSTER_KEY="$HOME/keys/$CLUSTER_KEY_NAME"
+CLUSTER_HOSTS_FILE="$HOME/admin/filesystem-01-cluster-hosts.txt"
+[ -s "$CLUSTER_HOSTS_FILE" ] || { printf 'STOP: Missing cluster host list on bastion: %s\n' "$CLUSTER_HOSTS_FILE" &gt;&amp;2; exit 1; }
+[ -f "$CLUSTER_KEY" ] || { printf 'STOP: Missing cluster key on bastion: %s\n' "$CLUSTER_KEY" &gt;&amp;2; exit 1; }
+chmod 700 "$HOME/keys" "$CLUSTER_KEY"
+while IFS= read -r TARGET_HOST; do
+  [ -n "$TARGET_HOST" ] || continue
+  printf 'Checking File Storage mount on %s ...\n' "$TARGET_HOST"
+  ssh -i "$CLUSTER_KEY" -o StrictHostKeyChecking=accept-new "opc@$TARGET_HOST" 'bash -s' &lt;&lt;'NODE_SCRIPT'
+set -e
+sudo mkdir -p '$FSS_MOUNT_POINT'
+if ! command -v mount.nfs &gt;/dev/null 2&gt;&amp;1; then
+  sudo dnf install -y nfs-utils &gt;/dev/null 2&gt;&amp;1 || sudo yum install -y nfs-utils &gt;/dev/null 2&gt;&amp;1
+fi
+if mountpoint -q '$FSS_MOUNT_POINT'; then
+  printf 'File Storage is already mounted at %s.\n' '$FSS_MOUNT_POINT'
+else
+  printf 'Mounting File Storage at %s ...\n' '$FSS_MOUNT_POINT'
+  sudo mount '$FSS_CLUSTER_MOUNT_HOST:$FSS_EXPORT_PATH' '$FSS_MOUNT_POINT'
+fi
+sudo chown oracle:oinstall '$FSS_MOUNT_POINT' 2&gt;/dev/null || true
+ls -la '$FSS_MOUNT_POINT'
+df -h '$FSS_MOUNT_POINT'
+du -hs '$FSS_MOUNT_POINT'
+NODE_SCRIPT
+done &lt; "$CLUSTER_HOSTS_FILE"
+REMOTE_SCRIPT
+chmod 700 "\$REMOTE_TMP"
+ssh -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "opc@\$BASTION_PUBLIC_IP" "mkdir -p ~/admin ~/keys &amp;&amp; chmod 700 ~/admin ~/keys"
+scp -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "\$CLUSTER_KEY_PATH" "opc@\$BASTION_PUBLIC_IP:~/keys/\$CLUSTER_KEY_NAME"
+scp -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "\$CLUSTER_HOSTS_FILE" "opc@\$BASTION_PUBLIC_IP:\$REMOTE_HOSTS_FILE"
+scp -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "\$REMOTE_TMP" "opc@\$BASTION_PUBLIC_IP:\$REMOTE_MOUNT_SCRIPT"
+rm -f "\$REMOTE_TMP"
+ssh -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "opc@\$BASTION_PUBLIC_IP" "chmod 700 ~/admin ~/keys ~/keys/\$CLUSTER_KEY_NAME \$REMOTE_MOUNT_SCRIPT &amp;&amp; chmod 600 \$REMOTE_HOSTS_FILE &amp;&amp; \$REMOTE_MOUNT_SCRIPT"
+SCRIPT
+chmod 700 "$LOCAL_MOUNT_SCRIPT"
+
+clear
+printf 'Cluster File Storage mount script: %s\n' "$LOCAL_MOUNT_SCRIPT"
+printf 'Remote bastion script: %s\n' "$REMOTE_MOUNT_SCRIPT"
+"$LOCAL_MOUNT_SCRIPT"
+printf '\n%s\n' "wb17_card06"
+}
+
+wb17_card06</code></pre>
+</div>
+<h3>OUTPUT 06 - Expected cluster File Storage mount output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the reusable mount script is created and each VM cluster node validates the File Storage mount.</span>
+  </div>
+  <pre class="code-scroll"><code>Cluster File Storage mount script: /home/&lt;cloud_shell_user&gt;/workbook/bin/mount-filesystem-cluster.sh
+Remote bastion script: ~/admin/configure-filesystem-01-all-nodes.sh
+Checking File Storage mount on exasc011-&lt;suffix&gt;.client.poc.oraclevcn.com ...
+Mounting File Storage at /mnt/FileSystem-01 ...
+Checking File Storage mount on exasc012-&lt;suffix&gt;.client.poc.oraclevcn.com ...
+Mounting File Storage at /mnt/FileSystem-01 ...
+
+wb17_card06</code></pre>
+</div>
+      </section><section id="bash-07-create-executive-recovery-report" class="article-section">
+        <h2>BASH 07 - Create executive recovery report</h2>
+        <h3>BASH 07 - Create executive recovery report</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Summarize recovered artifacts, count recovered and missing variables from <code>~/workbook/reports/recovery-status.tsv</code>, and write the report to <code>~/workbook/reports/recovery-executive-report.txt</code>.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb17_card07() {
+
+REPORT_DIR="$WORKBOOK_DIR/reports"
+REPORT_FILE="$REPORT_DIR/recovery-executive-report.txt"
+STATUS_FILE="$REPORT_DIR/recovery-status.tsv"
+mkdir -p "$REPORT_DIR"
+chmod 700 "$REPORT_DIR"
 
 section() {
   printf '\n%s\n' "$1"
@@ -512,25 +918,25 @@ fi
   if [ -f "$STATUS_FILE" ]; then
     awk -F '\t' '$2=="FOUND"{printf "%-34s | FOUND | %s\n",$1,$3}' "$STATUS_FILE"
   else
-    printf 'recovery-status.tsv was not found. Run wb17_card02 first.\n'
+    printf '%s was not found. Run wb17_card02 first.\n' "$STATUS_FILE"
   fi
 
   section "Missing variable detail"
   if [ -f "$STATUS_FILE" ]; then
     awk -F '\t' '$2=="MISS"{print $1}' "$STATUS_FILE"
   else
-    printf 'recovery-status.tsv was not found. Run wb17_card02 first.\n'
+    printf '%s was not found. Run wb17_card02 first.\n' "$STATUS_FILE"
   fi
 } &gt; "$REPORT_FILE"
 
 clear
 cat "$REPORT_FILE"
-printf '\n%s\n' "wb17_card04"
+printf '\n%s\n' "wb17_card07"
 }
 
-wb17_card04</code></pre>
+wb17_card07</code></pre>
 </div>
-<h3>OUTPUT 04 - Expected executive report summary</h3>
+<h3>OUTPUT 07 - Expected executive report summary</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -560,7 +966,7 @@ Recovered sensitive value
 ----------------------------------------
 CDB admin password                 | FOUND | &lt;stored_in_cli_env&gt;
 
-wb17_card04</code></pre>
+wb17_card07</code></pre>
 </div>
       </section><section id="reuse-notes" class="article-section">
         <h2>Reuse notes</h2>
@@ -574,7 +980,7 @@ wb17_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for Reuse notes.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>~/workbook/recovery-tools/recover-poc-variables.sh</code></pre>
+  <pre class="code-scroll"><code>~/workbook/bin/recover-poc-variables.sh</code></pre>
 </div>
 <p>The script always asks for the parent compartment, assigned child compartment, and confirmation before writing recovered values into <code>~/workbook/cli.env</code>.</p>
       </section>

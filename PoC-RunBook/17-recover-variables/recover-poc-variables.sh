@@ -2,10 +2,16 @@
 
 . "$HOME/workbook/helpers.sh" || exit 1
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
+REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
-STATUS_FILE="$WORKBOOK_DIR/recovery-status.tsv"
+STATUS_FILE="$REPORT_DIR/recovery-status.tsv"
 FOUND=0
 MISS=0
+
+mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
 
 phase() { printf '\n%s ...\n' "$1"; }
 note() { printf '  - %s\n' "$1"; }
@@ -84,7 +90,7 @@ note "Bastion public IP: ${BASTION_PUBLIC_IP:-<not_found>}"
 
 phase 'Discovering Exadata and database artifacts'
 VM_CLUSTER_OCID="$(first_id oci db exadb-vm-cluster list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$EXADATA_DISPLAY_NAME" --sort-by TIMECREATED --sort-order DESC --all)"
-VM_CLUSTER_JSON="$WORKBOOK_DIR/recovered-vm-cluster.json"
+VM_CLUSTER_JSON="$JSON_DIR/recovered-vm-cluster.json"
 oci db exadb-vm-cluster get --region "$REGION" --exadb-vm-cluster-id "$VM_CLUSTER_OCID" --output json > "$VM_CLUSTER_JSON" 2>/dev/null || printf '{}\n' > "$VM_CLUSTER_JSON"
 VM_CLUSTER_STATUS="$(jq -r '.data."lifecycle-state" // empty' "$VM_CLUSTER_JSON" 2>/dev/null)"
 EXADATA_DISPLAY_NAME="$(jq -r '.data."display-name" // .data.displayName // empty' "$VM_CLUSTER_JSON" 2>/dev/null)"
@@ -115,7 +121,7 @@ CDB_CREDENTIAL_VAULT_OCID="$(ociq oci kms management vault list --region "$REGIO
 CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT="$(ociq oci kms management vault get --region "$REGION" --vault-id "$CDB_CREDENTIAL_VAULT_OCID" --query 'data."management-endpoint"')"
 CDB_CREDENTIAL_KEY_OCID="$(ociq oci kms management key list --endpoint "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" --compartment-id "$POC_COMPARTMENT_OCID" --all --query "data[?\"display-name\"=='$CDB_CREDENTIAL_KEY_NAME']|[0].id")"
 CDB_SYS_SECRET_OCID="$(lookup_secret "$CDB_SYS_SECRET_NAME")"; CDB_SYSTEM_SECRET_OCID="$(lookup_secret "$CDB_SYSTEM_SECRET_NAME")"
-DBMGMT_PRIVATE_ENDPOINT_RESPONSE_JSON="$WORKBOOK_DIR/recovered-dbmgmt-private-endpoint.json"
+DBMGMT_PRIVATE_ENDPOINT_RESPONSE_JSON="$JSON_DIR/recovered-dbmgmt-private-endpoint.json"
 oci database-management private-endpoint list \
   --region "$REGION" \
   --compartment-id "$POC_COMPARTMENT_OCID" \
@@ -141,7 +147,7 @@ fi
 RECOVERY_SERVICE_SUBNET_OCID="$(ociq oci recovery recovery-service-subnet-collection list-recovery-service-subnets --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name rss-exadata-backup --vcn-id "$VCN_OCID" --lifecycle-state ACTIVE --all --query 'data.items[0].id')"
 PROTECTION_POLICY_NAME=Bronze; BACKUP_DESTINATION_TYPE=DBRS; BACKUP_RETENTION_POLICY_ON_TERMINATE=RETAIN_FOR_72_HOURS; REAL_TIME_DATA_PROTECTION_ENABLED=false
 PROTECTION_POLICY_OCID="$(ociq oci recovery protection-policy-collection list-protection-policies --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$PROTECTION_POLICY_NAME" --all --query 'data.items[0].id')"
-BACKUP_LIST_JSON="$WORKBOOK_DIR/recovered-backup-list.json"
+BACKUP_LIST_JSON="$JSON_DIR/recovered-backup-list.json"
 oci db backup list \
   --region "$REGION" \
   --database-id "$CDB_OCID" \
@@ -185,8 +191,8 @@ if ok "$DBMGMT_CDB_SERVICE_NAME"; then
   EXADATA_DOMAIN="${DBMGMT_CDB_SERVICE_NAME#*.}"
   [ "$EXADATA_DOMAIN" = "$DBMGMT_CDB_SERVICE_NAME" ] && EXADATA_DOMAIN=""
 fi
-DB_NODE_LIST_JSON="$WORKBOOK_DIR/recovered-db-node-list.json"
-DB_NODE_GET_JSON="$WORKBOOK_DIR/recovered-db-node-get.json"
+DB_NODE_LIST_JSON="$JSON_DIR/recovered-db-node-list.json"
+DB_NODE_GET_JSON="$JSON_DIR/recovered-db-node-get.json"
 oci db node list \
   --region "$REGION" \
   --compartment-id "$POC_COMPARTMENT_OCID" \
