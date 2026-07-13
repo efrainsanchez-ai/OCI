@@ -33,7 +33,7 @@
         <h1>OCI File Storage</h1>
         <p class="subtitle">This workbook creates and configures OCI File Storage for the PoC environment. The file system is named <code>FileSystem-01</code>, is created in the assigned <code>LAD-01</code> compartment, and is exported through mount targets in <code>subnet-admin</code>, <code>subnet-dbclient</code>, and <code>subnet-applications</code>. The bastion VM uses the admin mount target. Exadata VM cluster nodes use the db client mount target, which confirms there is a File Storage mount point in the db client subnet.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 13, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -72,6 +72,12 @@
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 
 wb15_card01() {
+BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
+REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
+mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+
 FSS_NAME="${FSS_NAME:-FileSystem-01}"
 FSS_EXPORT_PATH="${FSS_EXPORT_PATH:-/FileSystem-01}"
 FSS_MOUNT_POINT="${FSS_MOUNT_POINT:-/mnt/FileSystem-01}"
@@ -225,11 +231,15 @@ FSS_DBCLIENT_MOUNT_TARGET_NAME="${FSS_DBCLIENT_MOUNT_TARGET_NAME:-mt-FileSystem-
 FSS_APPS_MOUNT_TARGET_NAME="${FSS_APPS_MOUNT_TARGET_NAME:-mt-FileSystem-01-apps}"
 FSS_MOUNT_TARGET_HOST_LABEL="${FSS_MOUNT_TARGET_HOST_LABEL:-fs01}"
 FSS_NSG_NAME="${FSS_NSG_NAME:-nsg-file-storage}"
-FSS_RULES_FILE="$WORKBOOK_DIR/fss-nsg-rules.json"
-FSS_EXISTING_RULES_FILE="$WORKBOOK_DIR/fss-existing-nsg-rules.json"
-FSS_RULES_TO_ADD_FILE="$WORKBOOK_DIR/fss-nsg-rules-to-add.json"
-FSS_RULE_ADD_ERROR_FILE="$WORKBOOK_DIR/fss-nsg-rules-add.err"
-FSS_PROBLEM_FILE="$WORKBOOK_DIR/fss-problems.txt"
+REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
+mkdir -p "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$REPORT_DIR" "$JSON_DIR"
+FSS_RULES_FILE="$JSON_DIR/fss-nsg-rules.json"
+FSS_EXISTING_RULES_FILE="$JSON_DIR/fss-existing-nsg-rules.json"
+FSS_RULES_TO_ADD_FILE="$JSON_DIR/fss-nsg-rules-to-add.json"
+FSS_RULE_ADD_ERROR_FILE="$REPORT_DIR/fss-nsg-rules-add.err"
+FSS_PROBLEM_FILE="$REPORT_DIR/fss-problems.txt"
 : &gt; "$FSS_PROBLEM_FILE"
 : &gt; "$FSS_RULE_ADD_ERROR_FILE"
 
@@ -405,7 +415,7 @@ cat &gt; "$FSS_RULES_FILE" &lt;&lt;EOF
 EOF
 
 printf 'Checking existing File Storage NSG rules ...\n'
-FSS_EXISTING_RULES_ERROR_FILE="$WORKBOOK_DIR/fss-existing-nsg-rules.err"
+FSS_EXISTING_RULES_ERROR_FILE="$REPORT_DIR/fss-existing-nsg-rules.err"
 if ! OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True oci network nsg rules list \
   --region "$REGION" \
   --nsg-id "$FSS_NSG_OCID" \
@@ -438,7 +448,7 @@ if [ "$FSS_RULES_TO_ADD_COUNT" -gt 0 ]; then
   FSS_RULE_ADD_INDEX=0
   while IFS= read -r FSS_RULE_JSON; do
     FSS_RULE_ADD_INDEX=$((FSS_RULE_ADD_INDEX + 1))
-    FSS_SINGLE_RULE_FILE="$WORKBOOK_DIR/fss-nsg-rule-${FSS_RULE_ADD_INDEX}.json"
+    FSS_SINGLE_RULE_FILE="$JSON_DIR/fss-nsg-rule-${FSS_RULE_ADD_INDEX}.json"
     printf '%s\n' "$FSS_RULE_JSON" | jq 'if type == "array" then . else [.] end' &gt; "$FSS_SINGLE_RULE_FILE"
     FSS_RULE_DESCRIPTION="$(jq -r '.[0].description' "$FSS_SINGLE_RULE_FILE")"
     printf 'Adding File Storage NSG rule: %s ...\n' "$FSS_RULE_DESCRIPTION"
@@ -460,8 +470,8 @@ else
   printf 'File Storage NSG already has the required rules. No rule update needed.\n'
 fi
 
-FSS_RULES_AFTER_FILE="$WORKBOOK_DIR/fss-nsg-rules-after.json"
-FSS_RULES_AFTER_ERROR_FILE="$WORKBOOK_DIR/fss-nsg-rules-after.err"
+FSS_RULES_AFTER_FILE="$JSON_DIR/fss-nsg-rules-after.json"
+FSS_RULES_AFTER_ERROR_FILE="$REPORT_DIR/fss-nsg-rules-after.err"
 if ! OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True oci network nsg rules list \
   --region "$REGION" \
   --nsg-id "$FSS_NSG_OCID" \
@@ -660,7 +670,7 @@ FSS_APPS_MOUNT_TARGET_OCID         | ocid1.mounttarget.oc1.iad.&lt;apps_mount_ta
 FSS_ADMIN_EXPORT_OCID              | ocid1.export.oc1.iad.&lt;admin_export_ocid&gt;
 FSS_DBCLIENT_EXPORT_OCID           | ocid1.export.oc1.iad.&lt;dbclient_export_ocid&gt;
 FSS_APPS_EXPORT_OCID               | ocid1.export.oc1.iad.&lt;apps_export_ocid&gt;
-FSS_RULES_FILE                     | /home/&lt;cloud_shell_user&gt;/workbook/fss-nsg-rules.json
+FSS_RULES_FILE                     | /home/&lt;cloud_shell_user&gt;/workbook/json/fss-nsg-rules.json
 FSS_RULES_TO_ADD_COUNT             | &lt;missing_rule_count&gt;
 
 wb15_card02</code></pre>
@@ -680,6 +690,10 @@ wb15_card02</code></pre>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 
 wb15_card03() {
+REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+mkdir -p "$REPORT_DIR"
+chmod 700 "$REPORT_DIR"
+
 for name in REGION FSS_FILE_SYSTEM_OCID FSS_ADMIN_MOUNT_TARGET_OCID FSS_DBCLIENT_MOUNT_TARGET_OCID FSS_APPS_MOUNT_TARGET_OCID FSS_ADMIN_EXPORT_OCID FSS_DBCLIENT_EXPORT_OCID FSS_APPS_EXPORT_OCID FSS_ADMIN_MOUNT_HOST FSS_DBCLIENT_MOUNT_HOST FSS_APPS_MOUNT_HOST FSS_EXPORT_PATH FSS_MOUNT_POINT; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
@@ -752,7 +766,7 @@ FSS_APPS_EXPORT_STATE="$(
     --raw-output
 )"
 
-FSS_PROBLEM_FILE="$WORKBOOK_DIR/fss-validation-problems.txt"
+FSS_PROBLEM_FILE="$REPORT_DIR/fss-validation-problems.txt"
 : &gt; "$FSS_PROBLEM_FILE"
 for check_name in FILE_SYSTEM_STATE ADMIN_MOUNT_TARGET_STATE DBCLIENT_MOUNT_TARGET_STATE APPS_MOUNT_TARGET_STATE ADMIN_EXPORT_STATE DBCLIENT_EXPORT_STATE APPS_EXPORT_STATE; do
   eval "check_value=\$FSS_${check_name}"
@@ -815,12 +829,16 @@ wb15_card03</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Connect from Cloud Shell to the bastion VM as <code>opc</code>, create or normalize the <code>oracle</code> user and <code>oinstall</code> group, mount <code>FileSystem-01</code>, add a boot-safe systemd automount entry, set ownership, and validate with <code>ls -la</code>, <code>df -h</code>, and <code>du -hs</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Connect from Cloud Shell to the bastion VM as <code>opc</code>, create or normalize the <code>oracle</code> user and <code>oinstall</code> group, mount <code>FileSystem-01</code>, add a boot-safe systemd automount entry that does not unmount an idle share, set ownership, and validate with <code>ls -la</code>, <code>df -h</code>, and <code>du -hs</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 
 wb15_card04() {
+BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
+mkdir -p "$BIN_DIR"
+chmod 700 "$BIN_DIR"
+
 KEY_DIR="$HOME/keys"
 BASTION_PRIVATE_KEY_PATH="$KEY_DIR/$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
 FSS_ADMIN_MOUNT_HOST="${FSS_ADMIN_MOUNT_HOST:-${FSS_MOUNT_HOST:-}}"
@@ -841,14 +859,14 @@ fi
 
 chmod 700 "$BASTION_PRIVATE_KEY_PATH"
 
-BASTION_SETUP_SCRIPT="$WORKBOOK_DIR/configure-bastion-filesystem-01.sh"
-BASTION_RUN_SCRIPT="$WORKBOOK_DIR/configure-bastion-filesystem-01-from-cloud-shell.sh"
+BASTION_SETUP_SCRIPT="$BIN_DIR/configure-bastion-filesystem-01.sh"
+BASTION_RUN_SCRIPT="$BIN_DIR/configure-bastion-filesystem-01-from-cloud-shell.sh"
 cat &gt; "$BASTION_SETUP_SCRIPT" &lt;&lt;SCRIPT
 #!/bin/bash
 set -e
 FSS_PROBLEM_FILE="/tmp/filesystem-01-mount-problems.txt"
 FSS_NMAP_OUTPUT="/tmp/filesystem-01-nmap.txt"
-FSS_FSTAB_OPTIONS="defaults,_netdev,nofail,x-systemd.automount,x-systemd.idle-timeout=600,x-systemd.device-timeout=10s,timeo=50,retrans=2"
+FSS_FSTAB_OPTIONS="defaults,_netdev,nofail,x-systemd.automount,x-systemd.device-timeout=10s,timeo=50,retrans=2"
 : &gt; "\$FSS_PROBLEM_FILE"
 
 sudo groupadd oinstall 2&gt;/dev/null || true
@@ -955,11 +973,11 @@ Filesystem                                      Size  Used Avail Use% Mounted on
 fs01.admin.poc.oraclevcn.com:/FileSystem-01    &lt;size&gt; &lt;used&gt; &lt;free&gt; &lt;pct&gt; /mnt/FileSystem-01
 &lt;size&gt;  /mnt/FileSystem-01
 
-Reusable script: /home/&lt;cloud_shell_user&gt;/workbook/configure-bastion-filesystem-01-from-cloud-shell.sh
+Reusable script: /home/&lt;cloud_shell_user&gt;/workbook/bin/configure-bastion-filesystem-01-from-cloud-shell.sh
 
 wb15_card04</code></pre>
 </div>
-<p>After a bastion reboot, <code>df -h</code> by itself may not list <code>FileSystem-01</code> immediately because the workbook uses systemd automount to avoid blocking the boot sequence. Access the mount point first, for example with <code>ls -la /mnt/FileSystem-01</code>, then run <code>df -h /mnt/FileSystem-01</code>.</p>
+<p>After a bastion reboot, <code>df -h</code> by itself may not list <code>FileSystem-01</code> immediately because the workbook uses systemd automount to avoid blocking the boot sequence. Access the mount point first, for example with <code>ls -la /mnt/FileSystem-01</code>, then run <code>df -h /mnt/FileSystem-01</code>. The entry intentionally has no <code>x-systemd.idle-timeout</code>, so systemd will not unmount the share merely because it has been idle.</p>
       </section><section id="bash-05-configure-exadata-vm-cluster-node-mounts" class="article-section">
         <h2>BASH 05 - Configure Exadata VM cluster node mounts</h2>
         <h3>BASH 05 - Configure Exadata VM cluster node mounts</h3>
@@ -975,6 +993,12 @@ wb15_card04</code></pre>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 
 wb15_card05() {
+BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
+REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
+mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+
 KEY_DIR="$HOME/keys"
 BASTION_PRIVATE_KEY_PATH="$KEY_DIR/$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
 CLUSTER_PRIVATE_KEY_PATH="$KEY_DIR/$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-}")"
@@ -1000,9 +1024,9 @@ if [ ! -f "$CLUSTER_PRIVATE_KEY_PATH" ]; then
   return 1
 fi
 
-DB_NODE_LIST_JSON="$WORKBOOK_DIR/fss-db-node-list.json"
-CLUSTER_HOSTS_FILE="$WORKBOOK_DIR/fss-cluster-hosts.txt"
-CLUSTER_MOUNT_SCRIPT="$WORKBOOK_DIR/configure-cluster-filesystem-01.sh"
+DB_NODE_LIST_JSON="$JSON_DIR/fss-db-node-list.json"
+CLUSTER_HOSTS_FILE="$REPORT_DIR/fss-cluster-hosts.txt"
+CLUSTER_MOUNT_SCRIPT="$BIN_DIR/configure-cluster-filesystem-01.sh"
 REMOTE_ADMIN_DIR="~/admin"
 FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-all-nodes.sh}"
 REMOTE_CLUSTER_MOUNT_SCRIPT="~/admin/$FSS_REMOTE_SCRIPT_NAME"
