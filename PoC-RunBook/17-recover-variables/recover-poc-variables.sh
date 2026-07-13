@@ -1,6 +1,7 @@
 #!/bin/bash
 
-SCRIPT_CREATED_AT="2026-07-13 13:29:57 CST"
+# Maintenance: Update SCRIPT_CREATED_AT to the current timestamp whenever this script changes.
+SCRIPT_CREATED_AT="2026-07-13 13:40:51 CST"
 printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
 
 . "$HOME/workbook/helpers.sh" || exit 1
@@ -88,8 +89,10 @@ ALL_REGION_SERVICES_SERVICE_OCID="$(ociq oci network service list --region "$REG
 SERVICE_CIDR_BLOCK_LABEL="$(ociq oci network service list --region "$REGION" --query "data[?contains(name, 'All') && contains(name, 'Oracle Services Network')].\"cidr-block\" | [0]")"
 BASTION_VM_OCID="$(first_id oci compute instance list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$BASTION_DISPLAY_NAME" --sort-by TIMECREATED --sort-order DESC --all)"
 BASTION_PUBLIC_IP="$(ociq oci compute instance list-vnics --region "$REGION" --instance-id "$BASTION_VM_OCID" --query 'data[0]."public-ip"')"
+OL9_MARKETPLACE_IMAGE_OCID="$(ociq oci compute instance get --region "$REGION" --instance-id "$BASTION_VM_OCID" --query 'data."image-id"')"
 note "VCN: ${VCN_OCID:-<not_found>}"
 note "Bastion public IP: ${BASTION_PUBLIC_IP:-<not_found>}"
+note "Bastion image: ${OL9_MARKETPLACE_IMAGE_OCID:-<not_found>}"
 
 phase 'Discovering Exadata and database artifacts'
 VM_CLUSTER_OCID="$(first_id oci db exadb-vm-cluster list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$EXADATA_DISPLAY_NAME" --sort-by TIMECREATED --sort-order DESC --all)"
@@ -212,6 +215,30 @@ DBMGMT_SYSTEM_SECRET_OCID="$CDB_SYSTEM_SECRET_OCID"; DBMGMT_PASSWORD_SECRET_OCID
 DBMGMT_IAM_HOME_REGION="$(ociq oci iam region-subscription list --tenancy-id "$TENANCY_ID" --all --query 'data[?"is-home-region"==`true`]."region-name" | [0]')"
 DBMGMT_IAM_HOME_REGION="${DBMGMT_IAM_HOME_REGION:-${IAM_HOME_REGION:-${HOME_REGION:-us-phoenix-1}}}"
 DBMGMT_SECRET_POLICY_OCID="$(ociq oci iam policy list --region "$DBMGMT_IAM_HOME_REGION" --compartment-id "$POC_COMPARTMENT_OCID" --name "$DBMGMT_SECRET_POLICY_NAME" --all --query 'data[0].id')"
+if ! ok "$DBMGMT_SECRET_POLICY_OCID"; then
+  DBMGMT_POLICIES_JSON="$JSON_DIR/recovered-dbmgmt-policies.json"
+  oci iam policy list \
+    --region "$DBMGMT_IAM_HOME_REGION" \
+    --compartment-id "$POC_COMPARTMENT_OCID" \
+    --lifecycle-state ACTIVE \
+    --all \
+    --output json > "$DBMGMT_POLICIES_JSON" 2>/dev/null || printf '{"data":[]}\n' > "$DBMGMT_POLICIES_JSON"
+  DBMGMT_SECRET_POLICY_OCID="$(
+    jq -r --arg secret "$DBMGMT_PASSWORD_SECRET_OCID" '
+      .data[]
+      | select(any(.statements[]?; contains("dbmgmtmanageddatabase")))
+      | select(any(.statements[]?; contains($secret)))
+      | .id' "$DBMGMT_POLICIES_JSON" | head -n 1
+  )"
+fi
+if ! ok "$DBMGMT_SECRET_POLICY_OCID"; then
+  DBMGMT_SECRET_POLICY_OCID="$(
+    jq -r '
+      .data[]
+      | select(any(.statements[]?; contains("dbmgmtmanageddatabase")))
+      | .id' "$DBMGMT_POLICIES_JSON" | head -n 1
+  )"
+fi
 note "Credential vault: ${CDB_CREDENTIAL_VAULT_OCID:-<not_found>}"
 note "Credential key: ${CDB_CREDENTIAL_KEY_OCID:-<not_found>}"
 note "SYS secret: ${CDB_SYS_SECRET_OCID:-<not_found>}"
@@ -228,8 +255,7 @@ EXADATA_AD_NUMBER=2; EXADATA_STORAGE_GB=512; EXADB_SHAPE=EXADBXS; EXADB_SHAPE_AT
 EXADATA_CLUSTER_NAME="${EXADATA_CLUSTER_NAME:-vmc01}"; EXADATA_ENABLED_ECPU_COUNT="${EXADATA_ENABLED_ECPU_COUNT:-8}"; EXADATA_TOTAL_ECPU_COUNT="${EXADATA_TOTAL_ECPU_COUNT:-8}"; EXADATA_VM_FS_STORAGE_GB="${EXADATA_VM_FS_STORAGE_GB:-260}"
 EXADATA_SCAN_PORT_TCP="${EXADATA_SCAN_PORT_TCP:-1521}"; EXADATA_SCAN_PORT_TCPS="${EXADATA_SCAN_PORT_TCPS:-2484}"; EXADATA_TIME_ZONE="${EXADATA_TIME_ZONE:-UTC}"; LICENSE_MODEL="${LICENSE_MODEL:-BRING_YOUR_OWN_LICENSE}"
 EXADATA_SYSTEM_VERSION=25.2.3.0.0.251020; EXADATA_TARGET_SYSTEM_VERSION=25.2.11.0.0.260604.1; TOTAL_ECPU_PER_VM=12; ENABLED_ECPU_PER_VM=8; TARGET_MEMORY_GB_PER_VM=33
-BASTION_SHAPE=VM.Standard.E5.Flex; OL9_MARKETPLACE_IMAGE_OCID="$(ociq oci compute image list --region "$REGION" --compartment-id "$TENANCY_ID" --operating-system 'Oracle Linux' --shape "$BASTION_SHAPE" --sort-by TIMECREATED --sort-order DESC --query 'data[?contains("display-name", `Oracle-Linux-9`)] | [0].id')"
-note "Oracle Linux 9 image: ${OL9_MARKETPLACE_IMAGE_OCID:-<not_found>}"
+BASTION_SHAPE=VM.Standard.E5.Flex
 VAULT_OCID="$(first_id oci db exascale-db-storage-vault list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name Vault-01 --all)"
 GRID_IMAGE_ID_AD1=ocid1.dbpatch.oc1.iad.anuwcljtt5t4sqqasz3qnoo5rd57dcduckkxleotng5hnyxx22vko2g3w7ra
 GRID_IMAGE_ID_AD2=ocid1.dbpatch.oc1.iad.anuwcljst5t4sqqa352vh7qiqpual26qxqwkmkcqiyi6draczpiblr73araa
