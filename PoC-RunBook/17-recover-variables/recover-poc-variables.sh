@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Maintenance: Update SCRIPT_CREATED_AT to the current timestamp whenever this script changes.
-SCRIPT_CREATED_AT="2026-07-13 15:03:56 CST"
+SCRIPT_CREATED_AT="2026-07-13 15:13:03 CST"
 printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
 
 . "$HOME/workbook/helpers.sh" || exit 1
@@ -23,6 +23,7 @@ ok() { case "$1" in ""|null|None|Usage:*|Error:*|*"
 "*) return 1;; *) return 0;; esac; }
 rmkey() { [ -f "$CLI_ENV" ] || return 0; t="$(mktemp "$WORKBOOK_DIR/cli.env.XXXXXX")" || return 1; awk -v k="$1" '$0 !~ "^" k "=" {print}' "$CLI_ENV" > "$t" && mv "$t" "$CLI_ENV"; }
 save() { k="$1"; v="$2"; if ok "$v"; then FOUND=$((FOUND+1)); upsert_cli_env "$k" "$v" >/dev/null; [ "$k" = CDB_ADMIN_PASSWORD ] && out='<stored_in_cli_env>' || out="$v"; printf '%s\tFOUND\t%s\n' "$k" "$out" >> "$STATUS_FILE"; else MISS=$((MISS+1)); rmkey "$k"; printf '%s\tMISS\t\n' "$k" >> "$STATUS_FILE"; fi; }
+save_optional() { k="$1"; v="$2"; if ok "$v"; then save "$k" "$v"; else rmkey "$k"; printf '%s\tOPTIONAL\t\n' "$k" >> "$STATUS_FILE"; fi; }
 ociq() { "$@" --raw-output 2>/dev/null || true; }
 first_id() { "$@" --query 'data[0].id' --raw-output 2>/dev/null || true; }
 
@@ -120,6 +121,7 @@ note "Bastion image: ${OL9_MARKETPLACE_IMAGE_OCID:-<not_found>}"
 
 phase 'Discovering Exadata and database artifacts'
 VM_CLUSTER_OCID="$(first_id oci db exadb-vm-cluster list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$EXADATA_DISPLAY_NAME" --sort-by TIMECREATED --sort-order DESC --all)"
+note "VM cluster: ${VM_CLUSTER_OCID:-<not_found>}"
 VM_CLUSTER_JSON="$JSON_DIR/recovered-vm-cluster.json"
 oci db exadb-vm-cluster get --region "$REGION" --exadb-vm-cluster-id "$VM_CLUSTER_OCID" --output json > "$VM_CLUSTER_JSON" 2>/dev/null || printf '{}\n' > "$VM_CLUSTER_JSON"
 VM_CLUSTER_STATUS="$(jq -r '.data."lifecycle-state" // empty' "$VM_CLUSTER_JSON" 2>/dev/null)"
@@ -132,9 +134,13 @@ EXADATA_SCAN_PORT_TCP="$(jq -r '.data."scan-listener-port-tcp" // .data.scanList
 EXADATA_SCAN_PORT_TCPS="$(jq -r '.data."scan-listener-port-tcp-ssl" // .data.scanListenerPortTcpSsl // empty' "$VM_CLUSTER_JSON" 2>/dev/null)"
 EXADATA_TIME_ZONE="$(jq -r '.data."time-zone" // .data.timeZone // empty' "$VM_CLUSTER_JSON" 2>/dev/null)"
 LICENSE_MODEL="$(jq -r '.data."license-model" // .data.licenseModel // empty' "$VM_CLUSTER_JSON" 2>/dev/null)"
+note "VM cluster state: ${VM_CLUSTER_STATUS:-<not_found>}"
+note "VM cluster name: ${EXADATA_CLUSTER_NAME:-<not_found>}"
 DB_HOME_OCID="$(first_id oci db db-home list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vm-cluster-id "$VM_CLUSTER_OCID" --display-name "$DB_HOME_DISPLAY_NAME" --all)"
+note "Database home: ${DB_HOME_OCID:-<not_found>}"
 CDB_OCID="$(ociq oci db database list --region "$REGION" --db-home-id "$DB_HOME_OCID" --db-name "$CDB_NAME" --query 'data[0].id')"
 ok "$CDB_OCID" || CDB_OCID="$(ociq oci db database list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --query "data[?\"db-name\"=='$CDB_NAME'].id | [0]")"
+note "CDB: ${CDB_OCID:-<not_found>}"
 DBMGMT_CDB_CONNECT_STRING="$(ociq oci db database get --region "$REGION" --database-id "$CDB_OCID" --query 'data."connection-strings"."cdb-ip-default"')"
 ok "$DBMGMT_CDB_CONNECT_STRING" || DBMGMT_CDB_CONNECT_STRING="$(ociq oci db database get --region "$REGION" --database-id "$CDB_OCID" --query 'data."connection-strings"."all-connection-strings"."CDB Default"')"
 DBMGMT_CDB_SERVICE_NAME="$(printf '%s\n' "$DBMGMT_CDB_CONNECT_STRING" | sed -n 's/.*SERVICE_NAME=\([^)]*\)).*/\1/p' | sed -n '1p')"
@@ -145,6 +151,7 @@ if ok "$DBMGMT_CDB_SERVICE_NAME"; then
   [ "$EXADATA_DOMAIN" = "$DBMGMT_CDB_SERVICE_NAME" ] && EXADATA_DOMAIN=""
 fi
 PDB_OCID="$(ociq oci db pluggable-database list --region "$REGION" --database-id "$CDB_OCID" --all --query "data[?\"pdb-name\"=='$PDB_NAME'].id | [0]")"
+note "PDB: ${PDB_OCID:-<not_found>}"
 DB_VERSION="$(ociq oci db db-home get --region "$REGION" --db-home-id "$DB_HOME_OCID" --query 'data."db-version"')"
 CDB_CHARACTER_SET="$(ociq oci db database get --region "$REGION" --database-id "$CDB_OCID" --query 'data."character-set"')"
 CDB_CHARACTER_SET_MODE=EXPLICIT
@@ -174,7 +181,6 @@ else
   printf '{}\n' > "$DB_NODE_GET_JSON"
 fi
 CLUSTER_FIRST_NODE_HOSTNAME="$DB_NODE_HOSTNAME"
-note "VM cluster: ${VM_CLUSTER_OCID:-<not_found>}"
 if [ -s "$CLUSTER_NODE_HOSTNAMES_FILE" ]; then
   while IFS= read -r node_name; do
     [ -n "$node_name" ] && note "Node name: $node_name"
@@ -182,14 +188,16 @@ if [ -s "$CLUSTER_NODE_HOSTNAMES_FILE" ]; then
 else
   note "Node name: <not_found>"
 fi
-note "CDB: ${CDB_OCID:-<not_found>}"
-note "PDB: ${PDB_OCID:-<not_found>}"
 
 phase 'Discovering backup, Vault, and Database Management artifacts'
 CDB_CREDENTIAL_VAULT_OCID="$(ociq oci kms management vault list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --all --query "data[?\"display-name\"=='$CDB_CREDENTIAL_VAULT_NAME']|[0].id")"
+note "Credential vault: ${CDB_CREDENTIAL_VAULT_OCID:-<not_found>}"
 CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT="$(ociq oci kms management vault get --region "$REGION" --vault-id "$CDB_CREDENTIAL_VAULT_OCID" --query 'data."management-endpoint"')"
 CDB_CREDENTIAL_KEY_OCID="$(ociq oci kms management key list --endpoint "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" --compartment-id "$POC_COMPARTMENT_OCID" --all --query "data[?\"display-name\"=='$CDB_CREDENTIAL_KEY_NAME']|[0].id")"
+note "Credential key: ${CDB_CREDENTIAL_KEY_OCID:-<not_found>}"
 CDB_SYS_SECRET_OCID="$(lookup_secret "$CDB_SYS_SECRET_NAME")"; CDB_SYSTEM_SECRET_OCID="$(lookup_secret "$CDB_SYSTEM_SECRET_NAME")"
+note "SYS secret: ${CDB_SYS_SECRET_OCID:-<not_found>}"
+note "SYSTEM secret: ${CDB_SYSTEM_SECRET_OCID:-<not_found>}"
 DBMGMT_PRIVATE_ENDPOINT_RESPONSE_JSON="$JSON_DIR/recovered-dbmgmt-private-endpoint.json"
 oci database-management private-endpoint list \
   --region "$REGION" \
@@ -213,9 +221,12 @@ fi
 if ! ok "$DBMGMT_PRIVATE_ENDPOINT_OCID"; then
   DBMGMT_PRIVATE_ENDPOINT_OCID="$(ociq oci database-management private-endpoint list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --name "$DBMGMT_PRIVATE_ENDPOINT_NAME" --vcn-id "$VCN_OCID" --all --query 'data.items[0].id')"
 fi
+note "DB Management private endpoint: ${DBMGMT_PRIVATE_ENDPOINT_OCID:-<not_found>}"
 RECOVERY_SERVICE_SUBNET_OCID="$(ociq oci recovery recovery-service-subnet-collection list-recovery-service-subnets --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name rss-exadata-backup --vcn-id "$VCN_OCID" --lifecycle-state ACTIVE --all --query 'data.items[0].id')"
+note "Recovery Service subnet: ${RECOVERY_SERVICE_SUBNET_OCID:-<not_found>}"
 PROTECTION_POLICY_NAME=Bronze; BACKUP_DESTINATION_TYPE=DBRS; BACKUP_RETENTION_POLICY_ON_TERMINATE=RETAIN_FOR_72_HOURS; REAL_TIME_DATA_PROTECTION_ENABLED=false
 PROTECTION_POLICY_OCID="$(ociq oci recovery protection-policy-collection list-protection-policies --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$PROTECTION_POLICY_NAME" --all --query 'data.items[0].id')"
+note "Protection policy: ${PROTECTION_POLICY_OCID:-<not_found>}"
 BACKUP_LIST_JSON="$JSON_DIR/recovered-backup-list.json"
 oci db backup list \
   --region "$REGION" \
@@ -263,14 +274,7 @@ if ! ok "$DBMGMT_SECRET_POLICY_OCID"; then
       | .id' "$DBMGMT_POLICIES_JSON" | head -n 1
   )"
 fi
-note "Credential vault: ${CDB_CREDENTIAL_VAULT_OCID:-<not_found>}"
-note "Credential key: ${CDB_CREDENTIAL_KEY_OCID:-<not_found>}"
-note "SYS secret: ${CDB_SYS_SECRET_OCID:-<not_found>}"
-note "SYSTEM secret: ${CDB_SYSTEM_SECRET_OCID:-<not_found>}"
-note "Recovery Service subnet: ${RECOVERY_SERVICE_SUBNET_OCID:-<not_found>}"
-note "Protection policy: ${PROTECTION_POLICY_OCID:-<not_found>}"
 note "Initial backup: ${INITIAL_BACKUP_OCID:-<not_found>}"
-note "DB Management private endpoint: ${DBMGMT_PRIVATE_ENDPOINT_OCID:-<not_found>}"
 note "DB Management secret policy: ${DBMGMT_SECRET_POLICY_OCID:-<not_found>}"
 
 AVAILABILITY_DOMAIN="$(ociq oci iam availability-domain list --region "$REGION" --compartment-id "$TENANCY_ID" --query 'data[0].name')"
@@ -313,6 +317,7 @@ FSS_CLUSTER_MOUNT_HOST="${FSS_CLUSTER_MOUNT_HOST:-$FSS_DBCLIENT_MOUNT_HOST}"
 FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-mount.sh}"
 FSS_AVAILABILITY_DOMAIN="${FSS_AVAILABILITY_DOMAIN:-${AVAILABILITY_DOMAIN:-${EXADATA_AVAILABILITY_DOMAIN:-}}}"
 FSS_NSG_OCID="$(lookup_nsg "$FSS_NSG_NAME")"
+note "File Storage NSG: ${FSS_NSG_OCID:-<not_found>}"
 FSS_AD_LIST="$({
   ok "$FSS_AVAILABILITY_DOMAIN" && printf '%s
 ' "$FSS_AVAILABILITY_DOMAIN"
@@ -330,6 +335,7 @@ for candidate_ad in $FSS_AD_LIST; do
     break
   fi
 done
+note "File Storage file system: ${FSS_FILE_SYSTEM_OCID:-<not_found>}"
 
 recover_fss_mount_target() {
   target_name="$1"; target_key="$2"; export_set_key="$3"; export_key="$4"
@@ -357,13 +363,14 @@ recover_fss_mount_target() {
 }
 
 recover_fss_mount_target "$FSS_ADMIN_MOUNT_TARGET_NAME" FSS_ADMIN_MOUNT_TARGET_OCID FSS_ADMIN_EXPORT_SET_OCID FSS_ADMIN_EXPORT_OCID
+note "File Storage admin mount target: ${FSS_ADMIN_MOUNT_TARGET_OCID:-<not_found>}"
 recover_fss_mount_target "$FSS_DBCLIENT_MOUNT_TARGET_NAME" FSS_DBCLIENT_MOUNT_TARGET_OCID FSS_DBCLIENT_EXPORT_SET_OCID FSS_DBCLIENT_EXPORT_OCID
+note "File Storage db client mount target: ${FSS_DBCLIENT_MOUNT_TARGET_OCID:-<not_found>}"
 recover_fss_mount_target "$FSS_APPS_MOUNT_TARGET_NAME" FSS_APPS_MOUNT_TARGET_OCID FSS_APPS_EXPORT_SET_OCID FSS_APPS_EXPORT_OCID
+note "File Storage applications mount target: ${FSS_APPS_MOUNT_TARGET_OCID:-<not_found>}"
 FSS_MOUNT_TARGET_OCID="$FSS_ADMIN_MOUNT_TARGET_OCID"
 FSS_EXPORT_SET_OCID="$FSS_ADMIN_EXPORT_SET_OCID"
 FSS_EXPORT_OCID="$FSS_ADMIN_EXPORT_OCID"
-note "File Storage file system: ${FSS_FILE_SYSTEM_OCID:-<not_found>}"
-note "File Storage db client mount target: ${FSS_DBCLIENT_MOUNT_TARGET_OCID:-<not_found>}"
 note "Cluster first node hostname: ${CLUSTER_FIRST_NODE_HOSTNAME:-<not_found>}"
 
 phase 'Saving recovered variables'
@@ -372,7 +379,13 @@ printf '\n%-36s | %s\n' VARIABLE VALUE
 printf '%-36s | %s\n' ------------------------------------ -----
 KEYS='TENANCY_ID REGION POC_PARENT_COMPARTMENT_NAME POC_PARENT_COMPARTMENT_OCID POC_COMPARTMENT_NAME POC_COMPARTMENT_OCID PARENT_COMPARTMENT_NAME PARENT_COMPARTMENT_OCID NETWORK_COMPARTMENT_OCID SECURITY_COMPARTMENT_OCID DATABASE_COMPARTMENT_OCID ADMIN_COMPARTMENT_OCID APPLICATION_COMPARTMENT_OCID LOG_COMPARTMENT_OCID VCN_NAME VCN_CIDR VCN_OCID DEFAULT_SECURITY_LIST_OCID ALL_REGION_SERVICES_SERVICE_OCID SERVICE_CIDR_BLOCK_LABEL SECURITY_LIST_BACKUP_OCID SUBNET_ADMIN_OCID SUBNET_DBCLIENT_OCID SUBNET_DB_BACKUP_OCID SUBNET_DBTOOLS_OCID SUBNET_PUBLIC_LB_OCID SUBNET_APPS_OCID RT_PUBLIC_OCID RT_PRIVATE_OCID IGW_OCID NAT_OCID SGW_OCID NSG_EXADATA_CLIENT_OCID NSG_APPLICATIONS_OCID NSG_DBTOOLS_OCID NSG_BASTION_OCID NSG_PUBLIC_LB_OCID AVAILABILITY_DOMAIN BASTION_SHAPE OL9_MARKETPLACE_IMAGE_OCID BASTION_DISPLAY_NAME BASTION_VM_OCID BASTION_PUBLIC_IP ADMIN_BUCKET_NAME SSH_PRIVATE_KEY_FILE SSH_PUBLIC_KEY_FILE VAULT_OCID EXADATA_STORAGE_GB EXADATA_AVAILABILITY_DOMAIN EXADATA_AD_NUMBER EXADB_SHAPE EXADB_SHAPE_ATTRIBUTE EXADB_SHAPE_FAMILY GI_MAJOR_VERSION GRID_IMAGE_ID EXADATA_SYSTEM_VERSION EXADATA_DISPLAY_NAME EXADATA_CLUSTER_NAME EXADATA_ENABLED_ECPU_COUNT EXADATA_TOTAL_ECPU_COUNT EXADATA_VM_FS_STORAGE_GB EXADATA_SCAN_PORT_TCP EXADATA_SCAN_PORT_TCPS EXADATA_TIME_ZONE LICENSE_MODEL VM_CLUSTER_OCID VM_CLUSTER_STATUS EXADATA_TARGET_SYSTEM_VERSION EXADATA_SSH_PRIVATE_KEY_FILE EXADATA_SSH_PUBLIC_KEY_FILE DB_HOME_OCID DB_VERSION TOTAL_ECPU_PER_VM ENABLED_ECPU_PER_VM TARGET_MEMORY_GB_PER_VM CDB_NAME CDB_OCID CDB_ADMIN_PASSWORD CDB_CHARACTER_SET CDB_CHARACTER_SET_MODE PDB_NAME PDB_OCID PROTECTION_POLICY_NAME BACKUP_DESTINATION_TYPE BACKUP_RETENTION_POLICY_ON_TERMINATE REAL_TIME_DATA_PROTECTION_ENABLED RECOVERY_SERVICE_SUBNET_OCID PROTECTION_POLICY_OCID INITIAL_BACKUP_OCID CDB_CREDENTIAL_VAULT_NAME CDB_CREDENTIAL_VAULT_OCID CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT CDB_CREDENTIAL_KEY_NAME CDB_CREDENTIAL_KEY_OCID CDB_SYS_SECRET_NAME CDB_SYS_SECRET_OCID CDB_SYSTEM_SECRET_NAME CDB_SYSTEM_SECRET_OCID DBMGMT_SYSTEM_SECRET_OCID DBMGMT_PASSWORD_SECRET_OCID DBMGMT_PRIVATE_ENDPOINT_NAME DBMGMT_MANAGEMENT_TYPE DBMGMT_CREDENTIAL_USERNAME DBMGMT_PROTOCOL DBMGMT_PORT DBMGMT_ROLE DBMGMT_SECRET_POLICY_NAME DBMGMT_PRIVATE_ENDPOINT_OCID DBMGMT_IAM_HOME_REGION DBMGMT_SECRET_POLICY_COMPARTMENT_NAME DBMGMT_SECRET_POLICY_OCID DBMGMT_CDB_SERVICE_NAME FSS_NAME FSS_EXPORT_PATH FSS_MOUNT_POINT FSS_ADMIN_MOUNT_TARGET_NAME FSS_DBCLIENT_MOUNT_TARGET_NAME FSS_APPS_MOUNT_TARGET_NAME FSS_MOUNT_TARGET_NAME FSS_MOUNT_TARGET_HOST_LABEL FSS_NSG_NAME FSS_ADMIN_SUBNET_DNS_LABEL FSS_DBCLIENT_SUBNET_DNS_LABEL FSS_APPS_SUBNET_DNS_LABEL FSS_VCN_DNS_LABEL FSS_ADMIN_MOUNT_HOST FSS_DBCLIENT_MOUNT_HOST FSS_APPS_MOUNT_HOST FSS_MOUNT_HOST FSS_CLUSTER_MOUNT_HOST FSS_REMOTE_SCRIPT_NAME FSS_AVAILABILITY_DOMAIN FSS_NSG_OCID FSS_FILE_SYSTEM_OCID FSS_MOUNT_TARGET_OCID FSS_EXPORT_SET_OCID FSS_EXPORT_OCID FSS_ADMIN_MOUNT_TARGET_OCID FSS_ADMIN_EXPORT_SET_OCID FSS_ADMIN_EXPORT_OCID FSS_DBCLIENT_MOUNT_TARGET_OCID FSS_DBCLIENT_EXPORT_SET_OCID FSS_DBCLIENT_EXPORT_OCID FSS_APPS_MOUNT_TARGET_OCID FSS_APPS_EXPORT_SET_OCID FSS_APPS_EXPORT_OCID EXADATA_HOSTNAME BASTION_SSH_USER OBJECT_STORAGE_NAMESPACE CLUSTER_SSH_USER EXADATA_DOMAIN CLUSTER_FIRST_NODE_HOSTNAME'
 PARENT_COMPARTMENT_NAME="$POC_PARENT_COMPARTMENT_NAME"; PARENT_COMPARTMENT_OCID="$POC_PARENT_COMPARTMENT_OCID"; NETWORK_COMPARTMENT_OCID="$POC_COMPARTMENT_OCID"; SECURITY_COMPARTMENT_OCID="$POC_COMPARTMENT_OCID"; DATABASE_COMPARTMENT_OCID="$POC_COMPARTMENT_OCID"; ADMIN_COMPARTMENT_OCID="$POC_COMPARTMENT_OCID"; APPLICATION_COMPARTMENT_OCID="$POC_COMPARTMENT_OCID"; LOG_COMPARTMENT_OCID="$POC_COMPARTMENT_OCID"
-for k in $KEYS; do eval "v=\${$k:-}"; save "$k" "$v"; done
+for k in $KEYS; do
+  eval "v=\${$k:-}"
+  case "$k" in
+    DBMGMT_SECRET_POLICY_OCID) save_optional "$k" "$v" ;;
+    *) save "$k" "$v" ;;
+  esac
+done
 printf '\n%-36s | %s\n' RECOVERY_STATUS complete
 printf '%-36s | %s\n' RECOVERED_VARIABLES "$FOUND"
 printf '%-36s | %s\n' MISSING_VARIABLES "$MISS"

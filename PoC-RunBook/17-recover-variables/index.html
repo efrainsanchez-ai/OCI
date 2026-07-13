@@ -338,6 +338,7 @@ printf '\n%s\n' "wb17_card02"
 wb17_card02</code></pre>
 </div>
 <h3>OUTPUT 02 - Expected recovery discovery output</h3>
+<p><code>DBMGMT_SECRET_POLICY_OCID</code> is optional during recovery. If the Chapter 14 policy does not yet exist, it is recorded as <code>OPTIONAL</code> in the recovery status file rather than listed as missing; Chapter 14 BASH 05 creates the policy when required.</p>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -347,7 +348,7 @@ wb17_card02</code></pre>
   </div>
   <pre class="code-scroll"><code>Downloading recovery script ...
 Source: https://efrainsanchez-ai.github.io/OCI/PoC-RunBook/17-recover-variables/recover-poc-variables.sh
-Recovery script created: 2026-07-13 15:03:56 CST
+Recovery script created: 2026-07-13 15:13:03 CST
 
 Reading active OCI CLI profile ...
   - Region candidate: &lt;region&gt;
