@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Maintenance: Update SCRIPT_CREATED_AT to the current timestamp whenever this script changes.
-SCRIPT_CREATED_AT="2026-07-13 13:40:51 CST"
+SCRIPT_CREATED_AT="2026-07-13 15:03:56 CST"
 printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
 
 . "$HOME/workbook/helpers.sh" || exit 1
@@ -76,22 +76,46 @@ CDB_SYS_SECRET_NAME=cdb01-sys-password; CDB_SYSTEM_SECRET_NAME=cdb01-system-pass
 
 phase 'Discovering network and bastion artifacts'
 VCN_OCID="$(first_id oci network vcn list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$VCN_NAME" --all)"
-VCN_CIDR="$(ociq oci network vcn get --region "$REGION" --vcn-id "$VCN_OCID" --query 'data."cidr-block"')"
-DEFAULT_SECURITY_LIST_OCID="$(ociq oci network vcn get --region "$REGION" --vcn-id "$VCN_OCID" --query 'data."default-security-list-id"')"
-for item in 'SUBNET_ADMIN_OCID subnet-admin' 'SUBNET_DBCLIENT_OCID subnet-dbclient' 'SUBNET_DB_BACKUP_OCID subnet-db-backup' 'SUBNET_DBTOOLS_OCID subnet-dbtools' 'SUBNET_PUBLIC_LB_OCID subnet-public-lb' 'SUBNET_APPS_OCID subnet-applications'; do set -- $item; eval "$1=\$(lookup_subnet $2)"; done
-for item in 'RT_PUBLIC_OCID rt-public' 'RT_PRIVATE_OCID rt-private'; do set -- $item; eval "$1=\$(lookup_rt $2)"; done
-IGW_OCID="$(first_id oci network internet-gateway list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --display-name gw-internet --all)"
-NAT_OCID="$(first_id oci network nat-gateway list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --display-name gw-nat --all)"
-SGW_OCID="$(ociq oci network service-gateway list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --all --query "data[?\"display-name\"=='gw-service'].id | [0]")"
-for item in 'NSG_EXADATA_CLIENT_OCID nsg-exadata-client' 'NSG_APPLICATIONS_OCID nsg-applications' 'NSG_DBTOOLS_OCID nsg-dbtools-endpoint' 'NSG_BASTION_OCID nsg-bastion-admin' 'NSG_PUBLIC_LB_OCID nsg-public-lb'; do set -- $item; eval "$1=\$(lookup_nsg $2)"; done
-SECURITY_LIST_BACKUP_OCID="$(first_id oci network security-list list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --display-name sl-backup --all)"
-ALL_REGION_SERVICES_SERVICE_OCID="$(ociq oci network service list --region "$REGION" --query "data[?contains(name, 'All') && contains(name, 'Oracle Services Network')].id | [0]")"
-SERVICE_CIDR_BLOCK_LABEL="$(ociq oci network service list --region "$REGION" --query "data[?contains(name, 'All') && contains(name, 'Oracle Services Network')].\"cidr-block\" | [0]")"
-BASTION_VM_OCID="$(first_id oci compute instance list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$BASTION_DISPLAY_NAME" --sort-by TIMECREATED --sort-order DESC --all)"
-BASTION_PUBLIC_IP="$(ociq oci compute instance list-vnics --region "$REGION" --instance-id "$BASTION_VM_OCID" --query 'data[0]."public-ip"')"
-OL9_MARKETPLACE_IMAGE_OCID="$(ociq oci compute instance get --region "$REGION" --instance-id "$BASTION_VM_OCID" --query 'data."image-id"')"
 note "VCN: ${VCN_OCID:-<not_found>}"
+VCN_CIDR="$(ociq oci network vcn get --region "$REGION" --vcn-id "$VCN_OCID" --query 'data."cidr-block"')"
+note "VCN CIDR: ${VCN_CIDR:-<not_found>}"
+DEFAULT_SECURITY_LIST_OCID="$(ociq oci network vcn get --region "$REGION" --vcn-id "$VCN_OCID" --query 'data."default-security-list-id"')"
+note "Default security list: ${DEFAULT_SECURITY_LIST_OCID:-<not_found>}"
+for item in 'SUBNET_ADMIN_OCID subnet-admin' 'SUBNET_DBCLIENT_OCID subnet-dbclient' 'SUBNET_DB_BACKUP_OCID subnet-db-backup' 'SUBNET_DBTOOLS_OCID subnet-dbtools' 'SUBNET_PUBLIC_LB_OCID subnet-public-lb' 'SUBNET_APPS_OCID subnet-applications'; do
+  set -- $item
+  eval "$1=\$(lookup_subnet $2)"
+  eval "resolved=\${$1:-}"
+  note "Subnet $2: ${resolved:-<not_found>}"
+done
+for item in 'RT_PUBLIC_OCID rt-public' 'RT_PRIVATE_OCID rt-private'; do
+  set -- $item
+  eval "$1=\$(lookup_rt $2)"
+  eval "resolved=\${$1:-}"
+  note "Route table $2: ${resolved:-<not_found>}"
+done
+IGW_OCID="$(first_id oci network internet-gateway list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --display-name gw-internet --all)"
+note "Internet gateway: ${IGW_OCID:-<not_found>}"
+NAT_OCID="$(first_id oci network nat-gateway list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --display-name gw-nat --all)"
+note "NAT gateway: ${NAT_OCID:-<not_found>}"
+SGW_OCID="$(ociq oci network service-gateway list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --all --query "data[?\"display-name\"=='gw-service'].id | [0]")"
+note "Service gateway: ${SGW_OCID:-<not_found>}"
+for item in 'NSG_EXADATA_CLIENT_OCID nsg-exadata-client' 'NSG_APPLICATIONS_OCID nsg-applications' 'NSG_DBTOOLS_OCID nsg-dbtools-endpoint' 'NSG_BASTION_OCID nsg-bastion-admin' 'NSG_PUBLIC_LB_OCID nsg-public-lb'; do
+  set -- $item
+  eval "$1=\$(lookup_nsg $2)"
+  eval "resolved=\${$1:-}"
+  note "NSG $2: ${resolved:-<not_found>}"
+done
+SECURITY_LIST_BACKUP_OCID="$(first_id oci network security-list list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --display-name sl-backup --all)"
+note "Backup security list: ${SECURITY_LIST_BACKUP_OCID:-<not_found>}"
+ALL_REGION_SERVICES_SERVICE_OCID="$(ociq oci network service list --region "$REGION" --query "data[?contains(name, 'All') && contains(name, 'Oracle Services Network')].id | [0]")"
+note "All-services network service: ${ALL_REGION_SERVICES_SERVICE_OCID:-<not_found>}"
+SERVICE_CIDR_BLOCK_LABEL="$(ociq oci network service list --region "$REGION" --query "data[?contains(name, 'All') && contains(name, 'Oracle Services Network')].\"cidr-block\" | [0]")"
+note "All-services CIDR label: ${SERVICE_CIDR_BLOCK_LABEL:-<not_found>}"
+BASTION_VM_OCID="$(first_id oci compute instance list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$BASTION_DISPLAY_NAME" --sort-by TIMECREATED --sort-order DESC --all)"
+note "Bastion VM: ${BASTION_VM_OCID:-<not_found>}"
+BASTION_PUBLIC_IP="$(ociq oci compute instance list-vnics --region "$REGION" --instance-id "$BASTION_VM_OCID" --query 'data[0]."public-ip"')"
 note "Bastion public IP: ${BASTION_PUBLIC_IP:-<not_found>}"
+OL9_MARKETPLACE_IMAGE_OCID="$(ociq oci compute instance get --region "$REGION" --instance-id "$BASTION_VM_OCID" --query 'data."image-id"')"
 note "Bastion image: ${OL9_MARKETPLACE_IMAGE_OCID:-<not_found>}"
 
 phase 'Discovering Exadata and database artifacts'
