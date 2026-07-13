@@ -33,7 +33,7 @@
         <h1>Recover Variables</h1>
         <p class="subtitle">This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, a different OCI user takes over, or the original <code>~/workbook/cli.env</code> file is no longer available. It does not recreate OCI resources. It discovers existing resources from OCI by using the same names, compartment assumptions, and discovery style used by the earlier workbooks in this series, especially Chapter 16.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 13, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -45,7 +45,7 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#introduction">Introduction</a></li><li><a href="#what-gets-recovered">What gets recovered</a></li><li><a href="#recovery-defaults">Recovery defaults</a></li><li><a href="#bash-01-recreate-workbook-helpers">BASH 01 - Recreate workbook helpers</a></li><li><a href="#bash-02-download-and-run-recovery-discovery-tools">BASH 02 - Download and run recovery discovery tools</a></li><li><a href="#bash-03-validate-recovered-variables">BASH 03 - Validate recovered variables</a></li><li><a href="#bash-04-create-reusable-bastion-ssh-script">BASH 04 - Create reusable bastion SSH script</a></li><li><a href="#bash-05-create-reusable-cluster-node-ssh-script">BASH 05 - Create reusable cluster node SSH script</a></li><li><a href="#bash-06-mount-file-storage-on-exadata-vm-cluster-nodes">BASH 06 - Mount File Storage on Exadata VM cluster nodes</a></li><li><a href="#bash-07-create-executive-recovery-report">BASH 07 - Create executive recovery report</a></li><li><a href="#reuse-notes">Reuse notes</a></li></ol>
+      <ol><li><a href="#introduction">Introduction</a></li><li><a href="#what-gets-recovered">What gets recovered</a></li><li><a href="#recovery-defaults">Recovery defaults</a></li><li><a href="#bash-01-recreate-workbook-helpers">BASH 01 - Recreate workbook helpers</a></li><li><a href="#bash-02-download-and-run-recovery-discovery-tools">BASH 02 - Download and run recovery discovery tools</a></li><li><a href="#bash-03-validate-recovered-variables">BASH 03 - Validate recovered variables</a></li><li><a href="#bash-04-allow-cloud-shell-ssh-access-to-the-bastion">BASH 04 - Allow Cloud Shell SSH access to the bastion</a></li><li><a href="#bash-05-create-reusable-bastion-ssh-script">BASH 05 - Create reusable bastion SSH script</a></li><li><a href="#bash-06-create-reusable-cluster-node-ssh-script">BASH 06 - Create reusable cluster node SSH script</a></li><li><a href="#bash-07-mount-file-storage-on-exadata-vm-cluster-nodes">BASH 07 - Mount File Storage on Exadata VM cluster nodes</a></li><li><a href="#bash-08-create-executive-recovery-report">BASH 08 - Create executive recovery report</a></li><li><a href="#reuse-notes">Reuse notes</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
@@ -150,12 +150,17 @@
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, store <code>helpers.sh</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, create compatibility symlinks, and create export-enabled <code>cli.env</code> so recovery can run even when the Cloud Shell home directory was reset.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, store <code>helpers.sh</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, create compatibility symlinks, and persist the local workbook path variables in export-enabled <code>cli.env</code> so recovery can run even when the Cloud Shell home directory was reset.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb17_card01() {
 
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
+REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
+mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 BIN_DIR="$WORKBOOK_DIR/bin"
 HELPERS_FILE="$BIN_DIR/helpers.sh"; ENV_FILE="$BIN_DIR/env.sh"
@@ -169,6 +174,11 @@ chmod 600 "$CLI_ENV"
 
 cat &gt; "$HELPERS_FILE" &lt;&lt;'HELPERS'
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
+REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
+mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 
 load_cli_env() {
@@ -202,11 +212,18 @@ HELPERS
 chmod 700 "$HELPERS_FILE"
 
 cat &gt; "$ENV_FILE" &lt;&lt;'EOF'
-cd ~/workbook || return 1
-. ./helpers.sh || return 1
+WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+cd "$WORKBOOK_DIR" || return 1
+. "$WORKBOOK_DIR/helpers.sh" || return 1
 load_cli_env || return 1
-PATH="$HOME/workbook/bin:$PATH"
+PATH="$WORKBOOK_DIR/bin:$PATH"
 PS1='$ '
+BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
+REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
+mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+export BIN_DIR REPORT_DIR JSON_DIR
 
 if [ "${1:-}" = "--quiet" ]; then
   return 0
@@ -228,6 +245,10 @@ ln -sfn "bin/helpers.sh" "$WORKBOOK_DIR/helpers.sh"
 ln -sfn "bin/env.sh" "$WORKBOOK_DIR/env.sh"
 
 . "$HELPERS_FILE"
+upsert_cli_env WORKBOOK_DIR "$WORKBOOK_DIR" &gt;/dev/null
+upsert_cli_env BIN_DIR "$BIN_DIR" &gt;/dev/null
+upsert_cli_env REPORT_DIR "$REPORT_DIR" &gt;/dev/null
+upsert_cli_env JSON_DIR "$JSON_DIR" &gt;/dev/null
 PS1='$ '
 
 clear
@@ -236,6 +257,8 @@ printf '%-18s | %s\n' \
   "WORKBOOK_DIR" "$WORKBOOK_DIR" \
   "CLI_ENV" "$CLI_ENV" \
   "BIN_DIR" "$BIN_DIR" \
+  "REPORT_DIR" "$REPORT_DIR" \
+  "JSON_DIR" "$JSON_DIR" \
   "HELPERS_FILE" "$HELPERS_FILE" \
   "ENV_FILE" "$ENV_FILE" \
   "PROMPT" "$PS1"
@@ -257,6 +280,8 @@ wb17_card01</code></pre>
 WORKBOOK_DIR       | /home/&lt;cloud_shell_user&gt;/workbook
 CLI_ENV            | /home/&lt;cloud_shell_user&gt;/workbook/cli.env
 BIN_DIR            | /home/&lt;cloud_shell_user&gt;/workbook/bin
+REPORT_DIR         | /home/&lt;cloud_shell_user&gt;/workbook/reports
+JSON_DIR           | /home/&lt;cloud_shell_user&gt;/workbook/json
 HELPERS_FILE       | /home/&lt;cloud_shell_user&gt;/workbook/bin/helpers.sh
 ENV_FILE           | /home/&lt;cloud_shell_user&gt;/workbook/bin/env.sh
 PROMPT             | $ 
@@ -318,7 +343,7 @@ wb17_card02</code></pre>
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the recovery phase feedback, compact status summary, and missing-variable list, then run BASH 07 for the full inventory.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the recovery phase feedback, compact status summary, and missing-variable list, then run BASH 08 for the full inventory.</span>
   </div>
   <pre class="code-scroll"><code>Downloading recovery script ...
 Source: https://efrainsanchez-ai.github.io/OCI/PoC-RunBook/17-recover-variables/recover-poc-variables.sh
@@ -353,6 +378,8 @@ Discovering backup, Vault, and Database Management artifacts ...
   - Protection policy: &lt;protection_policy_ocid&gt;
   - Initial backup: &lt;initial_backup_ocid&gt;
   - DB Management private endpoint: &lt;dbmgmt_private_endpoint_ocid&gt;
+  - DB Management secret policy: &lt;dbmgmt_secret_policy_ocid&gt;
+  - Oracle Linux 9 image: &lt;ol9_marketplace_image_ocid&gt;
 
 Discovering File Storage artifacts ...
   - File Storage file system: &lt;file_system_ocid&gt;
@@ -376,7 +403,7 @@ CLUSTER_FIRST_NODE_HOSTNAME        | &lt;cluster_first_node_hostname&gt;
 Missing variables:
   - &lt;missing_variable_name&gt;
 
-Detailed inventory: run wb17_card07.
+Detailed inventory: run wb17_card08.
 Recovered variables were saved to /home/&lt;cloud_shell_user&gt;/workbook/cli.env.
 
 wb17_card02</code></pre>
@@ -400,6 +427,10 @@ clear
 printf '%-34s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------------" "-----" \
+  "WORKBOOK_DIR" "${WORKBOOK_DIR:-}" \
+  "BIN_DIR" "${BIN_DIR:-}" \
+  "REPORT_DIR" "${REPORT_DIR:-}" \
+  "JSON_DIR" "${JSON_DIR:-}" \
   "TENANCY_ID" "${TENANCY_ID:-}" \
   "REGION" "${REGION:-}" \
   "POC_PARENT_COMPARTMENT_NAME" "${POC_PARENT_COMPARTMENT_NAME:-}" \
@@ -413,7 +444,11 @@ printf '%-34s | %s\n' \
   "NSG_BASTION_OCID" "${NSG_BASTION_OCID:-}" \
   "BASTION_VM_OCID" "${BASTION_VM_OCID:-}" \
   "BASTION_PUBLIC_IP" "${BASTION_PUBLIC_IP:-}" \
+  "OL9_MARKETPLACE_IMAGE_OCID" "${OL9_MARKETPLACE_IMAGE_OCID:-}" \
+  "OBJECT_STORAGE_NAMESPACE" "${OBJECT_STORAGE_NAMESPACE:-}" \
   "ADMIN_BUCKET_NAME" "${ADMIN_BUCKET_NAME:-}" \
+  "SSH_PRIVATE_KEY_FILE" "${SSH_PRIVATE_KEY_FILE:-}" \
+  "EXADATA_SSH_PRIVATE_KEY_FILE" "${EXADATA_SSH_PRIVATE_KEY_FILE:-}" \
   "VM_CLUSTER_OCID" "${VM_CLUSTER_OCID:-}" \
   "EXADATA_ENABLED_ECPU_COUNT" "${EXADATA_ENABLED_ECPU_COUNT:-}" \
   "EXADATA_TOTAL_ECPU_COUNT" "${EXADATA_TOTAL_ECPU_COUNT:-}" \
@@ -422,9 +457,13 @@ printf '%-34s | %s\n' \
   "CDB_OCID" "${CDB_OCID:-}" \
   "PDB_OCID" "${PDB_OCID:-}" \
   "DBMGMT_PRIVATE_ENDPOINT_OCID" "${DBMGMT_PRIVATE_ENDPOINT_OCID:-}" \
+  "DBMGMT_SECRET_POLICY_OCID" "${DBMGMT_SECRET_POLICY_OCID:-}" \
   "FSS_FILE_SYSTEM_OCID" "${FSS_FILE_SYSTEM_OCID:-}" \
   "FSS_DBCLIENT_MOUNT_TARGET_OCID" "${FSS_DBCLIENT_MOUNT_TARGET_OCID:-}" \
-  "FSS_DBCLIENT_EXPORT_OCID" "${FSS_DBCLIENT_EXPORT_OCID:-}"
+  "FSS_DBCLIENT_EXPORT_OCID" "${FSS_DBCLIENT_EXPORT_OCID:-}" \
+  "FSS_CLUSTER_MOUNT_HOST" "${FSS_CLUSTER_MOUNT_HOST:-}" \
+  "FSS_EXPORT_PATH" "${FSS_EXPORT_PATH:-}" \
+  "FSS_MOUNT_POINT" "${FSS_MOUNT_POINT:-}"
 printf '\n%s\n' "wb17_card03"
 }
 
@@ -440,6 +479,10 @@ wb17_card03</code></pre>
   </div>
   <pre class="code-scroll"><code>VARIABLE                           | VALUE
 ---------------------------------- | -----
+WORKBOOK_DIR                       | /home/&lt;cloud_shell_user&gt;/workbook
+BIN_DIR                            | /home/&lt;cloud_shell_user&gt;/workbook/bin
+REPORT_DIR                         | /home/&lt;cloud_shell_user&gt;/workbook/reports
+JSON_DIR                           | /home/&lt;cloud_shell_user&gt;/workbook/json
 TENANCY_ID                         | &lt;tenancy_ocid&gt;
 REGION                             | &lt;region&gt;
 POC_PARENT_COMPARTMENT_NAME        | Partner
@@ -449,6 +492,10 @@ VCN_OCID                           | &lt;vcn_ocid&gt;
 NSG_BASTION_OCID                   | &lt;bastion_nsg_ocid&gt;
 BASTION_VM_OCID                    | &lt;bastion_vm_ocid&gt;
 BASTION_PUBLIC_IP                  | &lt;bastion_public_ip&gt;
+OL9_MARKETPLACE_IMAGE_OCID         | &lt;ol9_marketplace_image_ocid&gt;
+OBJECT_STORAGE_NAMESPACE           | &lt;object_storage_namespace&gt;
+SSH_PRIVATE_KEY_FILE               | &lt;bastion_private_key_object_name&gt;
+EXADATA_SSH_PRIVATE_KEY_FILE       | &lt;cluster_private_key_object_name&gt;
 VM_CLUSTER_OCID                    | &lt;vm_cluster_ocid&gt;
 EXADATA_ENABLED_ECPU_COUNT         | &lt;enabled_ecpu_count&gt;
 EXADATA_TOTAL_ECPU_COUNT           | &lt;total_ecpu_count&gt;
@@ -456,37 +503,235 @@ EXADATA_VM_FS_STORAGE_GB           | &lt;vm_file_system_storage_gb&gt;
 CDB_OCID                           | &lt;cdb_ocid&gt;
 PDB_OCID                           | &lt;pdb_ocid&gt;
 DBMGMT_PRIVATE_ENDPOINT_OCID       | &lt;dbmgmt_private_endpoint_ocid&gt;
+DBMGMT_SECRET_POLICY_OCID          | &lt;dbmgmt_secret_policy_ocid&gt;
 FSS_FILE_SYSTEM_OCID                | &lt;file_system_ocid&gt;
 FSS_DBCLIENT_MOUNT_TARGET_OCID      | &lt;dbclient_mount_target_ocid&gt;
 FSS_DBCLIENT_EXPORT_OCID            | &lt;dbclient_export_ocid&gt;
+FSS_CLUSTER_MOUNT_HOST              | &lt;dbclient_mount_target_host&gt;
+FSS_EXPORT_PATH                     | /FileSystem-01
+FSS_MOUNT_POINT                     | /mnt/FileSystem-01
 
 wb17_card03</code></pre>
 </div>
-      </section><section id="bash-04-create-reusable-bastion-ssh-script" class="article-section">
-        <h2>BASH 04 - Create reusable bastion SSH script</h2>
-        <h3>BASH 04 - Create reusable bastion SSH script</h3>
-<p>This card follows the same connection pattern used by Chapter 11 BASH 02. In a recovered Cloud Shell, <code>~/workbook/cli.env</code> can contain <code>ADMIN_BUCKET_NAME</code>, <code>SSH_PRIVATE_KEY_FILE</code>, and <code>BASTION_PUBLIC_IP</code> while the local <code>~/keys</code> directory is empty, so this card downloads the private key object before creating the reusable connection script.</p>
+      </section><section id="bash-04-allow-cloud-shell-ssh-access-to-the-bastion" class="article-section">
+        <h2>BASH 04 - Allow Cloud Shell SSH access to the bastion</h2>
+        <p>This recovery card reuses the SSH ingress pattern from Chapter 11 BASH 06. It resolves the current Cloud Shell public IPv4 address by default, then adds it as a <code>/32</code> TCP port 22 ingress rule on <code>NSG_BASTION_OCID</code>. The operation is idempotent: it reports an existing matching rule instead of creating a duplicate. To allow a different approved public IPv4 address, pass it as the first parameter: <code>wb17_card04 &lt;approved_source_ip&gt;</code>.</p>
+<h3>BASH 04 - Allow Cloud Shell SSH access to the bastion</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Recreate the bastion SSH private key under <code>~/keys</code> when needed, create <code>~/workbook/bin/connect-bastion-vm.sh</code> using the recovered bastion values, and open the bastion SSH session.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create and run a reusable script that adds an SSH ingress rule for the current Cloud Shell public IP, or a supplied approved source IP, to the recovered bastion NSG.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb17_card04() {
 
+BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
+JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
+REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+SCRIPT_FILE="$BIN_DIR/allow-bastion-ssh-source.sh"
+SOURCE_IP="${1:-}"
+SOURCE_IP_MODE="provided"
+
+if [ -z "$SOURCE_IP" ]; then
+  SOURCE_IP="$(curl -fsS https://api.ipify.org)" || {
+    printf 'STOP: Unable to resolve the current Cloud Shell public IP. Run wb17_card04 &lt;approved_source_ip&gt;.\n' &gt;&amp;2
+    return 1
+  }
+  SOURCE_IP_MODE="current Cloud Shell public IP"
+fi
+
+mkdir -p "$BIN_DIR" "$JSON_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR"
+
+cat &gt; "$SCRIPT_FILE" &lt;&lt;'SCRIPT'
+#!/bin/sh
+
+allow_bastion_ssh_source() {
+  . "$HOME/workbook/env.sh" --quiet || return 1
+
+  WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+  BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
+  JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
+  REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+  mkdir -p "$BIN_DIR" "$JSON_DIR" "$REPORT_DIR"
+  chmod 700 "$BIN_DIR"
+
+  SOURCE_IP="${1:-}"
+  SOURCE_IP_MODE="${2:-provided}"
+  RULE_FILE="$JSON_DIR/nsg-bastion-ssh-source-rule.json"
+  RULES_JSON="$JSON_DIR/nsg-bastion-existing-rules.json"
+  RULE_ID_FILE="$REPORT_DIR/nsg-bastion-ssh-source-rule-id.txt"
+  RULE_ADD_ERROR_FILE="$REPORT_DIR/nsg-bastion-ssh-source-rule-add-error.txt"
+  SOURCE_SSH_CIDR="$SOURCE_IP/32"
+  RULE_DESCRIPTION="Allow SSH from approved source IP - Custom"
+
+  if [ "$SOURCE_IP_MODE" = "current Cloud Shell public IP" ]; then
+    RULE_DESCRIPTION="Allow SSH from approved source IP - Cloud Shell"
+  fi
+
+  missing=0
+  for name in REGION NSG_BASTION_OCID SOURCE_IP; do
+    eval "value=\${$name:-}"
+    if [ -z "$value" ]; then
+      printf 'STOP: Missing required variable: %s\n' "$name" &gt;&amp;2
+      missing=1
+    fi
+  done
+
+  case "$SOURCE_IP" in
+    *[!0-9.]*|*.*.*.*.*|.*|*.)
+      printf 'STOP: Source IP is not a valid IPv4 address: %s\n' "$SOURCE_IP" &gt;&amp;2
+      missing=1
+      ;;
+  esac
+
+  [ "$missing" -eq 0 ] || return 1
+
+  oci network nsg rules list \
+    --region "$REGION" \
+    --nsg-id "$NSG_BASTION_OCID" \
+    --direction INGRESS \
+    --all \
+    --output json &gt; "$RULES_JSON"
+
+  EXISTING_RULE_ID="$(
+    jq -r --arg cidr "$SOURCE_SSH_CIDR" '
+      .data[]
+      | select(.direction == "INGRESS")
+      | select(.protocol == "6")
+      | select(.source == $cidr)
+      | select(."source-type" == "CIDR_BLOCK")
+      | select(."tcp-options"."destination-port-range".min == 22)
+      | select(."tcp-options"."destination-port-range".max == 22)
+      | .id' "$RULES_JSON" | head -n 1
+  )"
+
+  if [ -z "$EXISTING_RULE_ID" ]; then
+    cat &gt; "$RULE_FILE" &lt;&lt;EOF
+[
+  {
+    "description": "$RULE_DESCRIPTION",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "$SOURCE_SSH_CIDR",
+    "sourceType": "CIDR_BLOCK",
+    "tcpOptions": {"destinationPortRange": {"min": 22, "max": 22}}
+  }
+]
+EOF
+
+    if ! oci network nsg rules add \
+      --region "$REGION" \
+      --nsg-id "$NSG_BASTION_OCID" \
+      --security-rules "file://$RULE_FILE" \
+      --query 'data[].id' \
+      --raw-output &gt; "$RULE_ID_FILE" 2&gt; "$RULE_ADD_ERROR_FILE"; then
+      printf 'STOP: OCI did not add the SSH ingress rule. Details: %s\n' "$RULE_ADD_ERROR_FILE" &gt;&amp;2
+      cat "$RULE_ADD_ERROR_FILE" &gt;&amp;2
+      return 1
+    fi
+
+    oci network nsg rules list \
+      --region "$REGION" \
+      --nsg-id "$NSG_BASTION_OCID" \
+      --direction INGRESS \
+      --all \
+      --output json &gt; "$RULES_JSON"
+    NSG_RULE_ID="$(
+      jq -r --arg cidr "$SOURCE_SSH_CIDR" '
+        .data[]
+        | select(.direction == "INGRESS")
+        | select(.protocol == "6")
+        | select(.source == $cidr)
+        | select(."source-type" == "CIDR_BLOCK")
+        | select(."tcp-options"."destination-port-range".min == 22)
+        | select(."tcp-options"."destination-port-range".max == 22)
+        | .id' "$RULES_JSON" | head -n 1
+    )"
+    if [ -z "$NSG_RULE_ID" ]; then
+      printf 'STOP: OCI accepted the request but the SSH ingress rule is not visible in the bastion NSG.\n' &gt;&amp;2
+      return 1
+    fi
+    NSG_RULE_STATUS="added"
+  else
+    NSG_RULE_STATUS="already present"
+    NSG_RULE_ID="$EXISTING_RULE_ID"
+  fi
+
+  clear
+  printf '%-28s | %s\n' \
+    "FIELD" "VALUE" \
+    "----------------------------" "-----" \
+    "SOURCE_IP_MODE" "$SOURCE_IP_MODE" \
+    "SOURCE_IP" "$SOURCE_IP" \
+    "SOURCE_SSH_CIDR" "$SOURCE_SSH_CIDR" \
+    "NSG_BASTION_OCID" "$NSG_BASTION_OCID" \
+    "NSG_RULE_STATUS" "$NSG_RULE_STATUS" \
+    "NSG_RULE_ID" "$NSG_RULE_ID" \
+    "SCRIPT_FILE" "$HOME/workbook/bin/allow-bastion-ssh-source.sh"
+}
+
+allow_bastion_ssh_source "$@"
+SCRIPT
+
+chmod 700 "$SCRIPT_FILE"
+"$SCRIPT_FILE" "$SOURCE_IP" "$SOURCE_IP_MODE"
+printf '\n%s\n' "wb17_card04"
+}
+
+wb17_card04</code></pre>
+</div>
+<h3>OUTPUT 04 - Expected bastion NSG SSH ingress output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the approved source IP was added, or was already present, as an SSH <code>/32</code> ingress source for the recovered bastion NSG.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                        | VALUE
+---------------------------- | -----
+SOURCE_IP_MODE               | current Cloud Shell public IP
+SOURCE_IP                    | &lt;source_ip&gt;
+SOURCE_SSH_CIDR              | &lt;source_ip&gt;/32
+NSG_BASTION_OCID             | &lt;bastion_nsg_ocid&gt;
+NSG_RULE_STATUS              | added
+NSG_RULE_ID                  | &lt;nsg_security_rule_id&gt;
+SCRIPT_FILE                  | /home/&lt;cloud_shell_user&gt;/workbook/bin/allow-bastion-ssh-source.sh
+
+wb17_card04</code></pre>
+</div>
+      </section><section id="bash-05-create-reusable-bastion-ssh-script" class="article-section">
+        <h2>BASH 05 - Create reusable bastion SSH script</h2>
+        <h3>BASH 05 - Create reusable bastion SSH script</h3>
+<p>This card follows the same connection pattern used by Chapter 11 BASH 02. In a recovered Cloud Shell, <code>~/workbook/cli.env</code> can contain the bastion and Exadata VM cluster key object names while the local <code>~/keys</code> directory is empty, so this card restores both private keys before creating the reusable connection script. The generated helper connects as <code>oracle</code> when called without an argument; pass another user, such as <code>opc</code>, as its first argument when required.</p>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Recreate the bastion and Exadata VM cluster private keys under <code>~/keys</code> when needed, create <code>~/workbook/bin/connect-bastion-vm.sh</code> that connects as <code>oracle</code> by default or as a specified user, and open the bastion SSH session.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
+wb17_card05() {
+
 KEY_DIR="$HOME/keys"
-BASTION_SSH_USER="${BASTION_SSH_USER:-opc}"
 BASTION_KEY_OBJECT_NAME="$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
 BASTION_PRIVATE_KEY_PATH="$KEY_DIR/$BASTION_KEY_OBJECT_NAME"
+CLUSTER_KEY_OBJECT_NAME="$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-}")"
+CLUSTER_PRIVATE_KEY_PATH="$KEY_DIR/$CLUSTER_KEY_OBJECT_NAME"
 BIN_DIR="$WORKBOOK_DIR/bin"
 BASTION_CONNECT_SCRIPT="$BIN_DIR/connect-bastion-vm.sh"
 missing=0
 
-for name in REGION ADMIN_BUCKET_NAME OBJECT_STORAGE_NAMESPACE BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE; do
+for name in REGION ADMIN_BUCKET_NAME OBJECT_STORAGE_NAMESPACE BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE EXADATA_SSH_PRIVATE_KEY_FILE; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
     printf 'STOP: Missing required variable: %s\n' "$name" &gt;&amp;2
@@ -497,32 +742,36 @@ done
 
 mkdir -p "$KEY_DIR" "$BIN_DIR"
 chmod 700 "$KEY_DIR" "$BIN_DIR"
-if [ ! -s "$BASTION_PRIVATE_KEY_PATH" ]; then
-  printf 'Downloading bastion private key object: %s ...\n' "$BASTION_KEY_OBJECT_NAME"
-  oci os object get \
-    --region "$REGION" \
-    --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
-    --bucket-name "$ADMIN_BUCKET_NAME" \
-    --name "$BASTION_KEY_OBJECT_NAME" \
-    --file "$BASTION_PRIVATE_KEY_PATH"
-fi
-
-if [ ! -s "$BASTION_PRIVATE_KEY_PATH" ]; then
-  clear
-  printf 'STOP: Missing bastion private key: %s\n' "$BASTION_PRIVATE_KEY_PATH" &gt;&amp;2
-  return 1
-fi
-chmod 600 "$BASTION_PRIVATE_KEY_PATH"
-upsert_cli_env BASTION_SSH_USER "$BASTION_SSH_USER" &gt;/dev/null
+for key_label in bastion cluster; do
+  if [ "$key_label" = bastion ]; then
+    key_object_name="$BASTION_KEY_OBJECT_NAME"
+    key_path="$BASTION_PRIVATE_KEY_PATH"
+  else
+    key_object_name="$CLUSTER_KEY_OBJECT_NAME"
+    key_path="$CLUSTER_PRIVATE_KEY_PATH"
+  fi
+  if [ ! -s "$key_path" ]; then
+    printf 'Downloading %s private key object: %s ...\n' "$key_label" "$key_object_name"
+    oci os object get \
+      --region "$REGION" \
+      --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+      --bucket-name "$ADMIN_BUCKET_NAME" \
+      --name "$key_object_name" \
+      --file "$key_path" || return 1
+  fi
+  [ -s "$key_path" ] || { printf 'STOP: Missing %s private key: %s\n' "$key_label" "$key_path" &gt;&amp;2; return 1; }
+  chmod 600 "$key_path"
+done
 
 cat &gt; "$BASTION_CONNECT_SCRIPT" &lt;&lt;SCRIPT
 #!/bin/sh
-BASTION_USER='$BASTION_SSH_USER'
+BASTION_DEFAULT_USER='oracle'
 BASTION_HOST='$BASTION_PUBLIC_IP'
 BASTION_KEY_NAME='$BASTION_KEY_OBJECT_NAME'
 BASTION_KEY_PATH="\$HOME/keys/\$BASTION_KEY_NAME"
 
 connect_bastion_vm() {
+  BASTION_USER="\${1:-\$BASTION_DEFAULT_USER}"
   [ -f "\$BASTION_KEY_PATH" ] || { printf 'STOP: Missing bastion key: %s\n' "\$BASTION_KEY_PATH" &gt;&amp;2; return 1; }
   chmod 700 "\$HOME/keys" "\$BASTION_KEY_PATH"
   printf 'Opening bastion SSH session to %s@%s\n' "\$BASTION_USER" "\$BASTION_HOST"
@@ -530,7 +779,7 @@ connect_bastion_vm() {
   ssh -i "\$BASTION_KEY_PATH" "\$BASTION_USER@\$BASTION_HOST"
 }
 
-connect_bastion_vm
+connect_bastion_vm "\$@"
 SCRIPT
 chmod 700 "$BASTION_CONNECT_SCRIPT"
 if ! grep -q '$HOME/workbook/bin' "$WORKBOOK_DIR/env.sh" 2&gt;/dev/null; then
@@ -539,15 +788,17 @@ fi
 
 clear
 printf '%s\n' "Opening bastion SSH session."
+printf '%s\n' "Default user: oracle. To use opc later: connect-bastion-vm.sh opc"
+printf '%s\n' "Cluster private key restored: $CLUSTER_PRIVATE_KEY_PATH"
 printf '%s\n' "When the bastion prompt appears, run: exit"
 printf 'Reusable script: %s\n\n' "$BASTION_CONNECT_SCRIPT"
 "$BASTION_CONNECT_SCRIPT"
-printf '\n%s\n' "wb17_card04"
+printf '\n%s\n' "wb17_card05"
 }
 
-wb17_card04</code></pre>
+wb17_card05</code></pre>
 </div>
-<h3>OUTPUT 04 - Expected bastion SSH script output</h3>
+<h3>OUTPUT 05 - Expected bastion SSH script output</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -556,22 +807,25 @@ wb17_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the reusable bastion SSH script was created and the bastion SSH session opens.</span>
   </div>
   <pre class="code-scroll"><code>Opening bastion SSH session.
+Default user: oracle. To use opc later: connect-bastion-vm.sh opc
+Cluster private key restored: /home/&lt;cloud_shell_user&gt;/keys/vmcluster-01_rsa
 When the bastion prompt appears, run: exit
 Reusable script: /home/EFRAIN_SAN/workbook/bin/connect-bastion-vm.sh
 
-Opening bastion SSH session to opc@132.145.169.254
+Opening bastion SSH session to oracle@132.145.169.254
 When finished, run: exit
 Last login: Fri Jul 10 16:19:42 2026 from 129.146.198.242
-[opc@bastion-01 ~]$ exit
+[oracle@bastion-01 ~]$ exit
 logout
 Connection to 132.145.169.254 closed.
 
-wb17_card04
+wb17_card05
 $</code></pre>
 </div>
-      </section><section id="bash-05-create-reusable-cluster-node-ssh-script" class="article-section">
-        <h2>BASH 05 - Create reusable cluster node SSH script</h2>
-        <h3>BASH 05 - Create reusable cluster node SSH script</h3>
+<p>After the bastion prompt appears, run <code>exit</code> to close the SSH session and return to the Cloud Shell prompt before continuing with BASH 06.</p>
+      </section><section id="bash-06-create-reusable-cluster-node-ssh-script" class="article-section">
+        <h2>BASH 06 - Create reusable cluster node SSH script</h2>
+        <h3>BASH 06 - Create reusable cluster node SSH script</h3>
 <p>This card follows the Chapter 11 BASH 03 jump-host pattern. It does not open both node sessions automatically because each SSH session is interactive; it prints the exact commands to connect to node 1 or node 2.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -583,7 +837,7 @@ $</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb17_card05() {
+wb17_card06() {
 
 KEY_DIR="$HOME/keys"
 BIN_DIR="$WORKBOOK_DIR/bin"
@@ -622,7 +876,7 @@ chmod 700 "$KEY_DIR" "$BIN_DIR"
 for file_path in "$BASTION_KEY_PATH" "$CLUSTER_KEY_PATH"; do
   if [ ! -s "$file_path" ]; then
     printf 'STOP: Missing SSH key file: %s\n' "$file_path" &gt;&amp;2
-    printf 'Run wb17_card04 first so keys are restored under ~/keys.\n' &gt;&amp;2
+    printf 'Run wb17_card05 first so keys are restored under ~/keys.\n' &gt;&amp;2
     return 1
   fi
 done
@@ -695,12 +949,12 @@ printf '%-34s | %s\n' \
   "NODE_2" "$(sed -n '2p' "$CLUSTER_HOSTS_FILE")" \
   "CONNECT_NODE_1" "connect-cluster-node.sh 1 oracle" \
   "CONNECT_NODE_2" "connect-cluster-node.sh 2 oracle"
-printf '\n%s\n' "wb17_card05"
+printf '\n%s\n' "wb17_card06"
 }
 
-wb17_card05</code></pre>
+wb17_card06</code></pre>
 </div>
-<h3>OUTPUT 05 - Expected cluster node SSH script output</h3>
+<h3>OUTPUT 06 - Expected cluster node SSH script output</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -716,7 +970,7 @@ NODE_2                             | exasc012-ahuip.client.poc.oraclevcn.com
 CONNECT_NODE_1                     | connect-cluster-node.sh 1 oracle
 CONNECT_NODE_2                     | connect-cluster-node.sh 2 oracle
 
-wb17_card05
+wb17_card06
 $ connect-cluster-node.sh 1 oracle
 Opening cluster node 1 through bastion: exasc011-fxafi.client.poc.oraclevcn.com as oracle
 [oracle@exasc011-fxafi ~]$ exit
@@ -731,9 +985,9 @@ logout
 Connection to exasc012-ahuip.client.poc.oraclevcn.com closed.
 Connection to 132.145.169.254 closed.</code></pre>
 </div>
-      </section><section id="bash-06-mount-file-storage-on-exadata-vm-cluster-nodes" class="article-section">
-        <h2>BASH 06 - Mount File Storage on Exadata VM cluster nodes</h2>
-        <h3>BASH 06 - Mount File Storage on Exadata VM cluster nodes</h3>
+      </section><section id="bash-07-mount-file-storage-on-exadata-vm-cluster-nodes" class="article-section">
+        <h2>BASH 07 - Mount File Storage on Exadata VM cluster nodes</h2>
+        <h3>BASH 07 - Mount File Storage on Exadata VM cluster nodes</h3>
 <p>This recovery card uses the same default File Storage values as Chapter 15 BASH 01 when the <code>FSS_*</code> variables are not present in <code>~/workbook/cli.env</code>.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -745,7 +999,7 @@ Connection to 132.145.169.254 closed.</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb17_card06() {
+wb17_card07() {
 
 KEY_DIR="$HOME/keys"
 BIN_DIR="$WORKBOOK_DIR/bin"
@@ -867,12 +1121,12 @@ clear
 printf 'Cluster File Storage mount script: %s\n' "$LOCAL_MOUNT_SCRIPT"
 printf 'Remote bastion script: %s\n' "$REMOTE_MOUNT_SCRIPT"
 "$LOCAL_MOUNT_SCRIPT"
-printf '\n%s\n' "wb17_card06"
+printf '\n%s\n' "wb17_card07"
 }
 
-wb17_card06</code></pre>
+wb17_card07</code></pre>
 </div>
-<h3>OUTPUT 06 - Expected cluster File Storage mount output</h3>
+<h3>OUTPUT 07 - Expected cluster File Storage mount output</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -906,11 +1160,11 @@ Filesystem                                    Size  Used Avail Use% Mounted on
 fs01.client.poc.oraclevcn.com:/FileSystem-01  8.0E     0  8.0E   0% /mnt/FileSystem-01
 1.5K    /mnt/FileSystem-01
 
-wb17_card06</code></pre>
+wb17_card07</code></pre>
 </div>
-      </section><section id="bash-07-create-executive-recovery-report" class="article-section">
-        <h2>BASH 07 - Create executive recovery report</h2>
-        <h3>BASH 07 - Create executive recovery report</h3>
+      </section><section id="bash-08-create-executive-recovery-report" class="article-section">
+        <h2>BASH 08 - Create executive recovery report</h2>
+        <h3>BASH 08 - Create executive recovery report</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -921,7 +1175,7 @@ wb17_card06</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb17_card07() {
+wb17_card08() {
 
 REPORT_DIR="$WORKBOOK_DIR/reports"
 REPORT_FILE="$REPORT_DIR/recovery-executive-report.txt"
@@ -1009,12 +1263,12 @@ fi
 
 clear
 cat "$REPORT_FILE"
-printf '\n%s\n' "wb17_card07"
+printf '\n%s\n' "wb17_card08"
 }
 
-wb17_card07</code></pre>
+wb17_card08</code></pre>
 </div>
-<h3>OUTPUT 07 - Expected executive report summary</h3>
+<h3>OUTPUT 08 - Expected executive report summary</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -1053,7 +1307,7 @@ Missing variable detail
 ----------------------------------------
 Note: No missing variables were reported by recovery-status.tsv.
 
-wb17_card07</code></pre>
+wb17_card08</code></pre>
 </div>
       </section><section id="reuse-notes" class="article-section">
         <h2>Reuse notes</h2>

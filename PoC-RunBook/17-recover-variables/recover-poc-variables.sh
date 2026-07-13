@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SCRIPT_CREATED_AT="2026-07-10 12:13:58 CST"
+SCRIPT_CREATED_AT="2026-07-13 13:29:57 CST"
 printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
 
 . "$HOME/workbook/helpers.sh" || exit 1
@@ -208,7 +208,9 @@ INITIAL_BACKUP_OCID="$(
   ' "$BACKUP_LIST_JSON" 2>/dev/null
 )"
 DBMGMT_MANAGEMENT_TYPE=ADVANCED; DBMGMT_CREDENTIAL_USERNAME=SYSTEM; DBMGMT_PROTOCOL=TCP; DBMGMT_PORT=1521; DBMGMT_ROLE=NORMAL; DBMGMT_SECRET_POLICY_NAME=DBMgmt_Resource_Policy
-DBMGMT_SYSTEM_SECRET_OCID="$CDB_SYSTEM_SECRET_OCID"; DBMGMT_PASSWORD_SECRET_OCID="$CDB_SYSTEM_SECRET_OCID"; DBMGMT_IAM_HOME_REGION=us-phoenix-1; DBMGMT_SECRET_POLICY_COMPARTMENT_NAME="$POC_COMPARTMENT_NAME"
+DBMGMT_SYSTEM_SECRET_OCID="$CDB_SYSTEM_SECRET_OCID"; DBMGMT_PASSWORD_SECRET_OCID="$CDB_SYSTEM_SECRET_OCID"; DBMGMT_SECRET_POLICY_COMPARTMENT_NAME="$POC_COMPARTMENT_NAME"
+DBMGMT_IAM_HOME_REGION="$(ociq oci iam region-subscription list --tenancy-id "$TENANCY_ID" --all --query 'data[?"is-home-region"==`true`]."region-name" | [0]')"
+DBMGMT_IAM_HOME_REGION="${DBMGMT_IAM_HOME_REGION:-${IAM_HOME_REGION:-${HOME_REGION:-us-phoenix-1}}}"
 DBMGMT_SECRET_POLICY_OCID="$(ociq oci iam policy list --region "$DBMGMT_IAM_HOME_REGION" --compartment-id "$POC_COMPARTMENT_OCID" --name "$DBMGMT_SECRET_POLICY_NAME" --all --query 'data[0].id')"
 note "Credential vault: ${CDB_CREDENTIAL_VAULT_OCID:-<not_found>}"
 note "Credential key: ${CDB_CREDENTIAL_KEY_OCID:-<not_found>}"
@@ -218,6 +220,7 @@ note "Recovery Service subnet: ${RECOVERY_SERVICE_SUBNET_OCID:-<not_found>}"
 note "Protection policy: ${PROTECTION_POLICY_OCID:-<not_found>}"
 note "Initial backup: ${INITIAL_BACKUP_OCID:-<not_found>}"
 note "DB Management private endpoint: ${DBMGMT_PRIVATE_ENDPOINT_OCID:-<not_found>}"
+note "DB Management secret policy: ${DBMGMT_SECRET_POLICY_OCID:-<not_found>}"
 
 AVAILABILITY_DOMAIN="$(ociq oci iam availability-domain list --region "$REGION" --compartment-id "$TENANCY_ID" --query 'data[0].name')"
 EXADATA_AVAILABILITY_DOMAIN="$(ociq oci iam availability-domain list --region "$REGION" --compartment-id "$TENANCY_ID" --query 'data[1].name')"
@@ -225,7 +228,8 @@ EXADATA_AD_NUMBER=2; EXADATA_STORAGE_GB=512; EXADB_SHAPE=EXADBXS; EXADB_SHAPE_AT
 EXADATA_CLUSTER_NAME="${EXADATA_CLUSTER_NAME:-vmc01}"; EXADATA_ENABLED_ECPU_COUNT="${EXADATA_ENABLED_ECPU_COUNT:-8}"; EXADATA_TOTAL_ECPU_COUNT="${EXADATA_TOTAL_ECPU_COUNT:-8}"; EXADATA_VM_FS_STORAGE_GB="${EXADATA_VM_FS_STORAGE_GB:-260}"
 EXADATA_SCAN_PORT_TCP="${EXADATA_SCAN_PORT_TCP:-1521}"; EXADATA_SCAN_PORT_TCPS="${EXADATA_SCAN_PORT_TCPS:-2484}"; EXADATA_TIME_ZONE="${EXADATA_TIME_ZONE:-UTC}"; LICENSE_MODEL="${LICENSE_MODEL:-BRING_YOUR_OWN_LICENSE}"
 EXADATA_SYSTEM_VERSION=25.2.3.0.0.251020; EXADATA_TARGET_SYSTEM_VERSION=25.2.11.0.0.260604.1; TOTAL_ECPU_PER_VM=12; ENABLED_ECPU_PER_VM=8; TARGET_MEMORY_GB_PER_VM=33
-BASTION_SHAPE=VM.Standard.E5.Flex; OL9_MARKETPLACE_IMAGE_OCID="$(ociq oci compute image list --region "$REGION" --compartment-id "$TENANCY_ID" --operating-system 'Oracle Linux' --operating-system-version 9 --shape "$BASTION_SHAPE" --all --query 'data[?contains("display-name", `Oracle-Linux-9`)] | [0].id')"
+BASTION_SHAPE=VM.Standard.E5.Flex; OL9_MARKETPLACE_IMAGE_OCID="$(ociq oci compute image list --region "$REGION" --compartment-id "$TENANCY_ID" --operating-system 'Oracle Linux' --shape "$BASTION_SHAPE" --sort-by TIMECREATED --sort-order DESC --query 'data[?contains("display-name", `Oracle-Linux-9`)] | [0].id')"
+note "Oracle Linux 9 image: ${OL9_MARKETPLACE_IMAGE_OCID:-<not_found>}"
 VAULT_OCID="$(first_id oci db exascale-db-storage-vault list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --display-name Vault-01 --all)"
 GRID_IMAGE_ID_AD1=ocid1.dbpatch.oc1.iad.anuwcljtt5t4sqqasz3qnoo5rd57dcduckkxleotng5hnyxx22vko2g3w7ra
 GRID_IMAGE_ID_AD2=ocid1.dbpatch.oc1.iad.anuwcljst5t4sqqa352vh7qiqpual26qxqwkmkcqiyi6draczpiblr73araa
