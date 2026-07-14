@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+REPORT_SCRIPT_UPDATED_DATE="2026-07-14 14:44:28 CDT"
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
 mkdir -p "$REPORT_DIR"
@@ -456,6 +457,7 @@ show_full_report() {
   section "OCI PoC RunBook Executive Report"
   kv_header
   kv "Generated UTC" "$(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+  kv "Report script updated" "$REPORT_SCRIPT_UPDATED_DATE"
   kv "Region" "${REGION:-NOT_AVAILABLE}"
   kv "Workbook directory" "$WORKBOOK_DIR"
   kv "Report file" "$REPORT_FILE"
