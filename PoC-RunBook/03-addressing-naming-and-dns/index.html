@@ -33,7 +33,7 @@
         <h1>Addressing, Naming, and DNS</h1>
         <p class="subtitle">This chapter defines the IP addressing, subnet names, DNS labels, and resolver posture required for an Exadata-ready OCI VCN baseline.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 14, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -54,86 +54,50 @@
       <section id="chapter-purpose" class="article-section">
         <h2>Chapter Purpose</h2>
         <div class="note-box">This chapter defines the IP addressing, subnet names, DNS labels, and resolver posture required for an Exadata-ready OCI VCN baseline.</div>
+<div class="note-box">For this PoC, these network artifacts use the one assigned <code>Partner/&lt;assigned PoC compartment&gt;</code> compartment. Production can distribute artifacts across compartments to enforce ownership and separation of duties.</div>
       </section><section id="logical-architecture" class="article-section">
         <h2>Logical Architecture</h2>
         <div class="architecture-infographic addressing-dns-infographic" aria-label="Addressing, naming, and DNS logical model infographic">
   <div class="architecture-stage architecture-stage-external">
-    <p class="visual-caption">Naming inputs</p>
+    <p class="visual-caption">VCN definition</p>
     <div class="architecture-node node-admin">
       <span class="node-icon" aria-hidden="true">CIDR</span>
-      <strong>VCN address space</strong>
-      <span>Parent private address range selected and reserved before subnet creation.</span>
-    </div>
-    <div class="architecture-node node-internet">
-      <span class="node-icon" aria-hidden="true">VCN</span>
-      <strong>VCN name</strong>
-      <span><code>VCN-&lt;compartment-name&gt;</code>, for example <code>VCN-LAD-01</code>.</span>
-    </div>
-    <div class="architecture-node node-hybrid">
-      <span class="node-icon" aria-hidden="true">DNS</span>
-      <strong>VCN DNS label</strong>
-      <span><code>poc</code> creates the private DNS domain <code>poc.oraclevcn.com</code>.</span>
+      <strong><code>VCN-LAD-01</code></strong>
+      <span><code>10.0.0.0/16</code> with DNS label <code>poc</code>.</span>
     </div>
   </div>
 
   <div class="architecture-stage architecture-stage-vcn">
     <div class="stage-header">
-      <p class="visual-caption">Subnet address and DNS plan</p>
-      <span>Each subnet receives a role-based name and DNS label under <code>poc.oraclevcn.com</code>.</span>
+      <p class="visual-caption">Role-based subnets</p>
+      <span>Named CIDRs stay inside the VCN and derive private names under <code>poc.oraclevcn.com</code>.</span>
     </div>
     <div class="architecture-grid">
       <div class="architecture-node node-bastion">
         <span class="node-icon" aria-hidden="true">ADM</span>
-        <strong>subnet-admin</strong>
-        <span>Bastion and admin access<br><code>admin.poc.oraclevcn.com</code></span>
+        <strong>Admin access</strong>
+        <span><code>subnet-admin</code><br><code>admin.poc.oraclevcn.com</code></span>
       </div>
       <div class="architecture-node node-client">
         <span class="node-icon" aria-hidden="true">CLI</span>
-        <strong>subnet-dbclient</strong>
-        <span>Exadata client and SQL*Net<br><code>client.poc.oraclevcn.com</code></span>
-      </div>
-      <div class="architecture-node node-backup">
-        <span class="node-icon" aria-hidden="true">BKP</span>
-        <strong>subnet-db-backup</strong>
-        <span>Backup and recovery traffic<br><code>backup.poc.oraclevcn.com</code></span>
-      </div>
-      <div class="architecture-node node-dbtools">
-        <span class="node-icon" aria-hidden="true">SQL</span>
-        <strong>subnet-dbtools</strong>
-        <span>Database tools endpoint<br><code>dbtools.poc.oraclevcn.com</code></span>
-      </div>
-      <div class="architecture-node node-lb">
-        <span class="node-icon" aria-hidden="true">LB</span>
-        <strong>subnet-public-lb</strong>
-        <span>Public load balancer tier<br><code>publb.poc.oraclevcn.com</code></span>
-      </div>
-      <div class="architecture-node node-apps">
-        <span class="node-icon" aria-hidden="true">APP</span>
-        <strong>subnet-applications</strong>
-        <span>Private application tier<br><code>apps.poc.oraclevcn.com</code></span>
+        <strong>Private services</strong>
+        <span><code>subnet-dbclient</code>, <code>subnet-db-backup</code>, <code>subnet-dbtools</code>, and <code>subnet-applications</code>.</span>
       </div>
     </div>
   </div>
 
   <div class="architecture-stage architecture-stage-services">
-    <p class="visual-caption">Resolution posture</p>
+    <p class="visual-caption">Private DNS resolution</p>
     <div class="architecture-node node-sgw">
       <span class="node-icon" aria-hidden="true">RES</span>
       <strong>Internet and VCN Resolver</strong>
-      <span>Default private hostname resolution for VCN resources.</span>
-    </div>
-    <div class="architecture-node node-nat">
-      <span class="node-icon" aria-hidden="true">HYB</span>
-      <strong>Optional enterprise forwarding</strong>
-      <span>Use conditional forwarding only when hybrid DNS requires it.</span>
+      <span>Resolves private VCN names; use conditional forwarding only for hybrid DNS.</span>
     </div>
   </div>
 
-  <div class="flow-label flow-admin">CIDR allocation</div>
-  <div class="flow-label flow-web">Subnet names</div>
-  <div class="flow-label flow-sql">DNS labels</div>
-  <div class="flow-label flow-services">Resolver</div>
-  <div class="flow-label flow-hybrid">Hybrid DNS</div>
+  <div class="flow-label flow-admin">CIDR + label</div>
+  <div class="flow-label flow-web">Named subnets</div>
+  <div class="flow-label flow-services">Private resolution</div>
 </div>
 <div class="table-wrap">
 <table class="data-table">
@@ -195,7 +159,7 @@
 <tr>
 <td><code>subnet-admin</code></td>
 <td class="align-right"><code>10.0.0.0/24</code></td>
-<td>Large enough for bastion endpoint, jump-host exception, and admin utilities</td>
+<td>Large enough for the approved Bastion VM used by OCI Cloud Shell and admin utilities</td>
 </tr>
 <tr>
 <td><code>subnet-dbclient</code></td>

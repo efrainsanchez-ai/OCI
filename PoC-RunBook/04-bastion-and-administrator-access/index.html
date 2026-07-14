@@ -33,7 +33,7 @@
         <h1>Bastion and Administrator Access</h1>
         <p class="subtitle">This chapter defines the administrator access path for private resources in the PoC VCN baseline.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 14, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -45,7 +45,7 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#chapter-purpose">Chapter Purpose</a></li><li><a href="#logical-architecture">Logical Architecture</a></li><li><a href="#preferred-model-oci-bastion-service">Preferred Model: OCI Bastion Service</a></li><li><a href="#bastion-access-flow">Bastion Access Flow</a></li><li><a href="#approved-jump-host-exception-model">Approved Jump-Host Exception Model</a></li><li><a href="#administrator-source-cidr-register">Administrator Source CIDR Register</a></li><li><a href="#ssh-key-handling">SSH Key Handling</a></li><li><a href="#validation">Validation</a></li></ol>
+      <ol><li><a href="#chapter-purpose">Chapter Purpose</a></li><li><a href="#logical-architecture">Logical Architecture</a></li><li><a href="#preferred-model-oci-cloud-shell">Preferred Model: OCI Cloud Shell</a></li><li><a href="#bastion-access-flow">Bastion Access Flow</a></li><li><a href="#approved-jump-host-model">Approved Jump-Host Model</a></li><li><a href="#administrator-source-cidr-register">Administrator Source CIDR Register</a></li><li><a href="#ssh-key-handling">SSH Key Handling</a></li><li><a href="#validation">Validation</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
@@ -61,57 +61,42 @@
   <div class="bastion-flow-main">
     <div class="bastion-step step-admin">
       <span class="bastion-step-number">1</span>
-      <span class="bastion-step-icon" aria-hidden="true">ID</span>
-      <strong>Administrator identity</strong>
-      <span>Named user governed by IAM, MFA, and approval workflow.</span>
+      <span class="bastion-step-icon" aria-hidden="true">CS</span>
+      <strong>OCI Cloud Shell</strong>
+      <span>Authenticated administrator workspace; its public egress IP is the originating SSH source.</span>
     </div>
-    <div class="bastion-connector" aria-hidden="true">Session</div>
+    <div class="bastion-connector" aria-hidden="true">Public SSH</div>
     <div class="bastion-step step-session">
       <span class="bastion-step-number">2</span>
       <span class="bastion-step-icon" aria-hidden="true">BST</span>
-      <strong>OCI Bastion or approved jump host</strong>
-      <span>Controlled administrative entry point for private resources.</span>
+      <strong>Bastion VM in <code>subnet-admin</code></strong>
+      <span>Receives Cloud Shell SSH, then provides the controlled hop to private subnets.</span>
       <div class="bastion-nsg-mini">
-        <strong>Bastion/admin NSG</strong>
-        <span><code>nsg-bastion-admin</code></span>
+        <strong>SSH source control</strong>
+        <span><code>nsg-bastion-admin</code>: Cloud Shell public IP <code>/32</code></span>
       </div>
     </div>
-    <div class="bastion-connector" aria-hidden="true">Private</div>
+    <div class="bastion-connector" aria-hidden="true">Private path</div>
     <div class="bastion-step step-target">
       <span class="bastion-step-number">3</span>
       <span class="bastion-step-icon" aria-hidden="true">EXA</span>
-      <strong>Exadata administration target</strong>
-      <span>SSH TCP 22 and SQL*Net validation stay on private paths.</span>
+      <strong>Private subnets</strong>
+      <span>Exadata client and application subnets keep SSH and validation traffic private.</span>
       <div class="bastion-nsg-mini">
-        <strong>Exadata client NSG</strong>
-        <span><code>nsg-exadata-client</code></span>
-      </div>
-    </div>
-    <div class="bastion-connector" aria-hidden="true">Admin</div>
-    <div class="bastion-step step-host">
-      <span class="bastion-step-number">4</span>
-      <span class="bastion-step-icon" aria-hidden="true">APP</span>
-      <strong>Application administration target</strong>
-      <span>Private application hosts can be reached only through the approved path.</span>
-      <div class="bastion-nsg-mini">
-        <strong>Applications NSG</strong>
-        <span><code>nsg-applications</code></span>
+        <strong>Target controls</strong>
+        <span><code>nsg-exadata-client</code> and <code>nsg-applications</code></span>
       </div>
     </div>
   </div>
 
   <div class="bastion-control-panel" aria-label="Administrator access controls">
     <div class="bastion-control">
-      <strong>Identity control</strong>
-      <span>Human access starts with named administrator identity and approval.</span>
+      <strong>One public entry</strong>
+      <span>Only the approved Bastion VM receives public SSH, restricted to the source `/32`.</span>
     </div>
     <div class="bastion-control">
-      <strong>Network control</strong>
-      <span>Only approved source CIDRs can reach the bastion entry point.</span>
-    </div>
-    <div class="bastion-control">
-      <strong>Target control</strong>
-      <span>Private NSGs limit SSH, SQL*Net, and validation traffic by destination.</span>
+      <strong>Private targets</strong>
+      <span>Target NSGs allow only the approved bastion-to-target traffic.</span>
     </div>
   </div>
 </div>
@@ -127,33 +112,33 @@
 <td>Human access source governed by IAM and approval workflow.</td>
 </tr>
 <tr>
-<td>OCI Bastion service or approved jump host</td>
-<td>Controlled administrative access pattern.</td>
+<td>OCI Cloud Shell</td>
+<td>Public-network administrator source for the initial SSH connection.</td>
+</tr>
+<tr>
+<td>Bastion VM in <code>subnet-admin</code></td>
+<td>Controlled SSH hop from Cloud Shell to private subnets.</td>
 </tr>
 <tr>
 <td><code>nsg-bastion-admin</code></td>
-<td>NSG boundary for SSH and admin validation egress.</td>
+<td>Source-specific <code>/32</code> SSH ingress boundary and bastion egress control.</td>
 </tr>
 <tr>
-<td><code>nsg-exadata-client</code></td>
-<td>Private Exadata administration target.</td>
-</tr>
-<tr>
-<td><code>nsg-applications</code></td>
-<td>Private application administration target.</td>
+<td>Private subnets</td>
+<td>Exadata client and application administration targets reached only through the Bastion VM.</td>
 </tr>
 </tbody></table></div>
-      </section><section id="preferred-model-oci-bastion-service" class="article-section">
-        <h2>Preferred Model: OCI Bastion Service</h2>
-        <p>Use OCI Bastion service where possible.</p>
+      </section><section id="preferred-model-oci-cloud-shell" class="article-section">
+        <h2>Preferred Model: OCI Cloud Shell</h2>
+        <p>Use OCI Cloud Shell as the preferred administrator workstation for this workbook. It provides an authenticated OCI CLI environment without requiring local OCI CLI installation or local API-key configuration. From Cloud Shell, connect through the approved Bastion VM to reach private resources.</p>
 <p>Advantages:</p>
 <ul class="article-list">
-<li>No persistent public jump-host compute instance.</li>
-<li>No public IP needed on database nodes.</li>
-<li>Time-bound sessions.</li>
-<li>Identity-based access controls.</li>
-<li>Auditable session creation and deletion.</li>
-<li>Reduced patching and hardening burden compared with a traditional bastion host.</li>
+<li>Browser-based, OCI-authenticated administrator environment.</li>
+<li>OCI CLI and common utilities are ready for workbook execution.</li>
+<li>No local OCI API key, CLI profile, or workstation package installation is required.</li>
+<li>The current Cloud Shell public IP can be restricted to a <code>/32</code> SSH ingress rule on the Bastion VM NSG.</li>
+<li>Database nodes and application targets remain private; Cloud Shell reaches them only through the approved bastion path.</li>
+<li>Cloud Shell is ephemeral, reducing administrator workstation configuration drift.</li>
 </ul>
       </section><section id="bastion-access-flow" class="article-section">
         <h2>Bastion Access Flow</h2>
@@ -162,44 +147,40 @@
     <div class="bastion-step step-admin">
       <span class="bastion-step-number">1</span>
       <span class="bastion-step-icon" aria-hidden="true">ADM</span>
-      <strong>Administrator workstation</strong>
-      <span>Named user starts from an approved source network.</span>
+      <strong>OCI Cloud Shell or Bastion VM</strong>
+      <span>Start in Cloud Shell from its public egress IP, or continue from an existing Bastion VM session.</span>
     </div>
-    <div class="bastion-connector" aria-hidden="true">SSH request</div>
+    <div class="bastion-connector" aria-hidden="true">Get public IP</div>
     <div class="bastion-step step-session">
       <span class="bastion-step-number">2</span>
       <span class="bastion-step-icon" aria-hidden="true">BST</span>
-      <strong>OCI Bastion managed session</strong>
-      <span>Identity-controlled, time-bound access path.</span>
+      <strong>Confirm source `/32` when using Cloud Shell</strong>
+      <span>Before a Cloud Shell connection, ensure its current public IP has TCP <code>22</code> ingress in <code>nsg-bastion-admin</code>.</span>
     </div>
-    <div class="bastion-connector" aria-hidden="true">Private path</div>
+    <div class="bastion-connector" aria-hidden="true">SSH TCP 22</div>
     <div class="bastion-step step-target">
       <span class="bastion-step-number">3</span>
       <span class="bastion-step-icon" aria-hidden="true">VCN</span>
-      <strong>Private target subnet</strong>
-      <span><code>subnet-admin</code> or target Exadata client subnet.</span>
+      <strong>Bastion VM</strong>
+      <span>Connect from Cloud Shell with the approved SSH user, or use the existing Bastion VM session as the controlled hop.</span>
     </div>
-    <div class="bastion-connector" aria-hidden="true">TCP 22</div>
+    <div class="bastion-connector" aria-hidden="true">Private SSH</div>
     <div class="bastion-step step-host">
       <span class="bastion-step-number">4</span>
       <span class="bastion-step-icon" aria-hidden="true">SSH</span>
-      <strong>Approved private host</strong>
-      <span>Private host or target Exadata VM node only.</span>
+      <strong>Private target</strong>
+      <span>Reach an Exadata node or approved application host through target NSG rules.</span>
     </div>
   </div>
 
   <div class="bastion-control-panel" aria-label="Bastion access controls">
     <div class="bastion-control">
-      <strong>Identity gate</strong>
-      <span>IAM policy, MFA, and privileged access workflow.</span>
+      <strong>Source gate</strong>
+      <span>Use the current source public IP as a `/32`; never allow <code>0.0.0.0/0</code>.</span>
     </div>
     <div class="bastion-control">
-      <strong>Network gate</strong>
-      <span>Approved CIDR allowlist; no <code>0.0.0.0/0</code> SSH.</span>
-    </div>
-    <div class="bastion-control">
-      <strong>Session guardrail</strong>
-      <span>Short TTL with session creation and deletion audit events.</span>
+      <strong>Hop gate</strong>
+      <span>Only the Bastion VM has the approved public SSH endpoint.</span>
     </div>
     <div class="bastion-control">
       <strong>Private-only target</strong>
@@ -207,22 +188,23 @@
     </div>
   </div>
 </div>
-<p>To protect exposure of the bastion public IP, allow Bastion access only from authorized administrator source IPs. Do not open TCP <code>22</code> to the public internet with <code>0.0.0.0/0</code>; instead, register the authorized IPs or CIDR ranges in the bastion NSG.</p>
+<p>The access flow can start from OCI Cloud Shell or from an existing Bastion VM session. When starting from Cloud Shell, before each SSH connection confirm that the current Cloud Shell public IP is registered as a <code>/32</code> TCP <code>22</code> ingress rule in <code>nsg-bastion-admin</code>. The rule can be reused only while that public IP is unchanged; update it whenever Cloud Shell receives a different public egress IP. When already connected to the Bastion VM, continue to the private target through the approved target NSG rule. Do not open TCP <code>22</code> to the public internet with <code>0.0.0.0/0</code>.</p>
 <p>Suggested SSH key protection tools:</p>
-<p>OpenSSH FIDO-backed keys are not imported copies of regular SSH private key files. Use <code>ed25519-sk</code> or <code>ecdsa-sk</code> keys generated for the FIDO authenticator; the authenticator protects a non-exportable per-device private key. When resident keys are used, a FIDO2 authenticator can also store the key handle so the credential can be loaded on another trusted workstation after user verification.</p>
+<p>Create a new SSH key pair for Bastion VM access using a supported FIDO2 security key when hardware-backed administrator access is required. On a client with OpenSSH FIDO support, generate an <code>ecdsa-sk</code> key pair or, when the security key supports it, an <code>ed25519-sk</code> key pair. Install its public key in the approved administrator account's <code>~/.ssh/authorized_keys</code> file on the Bastion VM. The key pair authorizes SSH access to the Bastion VM; the FIDO2 device protects the private credential used during authentication and that private material is not copied to the Bastion VM. When resident keys are used, the FIDO2 device can retain the key handle so the credential can be used from another trusted workstation after user verification.</p>
+<p>Reference: <a href="https://developers.yubico.com/SSH/Securing_SSH_with_FIDO2.html" target="_blank" rel="noopener">Yubico — Securing SSH with FIDO2</a>.</p>
 <p>OCI access and key storage guidance:</p>
 <div class="table-wrap">
 <table class="data-table">
 <thead><tr>
-<th scope="col">OCI capability</th>
+<th scope="col">Access capability</th>
 <th scope="col">Recommended role</th>
 <th scope="col">Guidance</th>
 </tr></thead>
 <tbody>
 <tr>
-<td>OCI Bastion</td>
+<td>Bastion VM</td>
 <td>Primary SSH access control plane</td>
-<td>Use Bastion for restricted, time-bound access to private resources. Administrators provide the session public key and keep the private key client-side.</td>
+<td>Use the Bastion VM as the restricted SSH hop to private resources. Administrators provide the session public key and keep the private key client-side.</td>
 </tr>
 <tr>
 <td>OCI Secret Management Service</td>
@@ -237,7 +219,7 @@
 <tr>
 <td>OCI Compute SSH key pairs</td>
 <td>Instance bootstrap credential</td>
-<td>OCI Compute uses the public key during instance creation. Oracle does not retain the generated private key, so the administrator must store it securely.</td>
+<td>OCI Compute uses the public key during instance creation. Oracle does not retain the generated private key. Store the keys securely in the Cloud Shell <code>~/keys</code> directory and copy them to the administration Object Storage bucket for recovery.</td>
 </tr>
 </tbody></table></div>
 <div class="table-wrap">
@@ -265,10 +247,10 @@
 </tr>
 </tbody></table></div>
 <p>For database listener testing after Exadata deployment, use SSH tunneling or a private application/tooling host. Do not expose SCAN or node listener ports publicly.</p>
-      </section><section id="approved-jump-host-exception-model" class="article-section">
-        <h2>Approved Jump-Host Exception Model</h2>
-        <p>Use a traditional jump host only when OCI Bastion service is not acceptable for the operating model.</p>
-<p>If a Bastion VM is approved, place it in <code>(root)/Partner/LAD-01</code> by default, or in the assigned <code>Partner/&lt;compartment&gt;</code> child compartment for the deployment, and attach it to the prepared admin subnet and NSG model. The workbook prepares the network controls only; it does not create or configure the VM.</p>
+      </section><section id="approved-jump-host-model" class="article-section">
+        <h2>Approved Jump-Host Model</h2>
+        <p>Use an approved Bastion VM when the operating model requires a persistent jump host. OCI Cloud Shell remains the preferred administrator workstation; the Bastion VM provides the controlled SSH hop to private targets.</p>
+<p>If a Bastion VM is approved, place it in <code>(root)/Partner/LAD-01</code> by default, or in the assigned <code>Partner/&lt;compartment&gt;</code> child compartment for the deployment, and attach it to <code>subnet-admin</code> and <code>nsg-bastion-admin</code>. Register the public IP address of the originating SSH host in <code>nsg-bastion-admin</code> as a TCP <code>22</code> ingress rule with a <code>/32</code> CIDR. For example, when connecting from OCI Cloud Shell, add its current public IP as <code>&lt;cloud_shell_public_ip&gt;/32</code>. Do not use <code>0.0.0.0/0</code>; update the rule when the originating host public IP changes.</p>
 <h3>4.1 Jump-host requirements</h3>
 <div class="table-wrap">
 <table class="data-table">
@@ -291,7 +273,7 @@
 </tr>
 <tr>
 <td>Ingress</td>
-<td>TCP <code>22</code> from the internet for the approved bastion/admin host</td>
+<td>TCP <code>22</code> only from the registered originating-host public IP <code>/32</code> in <code>nsg-bastion-admin</code></td>
 </tr>
 <tr>
 <td>Egress</td>
@@ -331,10 +313,10 @@
 <tbody>
 <tr>
 <td>Ingress</td>
-<td><code>0.0.0.0/0</code></td>
+<td><code>&lt;originating_host_public_ip&gt;/32</code></td>
 <td>TCP</td>
 <td class="align-right"><code>22</code></td>
-<td>SSH from internet to the approved bastion/admin host</td>
+<td>SSH to the approved bastion/admin host; register this rule in <code>nsg-bastion-admin</code></td>
 </tr>
 <tr>
 <td>Egress</td>
@@ -358,7 +340,7 @@
 <td>Approved outbound internet path for admin host operations</td>
 </tr>
 </tbody></table></div>
-<p>Shared NAT Gateway, Internet Gateway, and regional Oracle Services paths are controlled by the subnet route tables and the default security-list baseline. The backup subnet also attaches <code>sl-backup</code> for the Exadata backup access rules. The bastion/admin NSG keeps only the approved internet egress exception and target NSG access rules.</p>
+<p>Shared NAT Gateway, Internet Gateway, and regional Oracle Services paths are controlled by the subnet route tables and the default security-list baseline. The backup subnet also attaches <code>sl-backup</code> for the Exadata backup access rules. <code>nsg-bastion-admin</code> is the control point for the source-specific SSH ingress rule, as well as approved internet egress and target-NSG access rules.</p>
       </section><section id="administrator-source-cidr-register" class="article-section">
         <h2>Administrator Source CIDR Register</h2>
         <p>Record the approved source networks. Do not use <code>0.0.0.0/0</code> for administrator SSH.</p>

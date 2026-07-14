@@ -33,7 +33,7 @@
         <h1>Target OCI Network Architecture</h1>
         <p class="subtitle">This chapter defines the target OCI VCN architecture and traffic flows for the Exadata-ready networking baseline. It is written as a network design chapter, not as an Exadata deployment chapter.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 14, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -54,6 +54,7 @@
       <section id="chapter-purpose" class="article-section">
         <h2>Chapter Purpose</h2>
         <div class="note-box">This chapter defines the target OCI VCN architecture and traffic flows for the Exadata-ready networking baseline. It is written as a network design chapter, not as an Exadata deployment chapter.</div>
+<div class="note-box">For this PoC, all network artifacts are created in the one assigned <code>Partner/&lt;assigned PoC compartment&gt;</code> compartment. A production design can place network, security, database, application, administration, and logging artifacts in separate compartments to enforce ownership and separation of duties.</div>
       </section><section id="logical-architecture" class="article-section">
         <h2>Logical Architecture</h2>
         <div class="architecture-infographic" aria-label="Logical OCI network architecture infographic">
@@ -61,8 +62,8 @@
     <p class="visual-caption">Entry points</p>
     <div class="architecture-node node-admin">
       <span class="node-icon" aria-hidden="true">ADM</span>
-      <strong>Administrator workstation</strong>
-      <span>SSH or Bastion session</span>
+      <strong>OCI Cloud Shell</strong>
+      <span>Authenticated CLI and SSH origin</span>
     </div>
     <div class="architecture-node node-internet">
       <span class="node-icon" aria-hidden="true">WWW</span>
@@ -84,8 +85,8 @@
     <div class="architecture-grid">
       <div class="architecture-node node-bastion">
         <span class="node-icon" aria-hidden="true">BST</span>
-        <strong>OCI Bastion or approved jump host</strong>
-        <span>Private TCP 22 path</span>
+        <strong>Bastion VM or OCI Bastion Service</strong>
+        <span>Controlled private TCP 22 path</span>
       </div>
       <div class="architecture-node node-lb">
         <span class="node-icon" aria-hidden="true">LB</span>
@@ -157,9 +158,9 @@
 <td>Administrator access</td>
 <td><code>subnet-admin</code></td>
 <td class="align-right"><code>10.0.0.0/24</code></td>
-<td>Yes for approved admin hosts</td>
+<td>Yes for the approved Bastion VM only</td>
 <td>Internet Gateway for the admin subnet path</td>
-<td>Bastion endpoint, jump host, or approved admin utility hosts</td>
+<td>Bastion VM used by OCI Cloud Shell, or OCI Bastion Service access path</td>
 </tr>
 <tr>
 <td>Database client</td>
@@ -214,7 +215,7 @@
 <tbody>
 <tr>
 <td>Source</td>
-<td>OCI Bastion service, approved jump host, or approved administrator CIDRs</td>
+<td>OCI Cloud Shell through an approved Bastion VM, or OCI Bastion Service</td>
 </tr>
 <tr>
 <td>Destination</td>
@@ -230,11 +231,11 @@
 </tr>
 <tr>
 <td>Control</td>
-<td><code>nsg-bastion-admin</code> to <code>nsg-exadata-client</code>, least privilege</td>
+<td>Register the originating Cloud Shell public IP as a <code>/32</code> TCP <code>22</code> ingress rule in <code>nsg-bastion-admin</code>; allow least-privilege SSH from <code>nsg-bastion-admin</code> to <code>nsg-exadata-client</code></td>
 </tr>
 <tr>
 <td>Rule</td>
-<td>Do not expose Exadata SSH to <code>0.0.0.0/0</code>.</td>
+<td>Do not expose the Bastion VM or Exadata SSH to <code>0.0.0.0/0</code>.</td>
 </tr>
 </tbody></table></div>
 <h3>4.2 Application database traffic</h3>
@@ -506,7 +507,7 @@
 </tr>
 <tr>
 <td>Admin access</td>
-<td>Uses OCI Bastion or approved private jump-host path</td>
+<td>Uses OCI Cloud Shell through an approved Bastion VM, or OCI Bastion Service</td>
 </tr>
 </tbody></table></div>
       </section><section id="acceptance-criteria" class="article-section">

@@ -33,7 +33,7 @@
         <h1>Scope and Design Principles</h1>
         <p class="subtitle">This chapter defines what the OCI PoC RunBook covers, what it intentionally excludes, and the design principles used across the full workbook sequence. The runbook uses one assigned child compartment under <code>(root)/Partner/&lt;assigned PoC compartment&gt;</code>, with <code>(root)/Partner/LAD-01</code> as the default example. The assigned child compartment name can change for other deployments.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 14, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -174,14 +174,15 @@
 </tbody></table></div>
 <h3>4.5 No direct database exposure</h3>
 <p>The public load balancer subnet can expose application entry points only. It must not expose database listeners, SCAN listeners, node listeners, or SSH access to Exadata nodes.</p>
-<h3>4.6 Prefer managed bastion access</h3>
-<p>OCI Bastion service is preferred over a traditional public jump host because it provides time-bound, audited access to private resources without requiring a persistent public compute instance. A traditional bastion host is acceptable only by documented exception.</p>
+<h3>4.6 Prefer OCI Cloud Shell administrative access</h3>
+<p>Use OCI Cloud Shell as the preferred administrator workstation because it provides an OCI-authenticated CLI environment without local OCI CLI installation or API-key configuration. Access to private resources must continue through an approved Bastion VM or OCI Bastion Service, with the originating Cloud Shell public IP registered as a source-specific <code>/32</code> TCP <code>22</code> rule in the bastion NSG. Do not allow SSH from <code>0.0.0.0/0</code>.</p>
 <h3>4.7 Service Gateway first</h3>
 <p>Use Service Gateway for supported Oracle services. NAT Gateway is reserved for outbound access to public endpoints that are not available through Oracle Services Network.</p>
 <h3>4.8 Build the runbook as one dependency chain</h3>
 <p>Each chapter must leave the next chapter with stable prerequisites. The network chapters write VCN, subnet, route, gateway, security-list, and NSG OCIDs. The Exadata chapters reuse those values to create infrastructure, then write database, backup, secret, and Database Management OCIDs for later validation.</p>
 <h3>4.9 Keep the PoC compartment model explicit</h3>
-<p>This PoC uses one assigned compartment under <code>(root)/Partner/&lt;assigned PoC compartment&gt;</code>. Role-specific variables remain in the runbook because the imported Exadata cards expect them, but Chapter 05 aliases those variables to the same assigned compartment OCID. Do not reintroduce legacy multi-compartment assumptions into executable cards.</p>
+<p>This PoC deliberately keeps all artifacts in one assigned compartment under <code>(root)/Partner/&lt;assigned PoC compartment&gt;</code>. Network, security, Exadata, database, backup, Vault, Database Management, administration, application, and logging artifacts use that same compartment. Role-specific variables remain in the runbook because the imported Exadata cards expect them, but Chapter 05 aliases those variables to the one assigned compartment OCID. Do not reintroduce legacy multi-compartment assumptions into executable PoC cards.</p>
+<p>For production, place artifacts in different compartments where that enforces separation of duties and ownership boundaries. For example, networking, security, database, application, administration, and logging teams can each use separate compartments with scoped IAM policies, budgets, tagging, audit boundaries, and lifecycle controls.</p>
       </section><section id="security-principles" class="article-section">
         <h2>Security Principles</h2>
         <div class="table-wrap">

@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
-REPORT_FILE="$WORKBOOK_DIR/networking-executive-report.txt"
+REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+mkdir -p "$REPORT_DIR"
+chmod 700 "$REPORT_DIR"
+REPORT_FILE="$REPORT_DIR/networking-executive-report.txt"
 
 cd "$WORKBOOK_DIR" || exit 1
 . ./helpers.sh
@@ -209,13 +212,13 @@ nsg_rules() {
   rule_header
   printf '%s\n' "$RULES_JSON" | jq -r \
     --arg current "$CURRENT_NSG" \
-    --arg client "${NSG_EXADATA_CLIENT_OCID:-}" \
+    --arg client "${NSG_DATABASE_CLIENT_OCID:-}" \
     --arg apps "${NSG_APPLICATIONS_OCID:-}" \
     --arg dbtools "${NSG_DBTOOLS_OCID:-}" \
     --arg bastion "${NSG_BASTION_OCID:-}" \
     --arg lb "${NSG_PUBLIC_LB_OCID:-}" '
       def nsg_name($id):
-        if $id == $client then "nsg-exadata-client"
+        if $id == $client then "nsg-database-client"
         elif $id == $apps then "nsg-applications"
         elif $id == $dbtools then "nsg-dbtools-endpoint"
         elif $id == $bastion then "nsg-bastion-admin"
@@ -404,9 +407,9 @@ show_subnet_inventory() {
 show_nsg_access_model() {
   section "NSG Access Model"
   access_header
-  access_row "nsg-exadata-client" "Client TCP/ICMP; app/admin/dbtools SQL/ONS; SSH" "Backup 8005/2484; VCN TCP"
-  access_row "nsg-applications" "Public LB 80/8080/443; admin SSH" "Exadata client TCP 1521 and 6200"
-  access_row "nsg-dbtools-endpoint" "None" "Exadata client TCP 1521 and 6200"
+  access_row "nsg-database-client" "Client TCP/ICMP; app/admin/dbtools SQL/ONS; SSH" "Backup 8005/2484; VCN TCP"
+  access_row "nsg-applications" "Public LB 80/8080/443; admin SSH" "Database client TCP 1521 and 6200"
+  access_row "nsg-dbtools-endpoint" "None" "Database client TCP 1521 and 6200"
   access_row "nsg-bastion-admin" "Internet SSH" "SSH to client/app; SQL/ONS to client; internet"
   access_row "nsg-public-lb" "Internet 80/443/8080" "Internet TCP 80, 443, and 8080"
 }
@@ -434,7 +437,7 @@ show_nsg_rule_details() {
   kv_header
   kv "Display focus" "Direction, protocol, port range, and rule description"
 
-  nsg_rules "nsg-exadata-client ingress and egress" NSG_EXADATA_CLIENT_OCID "nsg-exadata-client"
+  nsg_rules "nsg-database-client ingress and egress" NSG_DATABASE_CLIENT_OCID "nsg-database-client"
   nsg_rules "nsg-applications ingress and egress" NSG_APPLICATIONS_OCID "nsg-applications"
   nsg_rules "nsg-dbtools-endpoint ingress and egress" NSG_DBTOOLS_OCID "nsg-dbtools-endpoint"
   nsg_rules "nsg-bastion-admin ingress and egress" NSG_BASTION_OCID "nsg-bastion-admin"
@@ -474,7 +477,7 @@ show_full_report() {
   kv "Route tables" "rt-public, rt-private"
   kv "Subnets" "subnet-admin, subnet-dbclient, subnet-db-backup, subnet-dbtools, subnet-public-lb, subnet-applications"
   kv "Security lists" "default security list, sl-backup"
-  kv "NSGs" "nsg-exadata-client, nsg-applications, nsg-dbtools-endpoint, nsg-bastion-admin, nsg-public-lb"
+  kv "NSGs" "nsg-database-client, nsg-applications, nsg-dbtools-endpoint, nsg-bastion-admin, nsg-public-lb"
   kv "Service access" "Route tables provide NAT, Service Gateway, and Internet Gateway paths; security-list baseline uses the default list plus sl-backup"
 
   show_nsg_access_model
