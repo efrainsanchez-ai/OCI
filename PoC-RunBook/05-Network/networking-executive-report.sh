@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-REPORT_SCRIPT_UPDATED_DATE="2026-07-16 12:51:47 CST"
+REPORT_SCRIPT_UPDATED_DATE="2026-07-16 13:02:51 CST"
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 LIB_DIR="${LIB_DIR:-$WORKBOOK_DIR/lib}"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
@@ -386,10 +386,12 @@ show_subnet_inventory() {
   subnet_header
   printf '%s\n' "$SUBNETS_JSON" | jq -r \
     --arg default_sl "${DEFAULT_SECURITY_LIST_OCID:-}" \
-    --arg backup_sl "${SECURITY_LIST_BACKUP_OCID:-}" '
+    --arg backup_sl "${SECURITY_LIST_BACKUP_OCID:-}" \
+    --arg dbtools_sl "${SECURITY_LIST_DBTOOLS_OCID:-}" '
       def sl_name($id):
         if $id == $default_sl then "default"
         elif $id == $backup_sl then "sl-backup"
+        elif $id == $dbtools_sl then "sl-dbtools"
         else ($id[0:12] + "...")
         end;
       .data[] |
@@ -410,7 +412,7 @@ show_nsg_access_model() {
   section "NSG Access Model"
   access_header
   access_row "nsg-database-client" "Client TCP/ICMP; app/admin/dbtools SQL/ONS; SSH" "Backup 8005/2484; VCN TCP"
-  access_row "nsg-applications" "Public LB 80/8080/443; admin SSH" "Database client TCP 1521 and 6200"
+  access_row "nsg-applications" "Public LB 80/8080/443; admin SSH/RDP" "Database TCP 1521/6200; bastion RDP; OS updates"
   access_row "nsg-dbtools-endpoint" "None" "Database client TCP 1521 and 6200"
   access_row "nsg-bastion-admin" "Internet SSH" "SSH to client/app; SQL/ONS to client; internet"
   access_row "nsg-public-lb" "Internet 80/443/8080" "Internet TCP 80, 443, and 8080"
@@ -423,6 +425,7 @@ show_security_list_rule_details() {
 
   security_list_rules "Default security list ingress and egress" "${DEFAULT_SECURITY_LIST_OCID:-}" "default"
   security_list_rules "sl-backup ingress and egress" "${SECURITY_LIST_BACKUP_OCID:-}" "sl-backup"
+  security_list_rules "sl-dbtools ingress and egress" "${SECURITY_LIST_DBTOOLS_OCID:-}" "sl-dbtools"
 }
 
 show_nsg_inventory() {
@@ -479,9 +482,9 @@ show_full_report() {
   kv "Gateways" "gw-internet, gw-service, gw-nat, optional dynamic-routing-gateway"
   kv "Route tables" "rt-public, rt-private"
   kv "Subnets" "subnet-admin, subnet-dbclient, subnet-dbbackup, subnet-dbtools, subnet-public-lb, subnet-applications"
-  kv "Security lists" "default security list, sl-backup"
+  kv "Security lists" "default security list, sl-backup, sl-dbtools"
   kv "NSGs" "nsg-database-client, nsg-applications, nsg-dbtools-endpoint, nsg-bastion-admin, nsg-public-lb"
-  kv "Service access" "Route tables provide NAT, Service Gateway, and Internet Gateway paths; security-list baseline uses the default list plus sl-backup"
+  kv "Service access" "Route tables provide NAT, Service Gateway, and Internet Gateway paths; security-list baseline uses the default list plus sl-backup and sl-dbtools"
 
   show_nsg_access_model
 
