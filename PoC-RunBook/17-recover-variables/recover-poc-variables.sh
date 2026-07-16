@@ -1,10 +1,11 @@
 #!/bin/bash
 
 # Maintenance: Update SCRIPT_CREATED_AT to the current timestamp whenever this script changes.
-SCRIPT_CREATED_AT="2026-07-13 15:13:03 CST"
+SCRIPT_CREATED_AT="2026-07-14 10:01:34 CST"
 printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
 
 . "$HOME/workbook/helpers.sh" || exit 1
+load_cli_env || exit 1
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
@@ -31,8 +32,17 @@ read_profile() {
   cfg="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
   profile="${OCI_CLI_PROFILE:-DEFAULT}"
   [ -f "$cfg" ] || return 0
-  TENANCY_ID="$(awk -F= -v p="$profile" '$0=="["p"]"{i=1;next} /^\[/{i=0} i&&$1~/^[[:space:]]*tenancy[[:space:]]*$/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$cfg")"
-  REGION="$(awk -F= -v p="$profile" '$0=="["p"]"{i=1;next} /^\[/{i=0} i&&$1~/^[[:space:]]*region[[:space:]]*$/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$cfg")"
+  PROFILE_TENANCY_ID="$(awk -F= -v p="$profile" '$0=="["p"]"{i=1;next} /^\[/{i=0} i&&$1~/^[[:space:]]*tenancy[[:space:]]*$/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$cfg")"
+  PROFILE_REGION="$(awk -F= -v p="$profile" '$0=="["p"]"{i=1;next} /^\[/{i=0} i&&$1~/^[[:space:]]*region[[:space:]]*$/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$cfg")"
+}
+
+require_recovery_variable() {
+  key="$1"
+  value="${!key:-}"
+  if ! ok "$value"; then
+    printf 'STOP: Missing required recovery variable: %s. Run wb17_card01a first.\n' "$key" >&2
+    exit 1
+  fi
 }
 
 lookup_subnet() { first_id oci network subnet list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --display-name "$1" --all; }
@@ -42,19 +52,25 @@ lookup_secret() { first_id oci vault secret list --region "$REGION" --compartmen
 
 phase 'Reading active OCI CLI profile'
 read_profile
-REGION="${REGION:-$(oci configure get region 2>/dev/null || true)}"
-note "Region candidate: ${REGION:-<not_found>}"
-ok "$REGION" || { printf 'STOP: REGION not found.\n' >&2; exit 1; }
-case "$TENANCY_ID" in ocid1.tenancy.oc1*) ;; *) printf 'STOP: TENANCY_ID not found.\n' >&2; exit 1;; esac
+for key in \
+  TENANCY_ID REGION POC_PARENT_COMPARTMENT_NAME POC_PARENT_COMPARTMENT_OCID \
+  POC_COMPARTMENT_NAME POC_COMPARTMENT_OCID VCN_NAME; do
+  require_recovery_variable "$key"
+done
+note "Region from recovery preflight: $REGION"
+case "$TENANCY_ID" in ocid1.tenancy.oc1*) ;; *) printf 'STOP: TENANCY_ID is not a tenancy OCID. Run wb17_card01a again.\n' >&2; exit 1;; esac
+if ok "${PROFILE_REGION:-}" && [ "$PROFILE_REGION" != "$REGION" ]; then
+  printf 'STOP: Active OCI CLI profile region (%s) does not match recovered REGION (%s).\n' "$PROFILE_REGION" "$REGION" >&2
+  exit 1
+fi
+if ok "${PROFILE_TENANCY_ID:-}" && [ "$PROFILE_TENANCY_ID" != "$TENANCY_ID" ]; then
+  printf 'STOP: Active OCI CLI profile tenancy does not match recovered TENANCY_ID.\n' >&2
+  exit 1
+fi
 
 phase 'Confirming target compartment'
-printf 'Enter parent compartment name [Partner]: '; IFS= read -r POC_PARENT_COMPARTMENT_NAME
-POC_PARENT_COMPARTMENT_NAME="${POC_PARENT_COMPARTMENT_NAME:-Partner}"
-printf 'Enter assigned compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME"; IFS= read -r POC_COMPARTMENT_NAME
-POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
-printf 'This recovery will discover existing resources in /%s/%s and write %s.\n' "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" "$CLI_ENV"
-printf 'Confirm this compartment path? [y/N]: '; IFS= read -r ans
-case "$ans" in y|Y|yes|YES) ;; *) printf 'STOP: Recovery was not confirmed.\n' >&2; exit 1;; esac
+note "Using confirmed compartment path: /$POC_PARENT_COMPARTMENT_NAME/$POC_COMPARTMENT_NAME"
+note "Using confirmed VCN name: $VCN_NAME"
 while :; do
   printf 'Type CDB_ADMIN_PASSWORD : '
   IFS= read -r CDB_ADMIN_PASSWORD
@@ -63,14 +79,18 @@ while :; do
 done
 
 phase 'Resolving compartment OCIDs'
-POC_PARENT_COMPARTMENT_OCID="$(ociq oci iam compartment list --compartment-id "$TENANCY_ID" --all --query "data[?name=='$POC_PARENT_COMPARTMENT_NAME' && \"lifecycle-state\"=='ACTIVE'].id | [0]")"
-POC_COMPARTMENT_OCID="$(ociq oci iam compartment list --compartment-id "$POC_PARENT_COMPARTMENT_OCID" --all --query "data[?name=='$POC_COMPARTMENT_NAME' && \"lifecycle-state\"=='ACTIVE'].id | [0]")"
-ok "$POC_PARENT_COMPARTMENT_OCID" || { printf 'STOP: Parent compartment not found.\n' >&2; exit 1; }
-ok "$POC_COMPARTMENT_OCID" || { printf 'STOP: Assigned compartment not found.\n' >&2; exit 1; }
+CONFIRMED_PARENT_COMPARTMENT_OCID="$(ociq oci iam compartment list --compartment-id "$TENANCY_ID" --all --query "data[?name=='$POC_PARENT_COMPARTMENT_NAME' && \"lifecycle-state\"=='ACTIVE'].id | [0]")"
+CONFIRMED_POC_COMPARTMENT_OCID="$(ociq oci iam compartment list --compartment-id "$POC_PARENT_COMPARTMENT_OCID" --all --query "data[?name=='$POC_COMPARTMENT_NAME' && \"lifecycle-state\"=='ACTIVE'].id | [0]")"
+ok "$CONFIRMED_PARENT_COMPARTMENT_OCID" || { printf 'STOP: Confirmed parent compartment was not found.\n' >&2; exit 1; }
+ok "$CONFIRMED_POC_COMPARTMENT_OCID" || { printf 'STOP: Confirmed assigned compartment was not found.\n' >&2; exit 1; }
+if [ "$CONFIRMED_PARENT_COMPARTMENT_OCID" != "$POC_PARENT_COMPARTMENT_OCID" ] || [ "$CONFIRMED_POC_COMPARTMENT_OCID" != "$POC_COMPARTMENT_OCID" ]; then
+  printf 'STOP: Confirmed compartment names do not match the OCIDs saved by wb17_card01a.\n' >&2
+  exit 1
+fi
 note "Parent compartment OCID: $POC_PARENT_COMPARTMENT_OCID"
 note "Assigned compartment OCID: $POC_COMPARTMENT_OCID"
 
-VCN_NAME="VCN-$POC_COMPARTMENT_NAME"; ADMIN_BUCKET_NAME="${REGION}-${POC_PARENT_COMPARTMENT_NAME}-${POC_COMPARTMENT_NAME}"
+ADMIN_BUCKET_NAME="${REGION}-${POC_PARENT_COMPARTMENT_NAME}-${POC_COMPARTMENT_NAME}"
 BASTION_DISPLAY_NAME=bastion-01; EXADATA_DISPLAY_NAME=VMCluster-01; DB_HOME_DISPLAY_NAME=dbhome_01
 CDB_NAME=CDB01; PDB_NAME=PDB01; CDB_CREDENTIAL_VAULT_NAME=vault-01; CDB_CREDENTIAL_KEY_NAME=key-01
 CDB_SYS_SECRET_NAME=cdb01-sys-password; CDB_SYSTEM_SECRET_NAME=cdb01-system-password; DBMGMT_PRIVATE_ENDPOINT_NAME=pe-dbmgmt-cdb01
@@ -275,7 +295,11 @@ if ! ok "$DBMGMT_SECRET_POLICY_OCID"; then
   )"
 fi
 note "Initial backup: ${INITIAL_BACKUP_OCID:-<not_found>}"
-note "DB Management secret policy: ${DBMGMT_SECRET_POLICY_OCID:-<not_found>}"
+if ok "$DBMGMT_SECRET_POLICY_OCID"; then
+  note "DB Management secret policy: $DBMGMT_SECRET_POLICY_OCID"
+else
+  note "DB Management secret policy: <not_found; optional policy may not be created yet>"
+fi
 
 AVAILABILITY_DOMAIN="$(ociq oci iam availability-domain list --region "$REGION" --compartment-id "$TENANCY_ID" --query 'data[0].name')"
 EXADATA_AVAILABILITY_DOMAIN="$(ociq oci iam availability-domain list --region "$REGION" --compartment-id "$TENANCY_ID" --query 'data[1].name')"

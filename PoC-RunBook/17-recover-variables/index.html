@@ -31,9 +31,9 @@
       <div class="hero-copy">
         <p class="eyebrow">Chapter 17</p>
         <h1>Recover Variables</h1>
-        <p class="subtitle">This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, a different OCI user takes over, or the original <code>~/workbook/cli.env</code> file is no longer available. It does not recreate OCI resources. It discovers existing resources from OCI by using the same names, compartment assumptions, and discovery style used by the earlier workbooks in this series, especially Chapter 16.</p>
+        <p class="subtitle">This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, another OCI user takes over, or the original <code>~/workbook/cli.env</code> file is unavailable. It does not recreate OCI resources. Instead, it discovers existing resources by using the names, compartment assumptions, and discovery approach established in earlier workbooks, especially Chapter 16.</p>
         <div class="hero-meta">
-          <span>Last updated July 13, 2026</span>
+          <span>Last updated July 15, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -45,7 +45,7 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#introduction">Introduction</a></li><li><a href="#what-gets-recovered">What gets recovered</a></li><li><a href="#recovery-defaults">Recovery defaults</a></li><li><a href="#bash-01-recreate-workbook-helpers">BASH 01 - Recreate workbook helpers</a></li><li><a href="#bash-02-download-and-run-recovery-discovery-tools">BASH 02 - Download and run recovery discovery tools</a></li><li><a href="#bash-03-validate-recovered-variables">BASH 03 - Validate recovered variables</a></li><li><a href="#bash-04-allow-cloud-shell-ssh-access-to-the-bastion">BASH 04 - Allow Cloud Shell SSH access to the bastion</a></li><li><a href="#bash-05-create-reusable-bastion-ssh-script">BASH 05 - Create reusable bastion SSH script</a></li><li><a href="#bash-06-create-reusable-cluster-node-ssh-script">BASH 06 - Create reusable cluster node SSH script</a></li><li><a href="#bash-07-mount-file-storage-on-exadata-vm-cluster-nodes">BASH 07 - Mount File Storage on Exadata VM cluster nodes</a></li><li><a href="#bash-08-create-executive-recovery-report">BASH 08 - Create executive recovery report</a></li><li><a href="#reuse-notes">Reuse notes</a></li></ol>
+      <ol><li><a href="#introduction">Introduction</a></li><li><a href="#what-gets-recovered">What gets recovered</a></li><li><a href="#recovery-defaults">Recovery defaults</a></li><li><a href="#bash-01-recreate-workbook-helpers">BASH 01 - Recreate workbook helpers</a></li><li><a href="#bash-01a-confirm-recovery-variables">BASH 01A - Confirm recovery variables</a></li><li><a href="#bash-02-download-and-run-recovery-discovery-tools">BASH 02 - Download and run recovery discovery tools</a></li><li><a href="#bash-03-validate-recovered-variables">BASH 03 - Validate recovered variables</a></li><li><a href="#bash-04-allow-cloud-shell-ssh-access-to-the-bastion">BASH 04 - Allow Cloud Shell SSH access to the bastion</a></li><li><a href="#bash-05-create-reusable-bastion-ssh-script">BASH 05 - Create reusable bastion SSH script</a></li><li><a href="#bash-06-create-reusable-cluster-node-ssh-script">BASH 06 - Create reusable cluster node SSH script</a></li><li><a href="#bash-07-mount-file-storage-on-exadata-vm-cluster-nodes">BASH 07 - Mount File Storage on Exadata VM cluster nodes</a></li><li><a href="#bash-08-create-executive-recovery-report">BASH 08 - Create executive recovery report</a></li><li><a href="#reuse-notes">Reuse notes</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
@@ -53,8 +53,8 @@
       </nav>
       <section id="introduction" class="article-section">
         <h2>Introduction</h2>
-        <p>This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, a different OCI user takes over, or the original <code>~/workbook/cli.env</code> file is no longer available. It does not recreate OCI resources. It discovers existing resources from OCI by using the same names, compartment assumptions, and discovery style used by the earlier workbooks in this series, especially Chapter 16.</p>
-<p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, stores shell scripts under <code>~/workbook/bin</code>, creates compatibility symlinks for <code>env.sh</code> and <code>helpers.sh</code>, and creates a minimal export-enabled <code>cli.env</code>. BASH 02 downloads the reusable discovery tool under <code>~/workbook/bin</code>, asks you to confirm the parent compartment and assigned compartment, then writes recovered variables back into <code>~/workbook/cli.env</code>. Text reports are stored under <code>~/workbook/reports</code>, and JSON discovery files are stored under <code>~/workbook/json</code>.</p>
+        <p>This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, another OCI user takes over, or the original <code>~/workbook/cli.env</code> file is unavailable. It does not recreate OCI resources. Instead, it discovers existing resources by using the names, compartment assumptions, and discovery approach established in earlier workbooks, especially Chapter 16.</p>
+<p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, stores shell scripts under <code>~/workbook/bin</code>, creates compatibility symlinks for <code>env.sh</code> and <code>helpers.sh</code>, and creates a minimal export-enabled <code>cli.env</code>. BASH 01A confirms and saves the active profile, parent and assigned compartment, and VCN name. BASH 02 downloads the reusable discovery tool under <code>~/workbook/bin</code> and writes recovered variables back into <code>~/workbook/cli.env</code>. Text reports are stored under <code>~/workbook/reports</code>, and JSON discovery files are stored under <code>~/workbook/json</code>.</p>
 <p>The default compartment path is <code>(root)/Partner/LAD-01</code>. If your deployment used another assigned child compartment under <code>Partner</code>, enter that name when prompted. The script stops before discovery unless you confirm the resolved path.</p>
       </section><section id="what-gets-recovered" class="article-section">
         <h2>What gets recovered</h2>
@@ -288,6 +288,121 @@ PROMPT             | $
 
 wb17_card01</code></pre>
 </div>
+      </section><section id="bash-01a-confirm-recovery-variables" class="article-section">
+        <h2>BASH 01A - Confirm recovery variables</h2>
+        <h3>BASH 01A - Confirm recovery variables</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Before downloading the recovery script, confirm the active OCI CLI profile and one assigned PoC compartment, save those variables to <code>~/workbook/cli.env</code>, and select the VCN name that the recovery script will discover.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>wb17_card01a() {
+if [ ! -f ~/workbook/env.sh ]; then
+  printf 'STOP: Missing ~/workbook/env.sh. Run wb17_card01 first.\n' &gt;&amp;2
+  return 1
+fi
+. ~/workbook/env.sh --quiet || return 1
+clear
+
+read_profile() {
+  cfg="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
+  profile="${OCI_CLI_PROFILE:-DEFAULT}"
+  [ -f "$cfg" ] || return 0
+  TENANCY_ID="$(awk -F= -v p="$profile" '$0=="["p"]"{i=1;next} /^\[/{i=0} i&amp;&amp;$1~/^[[:space:]]*tenancy[[:space:]]*$/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$cfg")"
+  REGION="$(awk -F= -v p="$profile" '$0=="["p"]"{i=1;next} /^\[/{i=0} i&amp;&amp;$1~/^[[:space:]]*region[[:space:]]*$/{gsub(/[[:space:]]/,"",$2);print $2;exit}' "$cfg")"
+}
+
+printf 'Reading active OCI CLI profile ...\n'
+read_profile
+REGION="${REGION:-$(oci configure get region 2&gt;/dev/null || true)}"
+printf ' - Region candidate: %s\n' "${REGION:-&lt;not_found&gt;}"
+case "$TENANCY_ID" in
+  ocid1.tenancy.oc1*) ;;
+  *) printf 'STOP: TENANCY_ID not found in the active OCI CLI profile.\n' &gt;&amp;2; return 1 ;;
+esac
+[ -n "$REGION" ] || { printf 'STOP: REGION not found in the active OCI CLI profile.\n' &gt;&amp;2; return 1; }
+
+printf '\nConfirming target compartment ...\n'
+printf 'Enter parent compartment name [Partner]: '
+IFS= read -r POC_PARENT_COMPARTMENT_NAME
+POC_PARENT_COMPARTMENT_NAME="${POC_PARENT_COMPARTMENT_NAME:-Partner}"
+printf 'Enter assigned compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME"
+IFS= read -r POC_COMPARTMENT_NAME
+POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
+printf 'This recovery will discover resources in /%s/%s and write %s.\n' \
+  "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" "$CLI_ENV"
+printf 'Confirm this compartment path? [y/N]: '
+IFS= read -r answer
+case "$answer" in y|Y|yes|YES) ;; *) printf 'STOP: Recovery was not confirmed.\n' &gt;&amp;2; return 1;; esac
+
+printf '\nResolving compartment OCIDs ...\n'
+POC_PARENT_COMPARTMENT_OCID="$(
+  oci iam compartment list \
+    --compartment-id "$TENANCY_ID" \
+    --all \
+    --query "data[?name=='$POC_PARENT_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+    --raw-output
+)"
+POC_COMPARTMENT_OCID="$(
+  oci iam compartment list \
+    --compartment-id "$POC_PARENT_COMPARTMENT_OCID" \
+    --all \
+    --query "data[?name=='$POC_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+    --raw-output
+)"
+[ -n "$POC_PARENT_COMPARTMENT_OCID" ] &amp;&amp; [ "$POC_PARENT_COMPARTMENT_OCID" != "null" ] || { printf 'STOP: Parent compartment was not found.\n' &gt;&amp;2; return 1; }
+[ -n "$POC_COMPARTMENT_OCID" ] &amp;&amp; [ "$POC_COMPARTMENT_OCID" != "null" ] || { printf 'STOP: Assigned compartment was not found.\n' &gt;&amp;2; return 1; }
+printf ' - Parent compartment OCID: %s\n' "$POC_PARENT_COMPARTMENT_OCID"
+printf ' - Assigned compartment OCID: %s\n' "$POC_COMPARTMENT_OCID"
+
+DEFAULT_VCN_NAME="VCN-${POC_COMPARTMENT_NAME}"
+printf '\nEnter VCN name [%s]: ' "$DEFAULT_VCN_NAME"
+IFS= read -r VCN_NAME_INPUT
+VCN_NAME="${VCN_NAME_INPUT:-$DEFAULT_VCN_NAME}"
+printf 'Discovering VCN named %s in compartment %s ...\n' "$VCN_NAME" "$POC_COMPARTMENT_NAME"
+VCN_OCID="$(
+  oci network vcn list \
+    --compartment-id "$POC_COMPARTMENT_OCID" \
+    --all \
+    --query "data[?\"display-name\"=='$VCN_NAME' &amp;&amp; \"lifecycle-state\"!='TERMINATED'].id | [0]" \
+    --raw-output
+)"
+if [ -n "$VCN_OCID" ] &amp;&amp; [ "$VCN_OCID" != "null" ]; then
+  printf ' - Existing VCN found: %s\n' "$VCN_OCID"
+else
+  printf ' - No matching VCN found; the recovery script will report missing network artifacts.\n'
+fi
+
+for item in \
+  "TENANCY_ID|$TENANCY_ID" "REGION|$REGION" \
+  "POC_PARENT_COMPARTMENT_NAME|$POC_PARENT_COMPARTMENT_NAME" \
+  "POC_PARENT_COMPARTMENT_OCID|$POC_PARENT_COMPARTMENT_OCID" \
+  "POC_COMPARTMENT_NAME|$POC_COMPARTMENT_NAME" \
+  "POC_COMPARTMENT_OCID|$POC_COMPARTMENT_OCID" \
+  "VCN_NAME|$VCN_NAME"; do
+  upsert_cli_env "${item%%|*}" "${item#*|}" &gt;/dev/null
+done
+
+clear
+printf '%-30s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "------------------------------" "-----" \
+  "TENANCY_ID" "$TENANCY_ID" \
+  "REGION" "$REGION" \
+  "POC_PARENT_COMPARTMENT_NAME" "$POC_PARENT_COMPARTMENT_NAME" \
+  "POC_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" \
+  "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID" \
+  "VCN_NAME" "$VCN_NAME" \
+  "VCN_OCID" "${VCN_OCID:-&lt;not_found&gt;}"
+printf '\n%s\n' "wb17_card01a"
+}
+
+wb17_card01a</code></pre>
+</div>
       </section><section id="bash-02-download-and-run-recovery-discovery-tools" class="article-section">
         <h2>BASH 02 - Download and run recovery discovery tools</h2>
         <h3>BASH 02 - Download and run recovery discovery tools</h3>
@@ -297,7 +412,7 @@ wb17_card01</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Download the maintained recovery script into <code>~/workbook/bin</code>, confirm the parent and assigned compartment, discover existing OCI resources from their workbook names, show recovery status feedback while discovery runs, and save recovered values to <code>~/workbook/cli.env</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Download the maintained recovery script into <code>~/workbook/bin</code>, use the confirmed profile, compartment, and VCN values from BASH 01A, discover existing OCI resources from their workbook names, show recovery status feedback while discovery runs, and save recovered values to <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
@@ -348,7 +463,7 @@ wb17_card02</code></pre>
   </div>
   <pre class="code-scroll"><code>Downloading recovery script ...
 Source: https://efrainsanchez-ai.github.io/OCI/PoC-RunBook/17-recover-variables/recover-poc-variables.sh
-Recovery script created: 2026-07-13 15:13:03 CST
+Recovery script created: 2026-07-13 16:55:21 CST
 
 Reading active OCI CLI profile ...
   - Region candidate: &lt;region&gt;
@@ -1201,12 +1316,12 @@ row() {
   eval "value=\${$key:-}"
   if [ -n "$value" ]; then
     if [ "$key" = "CDB_ADMIN_PASSWORD" ]; then
-      printf '%-34s | FOUND | %s\n' "$label" "&lt;stored_in_cli_env&gt;"
+      printf '%-44s | %-8s | %s\n' "$label" "FOUND" "&lt;stored_in_cli_env&gt;"
     else
-      printf '%-34s | FOUND | %s\n' "$label" "$value"
+      printf '%-44s | %-8s | %s\n' "$label" "FOUND" "$value"
     fi
   else
-    printf '%-34s | MISS  | %s\n' "$label" "$key"
+    printf '%-44s | %-8s | %s\n' "$label" "MISS" "$key"
   fi
 }
 
@@ -1253,7 +1368,9 @@ fi
 
   section "Recovered variable detail"
   if [ -f "$STATUS_FILE" ]; then
-    awk -F '\t' '$2=="FOUND"{printf "%-34s | FOUND | %s\n",$1,$3}' "$STATUS_FILE"
+    printf '%-44s | %-8s | %s\n' "VARIABLE" "STATUS" "VALUE"
+    printf '%-44s | %-8s | %s\n' "--------------------------------------------" "--------" "-----"
+    awk -F '\t' '$2=="FOUND"{printf "%-44s | %-8s | %s\n",$1,$2,$3}' "$STATUS_FILE"
   else
     printf '%s was not found. Run wb17_card02 first.\n' "$STATUS_FILE"
   fi
@@ -1308,6 +1425,8 @@ CDB admin password                 | FOUND | &lt;stored_in_cli_env&gt;
 
 Recovered variable detail
 ----------------------------------------
+VARIABLE                                     | STATUS   | VALUE
+-------------------------------------------- | -------- | -----
 ...
 CLUSTER_FIRST_NODE_HOSTNAME        | FOUND | exasc011-fxafi.client.poc.oraclevcn.com
 

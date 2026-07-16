@@ -33,7 +33,7 @@
         <h1>Bastion and Administrator Access</h1>
         <p class="subtitle">This chapter defines the administrator access path for private resources in the PoC VCN baseline.</p>
         <div class="hero-meta">
-          <span>Last updated July 14, 2026</span>
+          <span>Last updated July 15, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -188,7 +188,7 @@
     </div>
   </div>
 </div>
-<p>The access flow can start from OCI Cloud Shell or from an existing Bastion VM session. When starting from Cloud Shell, before each SSH connection confirm that the current Cloud Shell public IP is registered as a <code>/32</code> TCP <code>22</code> ingress rule in <code>nsg-bastion-admin</code>. The rule can be reused only while that public IP is unchanged; update it whenever Cloud Shell receives a different public egress IP. When already connected to the Bastion VM, continue to the private target through the approved target NSG rule. Do not open TCP <code>22</code> to the public internet with <code>0.0.0.0/0</code>.</p>
+<p>The access flow can start from OCI Cloud Shell or an existing Bastion VM session. Before connecting from Cloud Shell, confirm that its current public IP is registered as a <code>/32</code> TCP <code>22</code> ingress rule in <code>nsg-bastion-admin</code>. Reuse the rule only while the public IP remains unchanged; update it whenever Cloud Shell receives a new egress IP. From an existing Bastion VM session, continue to the private target through the approved target NSG rule. Do not open TCP <code>22</code> to the public internet with <code>0.0.0.0/0</code>.</p>
 <p>Suggested SSH key protection tools:</p>
 <p>Create a new SSH key pair for Bastion VM access using a supported FIDO2 security key when hardware-backed administrator access is required. On a client with OpenSSH FIDO support, generate an <code>ecdsa-sk</code> key pair or, when the security key supports it, an <code>ed25519-sk</code> key pair. Install its public key in the approved administrator account's <code>~/.ssh/authorized_keys</code> file on the Bastion VM. The key pair authorizes SSH access to the Bastion VM; the FIDO2 device protects the private credential used during authentication and that private material is not copied to the Bastion VM. When resident keys are used, the FIDO2 device can retain the key handle so the credential can be used from another trusted workstation after user verification.</p>
 <p>Reference: <a href="https://developers.yubico.com/SSH/Securing_SSH_with_FIDO2.html" target="_blank" rel="noopener">Yubico — Securing SSH with FIDO2</a>.</p>

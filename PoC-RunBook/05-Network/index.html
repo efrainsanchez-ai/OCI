@@ -33,7 +33,7 @@
         <h1>Network</h1>
         <p class="subtitle">Run this sequence only after the <a href="../00-oci-poc-runbook/index.html#initialize-the-workbook-environment">Chapter 00 workbook environment</a> is ready. Confirm that <code>~/workbook/cli.env</code> exists, <code>~/workbook/helpers.sh</code> exists, and the helper functions are sourced in the current shell.</p>
         <div class="hero-meta">
-          <span>Last updated July 14, 2026</span>
+          <span>Last updated July 15, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -793,7 +793,7 @@ wb05_card10() {
 cat &gt; "$JSON_DIR/sl-backup-ingress.json" &lt;&lt;EOF
 [
   {
-    "description": "Allow VCN TCP 8005 to Exadata backup subnet",
+    "description": "Allow VCN TCP 8005 to Database backup subnet",
     "isStateless": false,
     "protocol": "6",
     "source": "$VCN_CIDR",
@@ -806,7 +806,7 @@ cat &gt; "$JSON_DIR/sl-backup-ingress.json" &lt;&lt;EOF
     }
   },
   {
-    "description": "Allow VCN TCP 2484 to Exadata backup subnet",
+    "description": "Allow VCN TCP 2484 to Database backup subnet",
     "isStateless": false,
     "protocol": "6",
     "source": "$VCN_CIDR",

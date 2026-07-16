@@ -33,7 +33,7 @@
         <h1>Bastion and Cluster SSH Connection</h1>
         <p class="subtitle">This section moves the SSH operational workflow out of the CDB creation workbook. It downloads the bastion and first cluster-node private keys from Object Storage, creates reusable connection scripts, opens the bastion and cluster sessions, validates CDB01 from SQL*Plus on the first cluster node, and adds an approved <code>/32</code> SSH source rule to the bastion network security group.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 15, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -346,8 +346,8 @@ CLUSTER_SSH_USER="${CLUSTER_SSH_USER:-opc}"
 CLUSTER_FIRST_NODE_HOSTNAME="${CLUSTER_FIRST_NODE_HOSTNAME:-}"
 EXADATA_HOSTNAME="${EXADATA_HOSTNAME:-exasc01}"
 EXADATA_DOMAIN="${EXADATA_DOMAIN:-}"
-DB_NODE_LIST_JSON="$HOME/workbook/db-node-list.json"
-DB_NODE_GET_JSON="$HOME/workbook/db-node-get.json"
+DB_NODE_LIST_JSON="$JSON_DIR/db-node-list.json"
+DB_NODE_GET_JSON="$JSON_DIR/db-node-get.json"
 SECOND_HOP_SCRIPT="$KEY_DIR/connect-cluster-first-node.sh"
 REMOTE_SECOND_HOP_SCRIPT="~/keys/connect-cluster-first-node.sh"
 CLUSTER_KEY_OBJECT_NAME="$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-}")"
@@ -550,19 +550,19 @@ wb11_card03</code></pre>
 BASTION_PUBLIC_IP                | &lt;bastion_public_ip&gt;
 REMOTE_CLUSTER_KEY               | ~/keys/vmcluster-01_rsa
 REMOTE_SECOND_HOP_SCRIPT         | ~/keys/connect-cluster-first-node.sh
-DB_NODE_LIST_JSON                | /home/&lt;cloud_shell_user&gt;/workbook/db-node-list.json
-DB_NODE_GET_JSON                 | /home/&lt;cloud_shell_user&gt;/workbook/db-node-get.json
-DB_NODE_HOSTNAME                 | exasc011-fxafi
-CLUSTER_FIRST_NODE_HOSTNAME      | exasc011-fxafi.client.poc.oraclevcn.com
+DB_NODE_LIST_JSON                | /home/&lt;cloud_shell_user&gt;/workbook/json/db-node-list.json
+DB_NODE_GET_JSON                 | /home/&lt;cloud_shell_user&gt;/workbook/json/db-node-get.json
+DB_NODE_HOSTNAME                 | &lt;db_node_hostname&gt;
+CLUSTER_FIRST_NODE_HOSTNAME      | &lt;cluster_node_fqdn&gt;
 Opening cluster SSH session through the bastion script as oracle.
-Opening cluster SSH session from bastion to exasc011-fxafi.client.poc.oraclevcn.com as oracle through opc.
-[oracle@exasc011-fxafi ~]$
+Opening cluster SSH session from bastion to &lt;cluster_node_fqdn&gt; as oracle through opc.
+[oracle@&lt;db_node_hostname&gt; ~]$
 
 wb11_card03</code></pre>
 </div>
       </section><section id="bash-04-open-sql-plus-as-sysdba-on-cdb01" class="article-section">
         <h2>BASH 04 - Open SQL*Plus as SYSDBA on CDB01</h2>
-        <p>After BASH 03 opens the SSH session to the first Exadata VM cluster node, the shell prompt should already be on the cluster node as <code>oracle</code>. Copy and paste the following commands one line at a time. The <code>CDB01.env</code> file sets the Oracle environment variables needed by SQL*Plus, including <code>ORACLE_HOME</code>, <code>ORACLE_SID</code>, and related library paths. After sourcing it, <code>exec sqlplus / as sysdba</code> replaces the <code>oracle</code> shell with SQL*Plus. This is intentional: when you later run <code>SQL&gt; exit</code>, the remote SQL*Plus process ends and the SSH chain returns directly to Cloud Shell.</p>
+        <p>After BASH 03 opens the SSH session, the prompt should be on the first Exadata VM cluster node as <code>oracle</code>. Run the following commands one at a time. <code>CDB01.env</code> sets the Oracle environment variables required by SQL*Plus, including <code>ORACLE_HOME</code>, <code>ORACLE_SID</code>, and related library paths. Then, <code>exec sqlplus / as sysdba</code> replaces the <code>oracle</code> shell with SQL*Plus. This is intentional: when you later run <code>SQL&gt; exit</code>, SQL*Plus ends and the SSH chain returns directly to Cloud Shell.</p>
 <h3>BASH 04 - Open SQL*Plus as SYSDBA on CDB01</h3>
 <div class="code-card">
   <div class="code-toolbar">
@@ -695,7 +695,7 @@ ssh -tt -i "$HOME/keys/$(basename "$SSH_PRIVATE_KEY_FILE")" "${BASTION_SSH_USER:
 </div>
       </section><section id="bash-06-allow-ssh-to-the-bastion-nsg" class="article-section">
         <h2>BASH 06 - Allow SSH to the bastion NSG</h2>
-        <p>To tighten bastion access, add a single IPv4 address as a <code>/32</code> SSH ingress rule on the bastion network security group. This card creates the reusable script <code>~/workbook/allow-bastion-ssh-source.sh</code>, resolves the current Cloud Shell public IP by default, and calls the reusable script with that IP address. The default rule description is <code>Allow SSH from approved source IP - Cloud Shell</code>. To allow a different source, pass the IP address as the first parameter, for example <code>wb11_card06 &lt;approved_source_ip&gt;</code>; that custom rule description is <code>Allow SSH from approved source IP - Custom</code>. This workbook uses <code>NSG_BASTION_OCID</code> for bastion access control, so the reusable script updates the bastion NSG used by the VM. It adds the <code>/32</code> rule when missing; it does not remove broader existing rules automatically.</p>
+        <p>To tighten bastion access, add a single IPv4 address as a <code>/32</code> SSH ingress rule on the bastion network security group. This card creates the reusable script <code>~/workbook/bin/allow-bastion-ssh-source.sh</code>, resolves the current Cloud Shell public IP by default, and calls the reusable script with that IP address. The default rule description is <code>Allow SSH from approved source IP - Cloud Shell</code>. To allow a different source, pass the IP address as the first parameter, for example <code>wb11_card06 &lt;approved_source_ip&gt;</code>; that custom rule description is <code>Allow SSH from approved source IP - Custom</code>. This workbook uses <code>NSG_BASTION_OCID</code> for bastion access control, so the reusable script updates the bastion NSG used by the VM. It adds the <code>/32</code> rule when missing; it does not remove broader existing rules automatically.</p>
 <h3>BASH 06 - Allow SSH to the bastion NSG</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -709,7 +709,7 @@ ssh -tt -i "$HOME/keys/$(basename "$SSH_PRIVATE_KEY_FILE")" "${BASTION_SSH_USER:
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb11_card06() {
 
-SCRIPT_FILE="$WORKBOOK_DIR/allow-bastion-ssh-source.sh"
+SCRIPT_FILE="$BIN_DIR/allow-bastion-ssh-source.sh"
 SOURCE_IP="${1:-}"
 SOURCE_IP_MODE="provided"
 
@@ -724,12 +724,20 @@ cat &gt; "$SCRIPT_FILE" &lt;&lt;'SCRIPT'
 allow_bastion_ssh_source() {
   . "$HOME/workbook/env.sh" --quiet || return 1
 
+  WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+  BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
+  JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
+  REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
+  mkdir -p "$BIN_DIR" "$JSON_DIR" "$REPORT_DIR"
+  chmod 700 "$BIN_DIR"
+
   SOURCE_IP="${1:-}"
   SOURCE_IP_MODE="${2:-provided}"
   WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
-  RULE_FILE="$WORKBOOK_DIR/nsg-bastion-ssh-source-rule.json"
-  RULES_JSON="$WORKBOOK_DIR/nsg-bastion-existing-rules.json"
-  RULE_ID_FILE="$WORKBOOK_DIR/nsg-bastion-ssh-source-rule-id.txt"
+  RULE_FILE="$JSON_DIR/nsg-bastion-ssh-source-rule.json"
+  RULES_JSON="$JSON_DIR/nsg-bastion-existing-rules.json"
+  RULE_ID_FILE="$REPORT_DIR/nsg-bastion-ssh-source-rule-id.txt"
+  RULE_ADD_ERROR_FILE="$REPORT_DIR/nsg-bastion-ssh-source-rule-add-error.txt"
   SOURCE_SSH_CIDR="$SOURCE_IP/32"
   RULE_DESCRIPTION="Allow SSH from approved source IP - Custom"
 
@@ -799,15 +807,39 @@ allow_bastion_ssh_source() {
 ]
 EOF
 
-    oci network nsg rules add \
+    if ! oci network nsg rules add \
       --region "$REGION" \
       --nsg-id "$NSG_BASTION_OCID" \
       --security-rules "file://$RULE_FILE" \
-      --query 'data[0].id' \
-      --raw-output &gt; "$RULE_ID_FILE"
+      --query 'data[].id' \
+      --raw-output &gt; "$RULE_ID_FILE" 2&gt; "$RULE_ADD_ERROR_FILE"; then
+      printf 'STOP: OCI did not add the SSH ingress rule. Details: %s\n' "$RULE_ADD_ERROR_FILE" &gt;&amp;2
+      cat "$RULE_ADD_ERROR_FILE" &gt;&amp;2
+      return 1
+    fi
 
+    oci network nsg rules list \
+      --region "$REGION" \
+      --nsg-id "$NSG_BASTION_OCID" \
+      --direction INGRESS \
+      --all \
+      --output json &gt; "$RULES_JSON"
+    NSG_RULE_ID="$(
+      jq -r --arg cidr "$SOURCE_SSH_CIDR" '
+        .data[]
+        | select(.direction == "INGRESS")
+        | select(.protocol == "6")
+        | select(.source == $cidr)
+        | select(."source-type" == "CIDR_BLOCK")
+        | select(."tcp-options"."destination-port-range".min == 22)
+        | select(."tcp-options"."destination-port-range".max == 22)
+        | .id' "$RULES_JSON" | head -n 1
+    )"
+    if [ -z "$NSG_RULE_ID" ]; then
+      printf 'STOP: OCI accepted the request but the SSH ingress rule is not visible in the bastion NSG.\n' &gt;&amp;2
+      return 1
+    fi
     NSG_RULE_STATUS="added"
-    NSG_RULE_ID="$(cat "$RULE_ID_FILE")"
   else
     NSG_RULE_STATUS="already present"
     NSG_RULE_ID="$EXISTING_RULE_ID"
@@ -825,7 +857,7 @@ EOF
     "NSG_RULE_STATUS" "$NSG_RULE_STATUS" \
     "NSG_RULE_ID" "$NSG_RULE_ID" \
     "RULE_FILE" "$RULE_FILE" \
-    "SCRIPT_FILE" "$HOME/workbook/allow-bastion-ssh-source.sh"
+    "SCRIPT_FILE" "$BIN_DIR/allow-bastion-ssh-source.sh"
 }
 
 allow_bastion_ssh_source "$@"
@@ -841,24 +873,24 @@ wb11_card06</code></pre>
 <p>To add a different source IP instead of the current Cloud Shell public IP, run the function with the IP address after pasting the card:</p>
 <div class="code-card">
   <div class="code-toolbar">
-    <span class="code-type">Bash</span>
+    <span class="code-type">Text</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for BASH 06 - Allow SSH to the bastion NSG.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for BASH 06 - Allow SSH to the bastion NSG.</span>
   </div>
   <pre class="code-scroll"><code>wb11_card06 &lt;approved_source_ip&gt;</code></pre>
 </div>
 <p>After the card creates the reusable script, you can also run it directly with any approved source IP:</p>
 <div class="code-card">
   <div class="code-toolbar">
-    <span class="code-type">Bash</span>
+    <span class="code-type">Text</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for BASH 06 - Allow SSH to the bastion NSG.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for BASH 06 - Allow SSH to the bastion NSG.</span>
   </div>
-  <pre class="code-scroll"><code>~/workbook/allow-bastion-ssh-source.sh &lt;approved_source_ip&gt;</code></pre>
+  <pre class="code-scroll"><code>~/workbook/bin/allow-bastion-ssh-source.sh &lt;approved_source_ip&gt;</code></pre>
 </div>
 <h3>OUTPUT 06 - Expected bastion SSH ingress update</h3>
 <div class="code-card">
@@ -876,8 +908,8 @@ SOURCE_SSH_CIDR              | &lt;source_ip&gt;/32
 NSG_BASTION_OCID             | ocid1.networksecuritygroup.oc1.iad.&lt;bastion_nsg_ocid&gt;
 NSG_RULE_STATUS              | added
 NSG_RULE_ID                  | &lt;nsg_security_rule_id&gt;
-RULE_FILE                    | /home/&lt;cloud_shell_user&gt;/workbook/nsg-bastion-ssh-source-rule.json
-SCRIPT_FILE                  | /home/&lt;cloud_shell_user&gt;/workbook/allow-bastion-ssh-source.sh
+RULE_FILE                    | /home/&lt;cloud_shell_user&gt;/workbook/json/nsg-bastion-ssh-source-rule.json
+SCRIPT_FILE                  | /home/&lt;cloud_shell_user&gt;/workbook/bin/allow-bastion-ssh-source.sh
 
 wb11_card06</code></pre>
 </div>

@@ -33,7 +33,7 @@
         <h1>Enable Automatic Backups</h1>
         <p class="subtitle">This section enables automatic backups for the existing container database <code>CDB01</code>, which was created with the default pluggable database <code>PDB01</code> in Chapter 10. The backup destination is Oracle Database Autonomous Recovery Service in the assigned PoC compartment through <code>DATABASE_COMPARTMENT_OCID</code>. The workflow uses the existing VCN baseline from the networking runbook: <code>subnet-db-backup</code>, the private service route through the service gateway, and the backup subnet security list rules that permit Autonomous Recovery Service backup traffic. The <code>nsg-exadata-backup</code> network security group is no longer required for this workbook series.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 15, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -294,8 +294,8 @@ wb11_card02</code></pre>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb11_card03() {
 
-RSS_SUBNETS_JSON="$HOME/workbook/recovery-service-subnets.json"
-RSS_RESPONSE_JSON="$HOME/workbook/recovery-service-subnet-create-response.json"
+RSS_SUBNETS_JSON="$JSON_DIR/recovery-service-subnets.json"
+RSS_RESPONSE_JSON="$JSON_DIR/recovery-service-subnet-create-response.json"
 
 printf '["%s"]\n' "$SUBNET_DB_BACKUP_OCID" &gt; "$RSS_SUBNETS_JSON"
 
@@ -425,8 +425,8 @@ wb11_card04</code></pre>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb11_card05() {
 
-BACKUP_DESTINATION_JSON="$HOME/workbook/cdb01-backup-destination.json"
-DATABASE_UPDATE_JSON="$HOME/workbook/cdb01-enable-automatic-backups.json"
+BACKUP_DESTINATION_JSON="$JSON_DIR/cdb01-backup-destination.json"
+DATABASE_UPDATE_JSON="$JSON_DIR/cdb01-enable-automatic-backups.json"
 
 if [ -z "$PROTECTION_POLICY_OCID" ]; then
   printf 'PROTECTION_POLICY_OCID is not set. Run BASH 04 first, then reload the workbook helpers and cli.env.\n' &gt;&amp;2
@@ -466,8 +466,8 @@ wb11_card05</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the local payload files created for the database update.</span>
   </div>
-  <pre class="code-scroll"><code>BACKUP_DESTINATION_JSON=/home/oci/workbook/cdb01-backup-destination.json
-DATABASE_UPDATE_JSON=/home/oci/workbook/cdb01-enable-automatic-backups.json
+  <pre class="code-scroll"><code>BACKUP_DESTINATION_JSON=/home/oci/workbook/json/cdb01-backup-destination.json
+DATABASE_UPDATE_JSON=/home/oci/workbook/json/cdb01-enable-automatic-backups.json
 
 wb11_card05</code></pre>
 </div>
@@ -486,9 +486,9 @@ wb11_card05</code></pre>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb11_card06() {
 
-BACKUP_DESTINATION_JSON="$HOME/workbook/cdb01-backup-destination.json"
-DATABASE_UPDATE_JSON="$HOME/workbook/cdb01-enable-automatic-backups.json"
-ENABLE_BACKUPS_RESPONSE_JSON="$HOME/workbook/cdb01-enable-automatic-backups-response.json"
+BACKUP_DESTINATION_JSON="$JSON_DIR/cdb01-backup-destination.json"
+DATABASE_UPDATE_JSON="$JSON_DIR/cdb01-enable-automatic-backups.json"
+ENABLE_BACKUPS_RESPONSE_JSON="$JSON_DIR/cdb01-enable-automatic-backups-response.json"
 
 if [ ! -s "$BACKUP_DESTINATION_JSON" ] || [ ! -s "$DATABASE_UPDATE_JSON" ]; then
   printf 'Missing backup update payload files. Run BASH 05 before enabling automatic backups.\n' &gt;&amp;2
@@ -519,7 +519,7 @@ wb11_card06</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the local response file captured from the update request.</span>
   </div>
-  <pre class="code-scroll"><code>ENABLE_BACKUPS_RESPONSE_JSON=/home/oci/workbook/cdb01-enable-automatic-backups-response.json
+  <pre class="code-scroll"><code>ENABLE_BACKUPS_RESPONSE_JSON=/home/oci/workbook/json/cdb01-enable-automatic-backups-response.json
 
 wb11_card06</code></pre>
 </div>
@@ -599,7 +599,7 @@ wb11_card07</code></pre>
 wb11_card08() {
 
 MANUAL_BACKUP_DISPLAY_NAME="${CDB_NAME}-initial-full-$(date +%Y%m%d%H%M%S)"
-INITIAL_BACKUP_OCID_FILE="$HOME/workbook/cdb01-initial-full-backup-ocid.txt"
+INITIAL_BACKUP_OCID_FILE="$REPORT_DIR/cdb01-initial-full-backup-ocid.txt"
 
 BACKUP_OCID="$(
   oci db backup create \
@@ -634,7 +634,7 @@ wb11_card08</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the initial backup OCID captured from OCI.</span>
   </div>
-  <pre class="code-scroll"><code>INITIAL_BACKUP_OCID_FILE=/home/oci/workbook/cdb01-initial-full-backup-ocid.txt
+  <pre class="code-scroll"><code>INITIAL_BACKUP_OCID_FILE=/home/oci/workbook/reports/cdb01-initial-full-backup-ocid.txt
 INITIAL_BACKUP_OCID=&lt;backup_ocid&gt;
 
 wb11_card08</code></pre>
@@ -730,8 +730,8 @@ wb11_card09</code></pre>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb11_card10() {
 
-BACKUP_REPORT="$HOME/workbook/cdb01-backup-configuration.txt"
-BACKUP_REPORT_SCRIPT="$HOME/workbook/show-cdb01-backup-configuration.sh"
+BACKUP_REPORT="$REPORT_DIR/cdb01-backup-configuration.txt"
+BACKUP_REPORT_SCRIPT="$BIN_DIR/show-cdb01-backup-configuration.sh"
 
 missing=0
 for name in CDB_NAME PDB_NAME CDB_OCID DATABASE_COMPARTMENT_OCID PROTECTION_POLICY_NAME PROTECTION_POLICY_OCID BACKUP_DESTINATION_TYPE REAL_TIME_DATA_PROTECTION_ENABLED BACKUP_RETENTION_POLICY_ON_TERMINATE; do

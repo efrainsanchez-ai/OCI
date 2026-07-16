@@ -33,7 +33,7 @@
         <h1>Stop and Start Services</h1>
         <p class="subtitle">This section stops and starts the compute-heavy parts of a non-production PoC environment when the environment does not need 24/7 operation. The stop path downscales <code>VMCluster-01</code> enabled ECPUs to <code>0</code>, stops the bastion VM with a graceful <code>SOFTSTOP</code>, and validates both resources after the change. The start path restores Exadata Exascale enabled ECPUs and starts the bastion VM when the service window reopens.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 15, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -45,7 +45,7 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#operating-assumptions">Operating assumptions</a></li><li><a href="#costs-that-can-still-be-charged">Costs that can still be charged</a></li><li><a href="#bash-01-prepare-admin-working-files">BASH 01 - Prepare admin working files</a></li><li><a href="#bash-02-review-current-service-runtime-state">BASH 02 - Review current service runtime state</a></li><li><a href="#bash-03-save-restore-values">BASH 03 - Save restore values</a></li><li><a href="#bash-04-downscale-enabled-ecpus-to-zero">BASH 04 - Downscale enabled ECPUs to zero</a></li><li><a href="#bash-05-stop-the-bastion-vm">BASH 05 - Stop the bastion VM</a></li><li><a href="#bash-06-validate-the-shutdown-state">BASH 06 - Validate the shutdown state</a></li><li><a href="#bash-07-discover-residual-cost-artifacts">BASH 07 - Discover residual cost artifacts</a></li><li><a href="#start-services-after-the-shutdown-window">Start services after the shutdown window</a></li><li><a href="#bash-08-start-the-bastion-vm">BASH 08 - Start the bastion VM</a></li><li><a href="#bash-09-restore-exadata-exascale-enabled-ecpus">BASH 09 - Restore Exadata Exascale enabled ECPUs</a></li><li><a href="#bash-10-validate-started-services">BASH 10 - Validate started services</a></li><li><a href="#oracle-documentation-references">Oracle documentation references</a></li></ol>
+      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#independent-administrator-account-model">Independent administrator account model</a></li><li><a href="#operating-assumptions">Operating assumptions</a></li><li><a href="#costs-that-can-still-be-charged">Costs that can still be charged</a></li><li><a href="#admin-workspace-setup">Admin Workspace Setup</a></li><li><a href="#current-service-status">Current Service Status</a></li><li><a href="#restore-values">Restore Values</a></li><li><a href="#cluster-downscale">Cluster Downscale</a></li><li><a href="#bastion-stop">Bastion Stop</a></li><li><a href="#shutdown-status">Shutdown Status</a></li><li><a href="#artifacts-report">Artifacts Report</a></li><li><a href="#start-services-after-the-shutdown-window">Start services after the shutdown window</a></li><li><a href="#bastion-start">Bastion Start</a></li><li><a href="#cluster-restore">Cluster Restore</a></li><li><a href="#started-service-status">Started Service Status</a></li><li><a href="#bastion-ssh-access">Bastion SSH Access</a></li><li><a href="#bastion-ssh-connection">Bastion SSH Connection</a></li><li><a href="#cluster-node-ssh-connection">Cluster Node SSH Connection</a></li><li><a href="#cluster-file-storage-mount">Cluster File Storage Mount</a></li><li><a href="#node-count-change-follow-up">Node-count change follow-up</a></li><li><a href="#oracle-documentation-references">Oracle documentation references</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
@@ -55,6 +55,43 @@
         <h2>Section purpose</h2>
         <div class="note-box">This section stops and starts the compute-heavy parts of a non-production PoC environment when the environment does not need 24/7 operation. The stop path downscales <code>VMCluster-01</code> enabled ECPUs to <code>0</code>, stops the bastion VM with a graceful <code>SOFTSTOP</code>, and validates both resources after the change. The start path restores Exadata Exascale enabled ECPUs and starts the bastion VM when the service window reopens.</div>
 <div class="note-box">This action reduces runtime consumption, but it does not make the environment free. Storage, backup retention, stopped-instance storage, public IPs, logging, observability, private endpoints, and any other provisioned paid services can continue to accrue charges. Review OCI Cost Analysis, budgets, and the current Oracle Cloud price list before using this as a recurring shutdown procedure.</div>
+      </section><section id="independent-administrator-account-model" class="article-section">
+        <h2>Independent administrator account model</h2>
+        <p>This workbook is designed for an independent administrator account that can take over the environment without relying on a previous administrator's Cloud Shell home directory. BASH 01 creates the account-local <code>~/admin</code> workspace, including <code>cli.env</code>, <code>bin</code>, <code>lib</code>, <code>json</code>, <code>reports</code>, and <code>keys</code>. The later cards rediscover the service OCIDs and names, restore only the required SSH keys from the private Object Storage bucket, and use the Bastion VM as the controlled path to the Exadata VM cluster.</p>
+<div class="bastion-flow-infographic" aria-label="Independent administrator account service operations infographic">
+  <div class="bastion-flow-main">
+    <div class="bastion-step step-admin">
+      <span class="bastion-step-number">1</span>
+      <span class="bastion-step-icon" aria-hidden="true">CS</span>
+      <strong>OCI Cloud Shell</strong>
+      <span>Independent administrator workspace. The Chapter 16 scripts and recovered values are stored under <code>~/admin</code>.</span>
+    </div>
+    <div class="bastion-connector" aria-hidden="true">SSH TCP 22</div>
+    <div class="bastion-step step-session">
+      <span class="bastion-step-number">2</span>
+      <span class="bastion-step-icon" aria-hidden="true">BST</span>
+      <strong>Bastion VM</strong>
+      <span>Controlled administration hop. Its NSG allows the approved Cloud Shell public source IP.</span>
+    </div>
+    <div class="bastion-connector" aria-hidden="true">Private SSH</div>
+    <div class="bastion-step step-host">
+      <span class="bastion-step-number">3</span>
+      <span class="bastion-step-icon" aria-hidden="true">EXA</span>
+      <strong>Exadata VM cluster</strong>
+      <span>Enabled ECPUs are downscaled and restored here; cluster-node access is through the bastion.</span>
+    </div>
+  </div>
+  <div class="bastion-control-panel">
+    <div class="bastion-control">
+      <strong>Private Object Storage bucket</strong>
+      <span>Stores the bastion and VM-cluster private-key objects that the independent administrator account restores into <code>~/admin/keys</code>.</span>
+    </div>
+    <div class="bastion-control">
+      <strong>OCI File Storage</strong>
+      <span>Provides <code>FileSystem-01</code> to the cluster nodes after restart; BASH 14 discovers its file-system availability domain and db-client mount target.</span>
+    </div>
+  </div>
+</div>
       </section><section id="operating-assumptions" class="article-section">
         <h2>Operating assumptions</h2>
         <div class="table-wrap">
@@ -133,8 +170,8 @@
 </tr>
 </tbody></table></div>
 <p>Use this runbook as a credit-saving control, not as a deletion procedure. To stop all charges, resources normally must be deleted and retained data must be removed according to your retention and compliance rules.</p>
-      </section><section id="bash-01-prepare-admin-working-files" class="article-section">
-        <h2>BASH 01 - Prepare admin working files</h2>
+      </section><section id="admin-workspace-setup" class="article-section">
+        <h2>Admin Workspace Setup</h2>
         <h3>BASH 01 - Prepare admin working files</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -142,24 +179,34 @@
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the <code>~/admin</code> directory and initialize every local response or error file used by this stop and start services workbook.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the <code>~/admin</code> directory, add <code>~/admin/bin</code> to the user PATH, create <code>~/admin/lib</code> for internal helpers, and initialize every local response or error file used by this stop and start services workbook.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>SERVICE_ADMIN_DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"
-CLI_ENV="${CLI_ENV:-$SERVICE_ADMIN_DIR/cli.env}"
-HELPERS_FILE="${HELPERS_FILE:-$SERVICE_ADMIN_DIR/helpers.sh}"
-ENV_FILE="${ENV_FILE:-$SERVICE_ADMIN_DIR/env.sh}"
-[ -r "$CLI_ENV" ] &amp;&amp; . "$CLI_ENV"
-[ -r "$HELPERS_FILE" ] &amp;&amp; . "$HELPERS_FILE"
+  <pre class="code-scroll"><code>wb16_card01() {
 
-wb16_card01() {
+clear
+
 SERVICE_ADMIN_DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"
+BIN_DIR="${BIN_DIR:-$SERVICE_ADMIN_DIR/bin}"
+LIB_DIR="${LIB_DIR:-$SERVICE_ADMIN_DIR/lib}"
+REPORT_DIR="${REPORT_DIR:-$SERVICE_ADMIN_DIR/reports}"
+JSON_DIR="${JSON_DIR:-$SERVICE_ADMIN_DIR/json}"
 CLI_ENV="${CLI_ENV:-$SERVICE_ADMIN_DIR/cli.env}"
-HELPERS_FILE="${HELPERS_FILE:-$SERVICE_ADMIN_DIR/helpers.sh}"
-ENV_FILE="${ENV_FILE:-$SERVICE_ADMIN_DIR/env.sh}"
+HELPERS_FILE="${HELPERS_FILE:-$LIB_DIR/helpers.sh}"
+ENV_FILE="${ENV_FILE:-$BIN_DIR/env.sh}"
+CLUSTER_STATUS_SCRIPT="$BIN_DIR/cluster-status.sh"
+CLUSTER_STOP_SCRIPT="$BIN_DIR/cluster-stop.sh"
+CLUSTER_START_SCRIPT="$BIN_DIR/cluster-start.sh"
 
-mkdir -p "$SERVICE_ADMIN_DIR"
-chmod 700 "$SERVICE_ADMIN_DIR"
+mkdir -p "$SERVICE_ADMIN_DIR" "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$SERVICE_ADMIN_DIR" "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
+BASH_PROFILE="$HOME/.bash_profile"
+PATH_PROFILE_LINE='export PATH="$HOME/admin/bin:$PATH"'
+touch "$BASH_PROFILE"
+if ! grep -Fqx "$PATH_PROFILE_LINE" "$BASH_PROFILE"; then
+  printf '%s\n' "$PATH_PROFILE_LINE" &gt;&gt; "$BASH_PROFILE"
+fi
+case ":$PATH:" in *":$BIN_DIR:"*) ;; *) PATH="$BIN_DIR:$PATH"; export PATH ;; esac
 printf 'Preparing admin workspace: %s ...\n' "$SERVICE_ADMIN_DIR"
 
 cat &gt; "$HELPERS_FILE" &lt;&lt;'HELPERS'
@@ -167,111 +214,47 @@ WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/admin}"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 
 load_cli_env() {
-  if [ ! -f "$CLI_ENV" ]; then
-    printf '%s does not exist. Create ~/admin/cli.env before continuing.\n' "$CLI_ENV" &gt;&amp;2
-    return 1
-  fi
+  [ -f "$CLI_ENV" ] || { printf '%s does not exist. Create ~/admin/cli.env before continuing.\n' "$CLI_ENV" &gt;&amp;2; return 1; }
   . "$CLI_ENV"
 }
 
 upsert_cli_env() {
-  KEY="${1:-}"
-  VALUE="${2:-}"
-  if [ -z "$KEY" ]; then
-    printf 'cli.env key is missing. Use upsert_cli_env KEY VALUE.\n' &gt;&amp;2
-    return 1
-  fi
-  case "$KEY" in
-    ""|*[!A-Z0-9_]*)
-      printf 'Invalid cli.env key: %s\n' "$KEY" &gt;&amp;2
-      return 1
-      ;;
-  esac
-  if [ -z "$VALUE" ] || [ "$VALUE" = "null" ]; then
-    printf '%s was not resolved. Review the command that produced this value before continuing.\n' "$KEY" &gt;&amp;2
-    return 1
-  fi
-  mkdir -p "$WORKBOOK_DIR"
-  touch "$CLI_ENV"
-  chmod 600 "$CLI_ENV"
-  if [ ! -s "$CLI_ENV" ]; then
-    printf 'set -a\nset +a\n' &gt; "$CLI_ENV"
-  fi
-  if ! grep -qx 'set -a' "$CLI_ENV"; then
-    TMP_ENV="$(mktemp "$WORKBOOK_DIR/cli-env.XXXXXX")"
-    {
-      printf 'set -a\n'
-      cat "$CLI_ENV"
-    } &gt; "$TMP_ENV"
-    mv "$TMP_ENV" "$CLI_ENV"
-  fi
-  if ! grep -qx 'set +a' "$CLI_ENV"; then
-    printf 'set +a\n' &gt;&gt; "$CLI_ENV"
-  fi
-  ESCAPED_VALUE="$(printf '%q' "$VALUE")"
-  TMP_ENV="$(mktemp "$WORKBOOK_DIR/cli-env.XXXXXX")"
-  awk -v key="$KEY" -v value="$ESCAPED_VALUE" '
-    BEGIN {
-      prefix = key "="
-      inserted = 0
-    }
-    index($0, prefix) == 1 {
-      next
-    }
-    $0 == "set +a" &amp;&amp; inserted == 0 {
-      print key "=" value
-      inserted = 1
-    }
-    {
-      print
-    }
-    END {
-      if (inserted == 0) {
-        print key "=" value
-      }
-    }
-  ' "$CLI_ENV" &gt; "$TMP_ENV"
-  mv "$TMP_ENV" "$CLI_ENV"
-  chmod 600 "$CLI_ENV"
+  KEY="${1:-}"; VALUE="${2:-}"
+  [ -n "$KEY" ] || { printf 'cli.env key is missing. Use upsert_cli_env KEY VALUE.\n' &gt;&amp;2; return 1; }
+  case "$KEY" in *[!A-Z0-9_]* ) printf 'Invalid cli.env key: %s\n' "$KEY" &gt;&amp;2; return 1;; esac
+  [ -n "$VALUE" ] &amp;&amp; [ "$VALUE" != "null" ] || { printf '%s was not resolved. Review the command that produced this value before continuing.\n' "$KEY" &gt;&amp;2; return 1; }
+  mkdir -p "$WORKBOOK_DIR"; touch "$CLI_ENV"; chmod 600 "$CLI_ENV"
+  [ -s "$CLI_ENV" ] || printf 'set -a\nset +a\n' &gt; "$CLI_ENV"
+  grep -qx 'set -a' "$CLI_ENV" || { TMP_ENV="$(mktemp "$WORKBOOK_DIR/cli-env.XXXXXX")"; { printf 'set -a\n'; cat "$CLI_ENV"; } &gt; "$TMP_ENV"; mv "$TMP_ENV" "$CLI_ENV"; }
+  grep -qx 'set +a' "$CLI_ENV" || printf 'set +a\n' &gt;&gt; "$CLI_ENV"
+  ESCAPED_VALUE="$(printf '%q' "$VALUE")"; TMP_ENV="$(mktemp "$WORKBOOK_DIR/cli-env.XXXXXX")"
+  awk -v k="$KEY" -v v="$ESCAPED_VALUE" 'BEGIN{p=k"=";d=0} index($0,p)==1{next} $0=="set +a"&amp;&amp;!d{print k"="v;d=1} {print} END{if(!d)print k"="v}' "$CLI_ENV" &gt; "$TMP_ENV"
+  mv "$TMP_ENV" "$CLI_ENV"; chmod 600 "$CLI_ENV"
   export "$KEY=$VALUE"
   printf '%-18s | %s\n%-18s | %s\n%-18s | %s\n\n' \
-    "VARIABLE" "VALUE" \
-    "------------------" "-----" \
-    "$KEY" "$VALUE"
+    "VARIABLE" "VALUE" "------------------" "-----" "$KEY" "$VALUE"
 }
 
-capture_oci_id() {
-  KEY="$1"
-  shift
-  mkdir -p "$WORKBOOK_DIR"
-  TMP_OUT="$(mktemp "$WORKBOOK_DIR/oci-cli-output.XXXXXX.txt")"
-  if ! VALUE="$("$@" --query 'data.id' --raw-output)"; then
-    rm -f "$TMP_OUT"
-    printf 'OCI command failed while resolving %s.\n' "$KEY" &gt;&amp;2
-    return 1
-  fi
-  printf '%s\n' "$VALUE" &gt; "$TMP_OUT"
-  rm -f "$TMP_OUT"
-  upsert_cli_env "$KEY" "$VALUE"
-}
 HELPERS
 chmod 700 "$HELPERS_FILE"
-. "$HELPERS_FILE"
-WORKBOOK_DIR="$SERVICE_ADMIN_DIR"
-CLI_ENV="$SERVICE_ADMIN_DIR/cli.env"
-[ -r "$CLI_ENV" ] &amp;&amp; . "$CLI_ENV"
 
 cat &gt; "$ENV_FILE" &lt;&lt;'EOF'
 cd ~/admin || return 1
-. ./helpers.sh || return 1
+. ./lib/helpers.sh || return 1
 load_cli_env || return 1
 PS1='$ '
+BIN_DIR="${BIN_DIR:-$HOME/admin/bin}"
+LIB_DIR="${LIB_DIR:-$HOME/admin/lib}"
+REPORT_DIR="${REPORT_DIR:-$HOME/admin/reports}"
+JSON_DIR="${JSON_DIR:-$HOME/admin/json}"
+mkdir -p "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
+export BIN_DIR LIB_DIR REPORT_DIR JSON_DIR
 
 if [ "${1:-}" = "--quiet" ]; then
   return 0
 fi
 
-clear
 printf '%-22s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------" "-----" \
@@ -282,109 +265,141 @@ printf '%-22s | %s\n' \
   "BASTION_VM_OCID" "$BASTION_VM_OCID"
 EOF
 chmod 700 "$ENV_FILE"
+
+cat &gt; "$CLUSTER_STATUS_SCRIPT" &lt;&lt;'SCRIPT'
+#!/bin/sh
+. "$HOME/admin/bin/env.sh" --quiet || exit 1
+clear
+oci db exadb-vm-cluster get \
+  --region "$REGION" \
+  --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+  --query 'data.{name:"display-name",lifecycle:"lifecycle-state",enabledEcpus:"enabled-e-cpu-count",totalEcpus:"total-e-cpu-count"}' \
+  --output table
+SCRIPT
+
+cat &gt; "$CLUSTER_STOP_SCRIPT" &lt;&lt;'SCRIPT'
+#!/bin/sh
+. "$HOME/admin/bin/env.sh" --quiet || exit 1
+TARGET_ENABLED_ECPUS=0
+CURRENT_ENABLED_ECPUS="$(oci db exadb-vm-cluster get --region "$REGION" --exadb-vm-cluster-id "$VM_CLUSTER_OCID" --query 'data."enabled-e-cpu-count"' --raw-output)" || exit 1
+if [ "$CURRENT_ENABLED_ECPUS" = "$TARGET_ENABLED_ECPUS" ]; then
+  printf 'VM cluster enabled ECPUs are already %s. No change submitted.\n' "$TARGET_ENABLED_ECPUS"
+  exit 0
+fi
+printf 'Confirm VM cluster downscale from %s enabled ECPUs to %s. [y/N]: ' "$CURRENT_ENABLED_ECPUS" "$TARGET_ENABLED_ECPUS"
+IFS= read -r CONFIRM
+case "$CONFIRM" in y|Y|yes|YES) ;; *) printf 'STOP: VM cluster downscale was not confirmed.\n' &gt;&amp;2; exit 1;; esac
+oci db exadb-vm-cluster update \
+  --region "$REGION" \
+  --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+  --enabled-ecpu-count "$TARGET_ENABLED_ECPUS" \
+  --force
+SCRIPT
+
+cat &gt; "$CLUSTER_START_SCRIPT" &lt;&lt;'SCRIPT'
+#!/bin/sh
+. "$HOME/admin/bin/env.sh" --quiet || exit 1
+TARGET_ENABLED_ECPUS="${SERVICE_RESTORE_ENABLED_ECPU_COUNT:-}"
+[ -n "$TARGET_ENABLED_ECPUS" ] || { printf 'STOP: SERVICE_RESTORE_ENABLED_ECPU_COUNT is missing. Run BASH 03 first.\n' &gt;&amp;2; exit 1; }
+CURRENT_ENABLED_ECPUS="$(oci db exadb-vm-cluster get --region "$REGION" --exadb-vm-cluster-id "$VM_CLUSTER_OCID" --query 'data."enabled-e-cpu-count"' --raw-output)" || exit 1
+if [ "$CURRENT_ENABLED_ECPUS" = "$TARGET_ENABLED_ECPUS" ]; then
+  printf 'VM cluster enabled ECPUs are already %s. No change submitted.\n' "$TARGET_ENABLED_ECPUS"
+  exit 0
+fi
+printf 'Confirm VM cluster restore from %s enabled ECPUs to %s. [y/N]: ' "$CURRENT_ENABLED_ECPUS" "$TARGET_ENABLED_ECPUS"
+IFS= read -r CONFIRM
+case "$CONFIRM" in y|Y|yes|YES) ;; *) printf 'STOP: VM cluster restore was not confirmed.\n' &gt;&amp;2; exit 1;; esac
+oci db exadb-vm-cluster update \
+  --region "$REGION" \
+  --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+  --enabled-ecpu-count "$TARGET_ENABLED_ECPUS" \
+  --force
+SCRIPT
+chmod 700 "$CLUSTER_STATUS_SCRIPT" "$CLUSTER_STOP_SCRIPT" "$CLUSTER_START_SCRIPT"
 printf 'Admin helper files created.\n'
 
-printf 'Enter parent compartment name [Partner]: '
-IFS= read -r POC_PARENT_COMPARTMENT_NAME
+. "$HELPERS_FILE"; WORKBOOK_DIR="$SERVICE_ADMIN_DIR"; CLI_ENV="$SERVICE_ADMIN_DIR/cli.env"; [ -r "$CLI_ENV" ] &amp;&amp; . "$CLI_ENV"
+
+printf 'Enter parent compartment name [Partner]: '; IFS= read -r POC_PARENT_COMPARTMENT_NAME
 POC_PARENT_COMPARTMENT_NAME="${POC_PARENT_COMPARTMENT_NAME:-Partner}"
-
-printf 'Enter assigned compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME"
-IFS= read -r POC_COMPARTMENT_NAME
+printf 'Enter assigned compartment name under %s [LAD-01]: ' "$POC_PARENT_COMPARTMENT_NAME"; IFS= read -r POC_COMPARTMENT_NAME
 POC_COMPARTMENT_NAME="${POC_COMPARTMENT_NAME:-LAD-01}"
+DEFAULT_VCN_NAME="${VCN_NAME:-VCN-${POC_COMPARTMENT_NAME}}"
+printf 'Enter VCN name [%s]: ' "$DEFAULT_VCN_NAME"; IFS= read -r VCN_NAME_INPUT
+VCN_NAME="${VCN_NAME_INPUT:-$DEFAULT_VCN_NAME}"
 
-EXADATA_DISPLAY_NAME="${EXADATA_DISPLAY_NAME:-VMCluster-01}"
-BASTION_DISPLAY_NAME="${BASTION_DISPLAY_NAME:-bastion-01}"
+printf 'Enter Exadata VM cluster display name [VMCluster-01]: '; IFS= read -r EXADATA_DISPLAY_NAME_INPUT
+EXADATA_DISPLAY_NAME="${EXADATA_DISPLAY_NAME_INPUT:-${EXADATA_DISPLAY_NAME:-VMCluster-01}}"
+printf 'Enter bastion VM display name [bastion-01]: '; IFS= read -r BASTION_DISPLAY_NAME_INPUT
+BASTION_DISPLAY_NAME="${BASTION_DISPLAY_NAME_INPUT:-${BASTION_DISPLAY_NAME:-bastion-01}}"
 
-printf 'This card will discover resources in /%s/%s and save values to %s.\n' \
+printf 'This card will discover VCN "%s", VM cluster "%s", and bastion VM "%s" in /%s/%s and save values to %s.\n' \
+  "$VCN_NAME" "$EXADATA_DISPLAY_NAME" "$BASTION_DISPLAY_NAME" \
   "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" "$CLI_ENV"
-printf 'Confirm this compartment path? [y/N]: '
-IFS= read -r CONFIRM_DISCOVERY
+printf 'Confirm this compartment path and resource names? [y/N]: '; IFS= read -r CONFIRM_DISCOVERY
 case "$CONFIRM_DISCOVERY" in
   y|Y|yes|YES) ;;
-  *)
-    clear
-    printf '%s\n\n' "STOP: Discovery was not confirmed. No resource variables were changed." &gt;&amp;2
-    return 1
-    ;;
+  *) clear; printf '%s\n\n' "STOP: Discovery was not confirmed. No resource variables were changed." &gt;&amp;2; return 1 ;;
 esac
 
+fail() { clear; printf "$@" &gt;&amp;2; printf '\n'; return 1; }
+ok_value() { [ -n "$1" ] &amp;&amp; [ "$1" != "null" ]; }
+
 OCI_CONFIG_FILE="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
+OCI_CONFIG_PROFILE="${OCI_CLI_PROFILE:-DEFAULT}"
+profile_value() {
+  awk -F= -v profile="$OCI_CONFIG_PROFILE" -v key="$1" '
+    $0 == "[" profile "]" { in_profile=1; next }
+    /^\[/ { in_profile=0 }
+    in_profile &amp;&amp; $1 ~ "^[[:space:]]*" key "[[:space:]]*$" {
+      gsub(/[[:space:]]/, "", $2); print $2; exit
+    }
+  ' "$OCI_CONFIG_FILE"
+}
 if [ -f "$OCI_CONFIG_FILE" ]; then
-  if [ -z "${REGION:-}" ]; then
-    REGION="$(
-      awk -F= -v profile="DEFAULT" '
-        $0 == "[" profile "]" { in_profile=1; next }
-        /^\[/ { in_profile=0 }
-        in_profile &amp;&amp; $1 ~ /^[[:space:]]*region[[:space:]]*$/ {
-          gsub(/[[:space:]]/, "", $2)
-          print $2
-          exit
-        }
-      ' "$OCI_CONFIG_FILE"
-    )"
-  fi
-  if [ -z "${TENANCY_ID:-}" ]; then
-    TENANCY_ID="$(
-      awk -F= -v profile="DEFAULT" '
-        $0 == "[" profile "]" { in_profile=1; next }
-        /^\[/ { in_profile=0 }
-        in_profile &amp;&amp; $1 ~ /^[[:space:]]*tenancy[[:space:]]*$/ {
-          gsub(/[[:space:]]/, "", $2)
-          print $2
-          exit
-        }
-      ' "$OCI_CONFIG_FILE"
-    )"
-  fi
+  [ -n "${REGION:-}" ] || REGION="$(profile_value region)"
+  [ -n "${TENANCY_ID:-}" ] || TENANCY_ID="$(profile_value tenancy)"
 fi
 
 REGION="${REGION:-$(oci configure get region 2&gt;/dev/null)}"
-if [ -z "$REGION" ] || [ "$REGION" = "null" ]; then
-  clear
-  printf '%s\n%s\n\n' \
-    "STOP: REGION could not be discovered from the active OCI CLI profile." \
-    "Action: set REGION in ~/admin/cli.env or export REGION before rerunning this card." &gt;&amp;2
-  return 1
-fi
+ok_value "$REGION" || { fail '%s\n%s\n' "STOP: REGION could not be discovered from the active OCI CLI profile." "Action: set REGION in ~/admin/cli.env or export REGION before rerunning this card."; return 1; }
+case "${TENANCY_ID:-}" in ocid1.tenancy.oc1*) ;; *) fail '%s\n' "STOP: TENANCY_ID could not be discovered from the active OCI CLI profile."; return 1;; esac
 
-if [ -z "${TENANCY_ID:-}" ] || [ "${TENANCY_ID#ocid1.tenancy.oc1}" = "$TENANCY_ID" ]; then
-  clear
-  printf '%s\n\n' "STOP: TENANCY_ID could not be discovered from the active OCI CLI profile." &gt;&amp;2
-  return 1
-fi
+oci_lookup() {
+  label="$1"; shift
+  printf '%s ...\n' "$label" &gt;&amp;2
+  "$@" --raw-output
+}
 
-POC_PARENT_COMPARTMENT_OCID="$(
-  printf 'Resolving parent compartment OCID ...\n' &gt;&amp;2
+require_value() {
+  value="$1"; message="$2"
+  ok_value "$value" || { fail '%s\n' "$message"; return 1; }
+}
+
+POC_PARENT_COMPARTMENT_OCID="$(oci_lookup 'Resolving parent compartment OCID' \
   oci iam compartment list \
     --compartment-id "$TENANCY_ID" \
     --all \
-    --query "data[?name=='$POC_PARENT_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
-    --raw-output
-)"
-if [ -z "$POC_PARENT_COMPARTMENT_OCID" ] || [ "$POC_PARENT_COMPARTMENT_OCID" = "null" ]; then
-  clear
-  printf 'STOP: Parent compartment "%s" was not found under the tenancy root.\n\n' \
-    "$POC_PARENT_COMPARTMENT_NAME" &gt;&amp;2
-  return 1
-fi
+    --query "data[?name=='$POC_PARENT_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]")"
+require_value "$POC_PARENT_COMPARTMENT_OCID" "STOP: Parent compartment \"$POC_PARENT_COMPARTMENT_NAME\" was not found under the tenancy root." || return 1
 
-POC_COMPARTMENT_OCID="$(
-  printf 'Resolving assigned compartment OCID ...\n' &gt;&amp;2
+POC_COMPARTMENT_OCID="$(oci_lookup 'Resolving assigned compartment OCID' \
   oci iam compartment list \
     --compartment-id "$POC_PARENT_COMPARTMENT_OCID" \
     --all \
-    --query "data[?name=='$POC_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
-    --raw-output
-)"
-if [ -z "$POC_COMPARTMENT_OCID" ] || [ "$POC_COMPARTMENT_OCID" = "null" ]; then
-  clear
-  printf 'STOP: Compartment "%s/%s" was not found.\n\n' \
-    "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" &gt;&amp;2
-  return 1
-fi
+    --query "data[?name=='$POC_COMPARTMENT_NAME' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]")"
+require_value "$POC_COMPARTMENT_OCID" "STOP: Compartment \"$POC_PARENT_COMPARTMENT_NAME/$POC_COMPARTMENT_NAME\" was not found." || return 1
 
-VM_CLUSTER_OCID="$(
-  printf 'Discovering Exadata VM cluster: %s ...\n' "$EXADATA_DISPLAY_NAME" &gt;&amp;2
+VCN_OCID="$(oci_lookup "Discovering VCN: $VCN_NAME" \
+  oci network vcn list \
+    --region "$REGION" \
+    --compartment-id "$POC_COMPARTMENT_OCID" \
+    --display-name "$VCN_NAME" \
+    --all \
+    --query 'data[0].id')"
+require_value "$VCN_OCID" "STOP: VCN \"$VCN_NAME\" was not found in /$POC_PARENT_COMPARTMENT_NAME/$POC_COMPARTMENT_NAME." || return 1
+
+VM_CLUSTER_OCID="$(oci_lookup "Discovering Exadata VM cluster: $EXADATA_DISPLAY_NAME" \
   oci db exadb-vm-cluster list \
     --region "$REGION" \
     --compartment-id "$POC_COMPARTMENT_OCID" \
@@ -392,18 +407,10 @@ VM_CLUSTER_OCID="$(
     --sort-by TIMECREATED \
     --sort-order DESC \
     --all \
-    --query 'data[0].id' \
-    --raw-output
-)"
-if [ -z "$VM_CLUSTER_OCID" ] || [ "$VM_CLUSTER_OCID" = "null" ]; then
-  clear
-  printf 'STOP: Exadata VM cluster "%s" was not found in /%s/%s.\n\n' \
-    "$EXADATA_DISPLAY_NAME" "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" &gt;&amp;2
-  return 1
-fi
+    --query 'data[0].id')"
+require_value "$VM_CLUSTER_OCID" "STOP: Exadata VM cluster \"$EXADATA_DISPLAY_NAME\" was not found in /$POC_PARENT_COMPARTMENT_NAME/$POC_COMPARTMENT_NAME." || return 1
 
-BASTION_VM_OCID="$(
-  printf 'Discovering bastion VM: %s ...\n' "$BASTION_DISPLAY_NAME" &gt;&amp;2
+BASTION_VM_OCID="$(oci_lookup "Discovering bastion VM: $BASTION_DISPLAY_NAME" \
   oci compute instance list \
     --region "$REGION" \
     --compartment-id "$POC_COMPARTMENT_OCID" \
@@ -411,39 +418,51 @@ BASTION_VM_OCID="$(
     --sort-by TIMECREATED \
     --sort-order DESC \
     --all \
-    --query 'data[0].id' \
-    --raw-output
-)"
-if [ -z "$BASTION_VM_OCID" ] || [ "$BASTION_VM_OCID" = "null" ]; then
-  clear
-  printf 'STOP: Bastion VM "%s" was not found in /%s/%s.\n\n' \
-    "$BASTION_DISPLAY_NAME" "$POC_PARENT_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" &gt;&amp;2
-  return 1
-fi
+    --query 'data[0].id')"
+require_value "$BASTION_VM_OCID" "STOP: Bastion VM \"$BASTION_DISPLAY_NAME\" was not found in /$POC_PARENT_COMPARTMENT_NAME/$POC_COMPARTMENT_NAME." || return 1
 
-upsert_cli_env TENANCY_ID "$TENANCY_ID" &gt;/dev/null
-upsert_cli_env REGION "$REGION" &gt;/dev/null
-upsert_cli_env POC_PARENT_COMPARTMENT_NAME "$POC_PARENT_COMPARTMENT_NAME" &gt;/dev/null
-upsert_cli_env POC_PARENT_COMPARTMENT_OCID "$POC_PARENT_COMPARTMENT_OCID" &gt;/dev/null
-upsert_cli_env POC_COMPARTMENT_NAME "$POC_COMPARTMENT_NAME" &gt;/dev/null
-upsert_cli_env POC_COMPARTMENT_OCID "$POC_COMPARTMENT_OCID" &gt;/dev/null
-upsert_cli_env VM_CLUSTER_OCID "$VM_CLUSTER_OCID" &gt;/dev/null
-upsert_cli_env BASTION_VM_OCID "$BASTION_VM_OCID" &gt;/dev/null
+BASTION_VNIC_ID="$(oci_lookup 'Discovering bastion primary VNIC' \
+  oci compute instance list-vnics \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data[0].id')"
+require_value "$BASTION_VNIC_ID" "STOP: The primary VNIC for bastion \"$BASTION_DISPLAY_NAME\" could not be discovered." || return 1
 
-for file_name in \
-  service-downscale-ecpu-response.json \
-  service-downscale-ecpu-error.txt \
-  service-bastion-stop-response.json \
-  service-bastion-stop-error.txt \
-  service-bastion-start-response.json \
-  service-bastion-start-error.txt \
-  service-restore-ecpu-response.json \
-  service-restore-ecpu-error.txt
-do
-  : &gt; "$SERVICE_ADMIN_DIR/$file_name"
+BASTION_PUBLIC_IP="$(oci_lookup 'Discovering bastion public IP' \
+  oci network vnic get \
+    --region "$REGION" \
+    --vnic-id "$BASTION_VNIC_ID" \
+    --query 'data."public-ip"')"
+require_value "$BASTION_PUBLIC_IP" "STOP: Bastion \"$BASTION_DISPLAY_NAME\" does not have a public IP address." || return 1
+
+NSG_BASTION_OCID="$(oci_lookup 'Discovering bastion network security group' \
+  oci network vnic get \
+    --region "$REGION" \
+    --vnic-id "$BASTION_VNIC_ID" \
+    --query 'data."nsg-ids"[0]')"
+require_value "$NSG_BASTION_OCID" "STOP: No network security group is attached to bastion \"$BASTION_DISPLAY_NAME\"." || return 1
+
+OBJECT_STORAGE_NAMESPACE="$(oci_lookup 'Discovering Object Storage namespace' \
+  oci os ns get \
+    --region "$REGION" \
+    --query data)"
+require_value "$OBJECT_STORAGE_NAMESPACE" "STOP: The Object Storage namespace could not be discovered." || return 1
+
+ADMIN_BUCKET_NAME="${ADMIN_BUCKET_NAME:-${REGION}-${POC_PARENT_COMPARTMENT_NAME}-${POC_COMPARTMENT_NAME}}"
+SSH_PRIVATE_KEY_FILE="$SERVICE_ADMIN_DIR/keys/$(basename "${SSH_PRIVATE_KEY_FILE:-bastion-01_rsa}")"
+
+for key in TENANCY_ID REGION POC_PARENT_COMPARTMENT_NAME POC_PARENT_COMPARTMENT_OCID POC_COMPARTMENT_NAME POC_COMPARTMENT_OCID VCN_NAME VCN_OCID EXADATA_DISPLAY_NAME BASTION_DISPLAY_NAME VM_CLUSTER_OCID BASTION_VM_OCID BASTION_VNIC_ID BASTION_PUBLIC_IP NSG_BASTION_OCID OBJECT_STORAGE_NAMESPACE ADMIN_BUCKET_NAME SSH_PRIVATE_KEY_FILE; do
+  eval "value=\${$key:-}"
+  upsert_cli_env "$key" "$value" &gt;/dev/null
 done
 
-clear
+for file_name in service-downscale-ecpu-response.json service-bastion-stop-response.json service-bastion-start-response.json service-restore-ecpu-response.json; do
+  : &gt; "$JSON_DIR/$file_name"
+done
+for file_name in service-downscale-ecpu-error.txt service-bastion-stop-error.txt service-bastion-start-error.txt service-restore-ecpu-error.txt; do
+  : &gt; "$REPORT_DIR/$file_name"
+done
+
 printf '%-28s | %s\n' \
   "FIELD" "VALUE" \
   "----------------------------" "-----" \
@@ -451,13 +470,28 @@ printf '%-28s | %s\n' \
   "CLI_ENV" "$CLI_ENV" \
   "HELPERS_FILE" "$HELPERS_FILE" \
   "ENV_FILE" "$ENV_FILE" \
+  "BASH_PROFILE" "$BASH_PROFILE" \
+  "BIN_DIR" "$BIN_DIR" \
+  "LIB_DIR" "$LIB_DIR" \
+  "CLUSTER_STATUS_SCRIPT" "$CLUSTER_STATUS_SCRIPT" \
+  "CLUSTER_STOP_SCRIPT" "$CLUSTER_STOP_SCRIPT" \
+  "CLUSTER_START_SCRIPT" "$CLUSTER_START_SCRIPT" \
   "COMPARTMENT_PATH" "/$POC_PARENT_COMPARTMENT_NAME/$POC_COMPARTMENT_NAME" \
   "TENANCY_ID" "$TENANCY_ID" \
   "REGION" "$REGION" \
   "POC_PARENT_COMPARTMENT_OCID" "$POC_PARENT_COMPARTMENT_OCID" \
   "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID" \
+  "VCN_NAME" "$VCN_NAME" \
+  "VCN_OCID" "$VCN_OCID" \
+  "EXADATA_DISPLAY_NAME" "$EXADATA_DISPLAY_NAME" \
+  "BASTION_DISPLAY_NAME" "$BASTION_DISPLAY_NAME" \
   "VM_CLUSTER_OCID" "$VM_CLUSTER_OCID" \
   "BASTION_VM_OCID" "$BASTION_VM_OCID" \
+  "BASTION_PUBLIC_IP" "$BASTION_PUBLIC_IP" \
+  "NSG_BASTION_OCID" "$NSG_BASTION_OCID" \
+  "OBJECT_STORAGE_NAMESPACE" "$OBJECT_STORAGE_NAMESPACE" \
+  "ADMIN_BUCKET_NAME" "$ADMIN_BUCKET_NAME" \
+  "SSH_PRIVATE_KEY_FILE" "$SSH_PRIVATE_KEY_FILE" \
   "FILES_INITIALIZED" "11"
 printf '\n%s\n' "wb16_card01"
 }
@@ -476,21 +510,36 @@ wb16_card01</code></pre>
 ---------------------------- | -----
 SERVICE_ADMIN_DIR            | /home/oci/admin
 CLI_ENV                      | /home/oci/admin/cli.env
-HELPERS_FILE                 | /home/oci/admin/helpers.sh
-ENV_FILE                     | /home/oci/admin/env.sh
+HELPERS_FILE                 | /home/oci/admin/lib/helpers.sh
+ENV_FILE                     | /home/oci/admin/bin/env.sh
+BASH_PROFILE                 | /home/&lt;cloud_shell_user&gt;/.bash_profile
+BIN_DIR                      | /home/oci/admin/bin
+LIB_DIR                      | /home/oci/admin/lib
+CLUSTER_STATUS_SCRIPT        | /home/oci/admin/bin/cluster-status.sh
+CLUSTER_STOP_SCRIPT          | /home/oci/admin/bin/cluster-stop.sh
+CLUSTER_START_SCRIPT         | /home/oci/admin/bin/cluster-start.sh
 COMPARTMENT_PATH             | /Partner/LAD-01
 TENANCY_ID                   | &lt;tenancy_ocid&gt;
 REGION                       | &lt;region&gt;
 POC_PARENT_COMPARTMENT_OCID  | &lt;parent_compartment_ocid&gt;
 POC_COMPARTMENT_OCID         | &lt;poc_compartment_ocid&gt;
+VCN_NAME                     | VCN-LAD-01
+VCN_OCID                     | &lt;vcn_ocid&gt;
+EXADATA_DISPLAY_NAME         | VMCluster-01
+BASTION_DISPLAY_NAME         | bastion-01
 VM_CLUSTER_OCID              | &lt;vm_cluster_ocid&gt;
 BASTION_VM_OCID              | &lt;bastion_vm_ocid&gt;
+BASTION_PUBLIC_IP            | &lt;bastion_public_ip&gt;
+NSG_BASTION_OCID             | &lt;bastion_nsg_ocid&gt;
+OBJECT_STORAGE_NAMESPACE     | &lt;object_storage_namespace&gt;
+ADMIN_BUCKET_NAME            | &lt;region&gt;-&lt;parent-compartment&gt;-&lt;compartment&gt;
+SSH_PRIVATE_KEY_FILE         | /home/&lt;cloud_shell_user&gt;/admin/keys/bastion-01_rsa
 FILES_INITIALIZED            | 11
 
 wb16_card01</code></pre>
 </div>
-      </section><section id="bash-02-review-current-service-runtime-state" class="article-section">
-        <h2>BASH 02 - Review current service runtime state</h2>
+      </section><section id="current-service-status" class="article-section">
+        <h2>Current Service Status</h2>
         <h3>BASH 02 - Review current service runtime state</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -501,9 +550,10 @@ wb16_card01</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Show the current VM cluster ECPU state and bastion VM lifecycle state before any shutdown action.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
 
 wb16_card02() {
+clear
 missing_vars=""
 for name in REGION VM_CLUSTER_OCID BASTION_VM_OCID; do
   eval "value=\${$name:-}"
@@ -513,7 +563,6 @@ for name in REGION VM_CLUSTER_OCID BASTION_VM_OCID; do
 done
 
 if [ -n "$missing_vars" ]; then
-  clear
   printf '\n%s\n%s\n%s\n\n' \
     "STOP: Missing required admin variables." \
     "Missing: $missing_vars" \
@@ -580,7 +629,6 @@ BASTION_SHAPE_CURRENT="$(
     --raw-output
 )"
 
-clear
 printf '%-26s | %s\n' \
   "FIELD" "VALUE" \
   "--------------------------" "-----" \
@@ -618,8 +666,8 @@ BASTION_SHAPE              | VM.Standard.E5.Flex
 
 wb16_card02</code></pre>
 </div>
-      </section><section id="bash-03-save-restore-values" class="article-section">
-        <h2>BASH 03 - Save restore values</h2>
+      </section><section id="restore-values" class="article-section">
+        <h2>Restore Values</h2>
         <h3>BASH 03 - Save restore values</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -627,14 +675,14 @@ wb16_card02</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Save the current enabled ECPU, total ECPU, and bastion VM state in <code>~/admin/cli.env</code> before downscaling.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Save the current enabled ECPU, total ECPU, and bastion VM restore values in <code>~/admin/cli.env</code> before downscaling.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
 
 wb16_card03() {
+clear
 if ! command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1; then
-  clear
   printf '\n%s\n%s\n\n' \
     "STOP: upsert_cli_env is not loaded." \
     "Action: run BASH 01 first, then rerun this card." &gt;&amp;2
@@ -670,19 +718,38 @@ SERVICE_RESTORE_BASTION_STATE="$(
     --query 'data."lifecycle-state"' \
     --raw-output
 )"
+SERVICE_RESTORE_BASTION_DISPLAY_NAME="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data."display-name"' \
+    --raw-output
+)"
+SERVICE_RESTORE_BASTION_SHAPE="$(
+  oci compute instance get \
+    --region "$REGION" \
+    --instance-id "$BASTION_VM_OCID" \
+    --query 'data.shape' \
+    --raw-output
+)"
 
 upsert_cli_env SERVICE_RESTORE_ENABLED_ECPU_COUNT "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" &gt;/dev/null
 upsert_cli_env SERVICE_RESTORE_TOTAL_ECPU_COUNT "$SERVICE_RESTORE_TOTAL_ECPU_COUNT" &gt;/dev/null
 upsert_cli_env SERVICE_RESTORE_NODE_COUNT "$SERVICE_RESTORE_NODE_COUNT" &gt;/dev/null
+upsert_cli_env SERVICE_RESTORE_BASTION_OCID "$BASTION_VM_OCID" &gt;/dev/null
+upsert_cli_env SERVICE_RESTORE_BASTION_DISPLAY_NAME "$SERVICE_RESTORE_BASTION_DISPLAY_NAME" &gt;/dev/null
+upsert_cli_env SERVICE_RESTORE_BASTION_SHAPE "$SERVICE_RESTORE_BASTION_SHAPE" &gt;/dev/null
 upsert_cli_env SERVICE_RESTORE_BASTION_STATE "$SERVICE_RESTORE_BASTION_STATE" &gt;/dev/null
 
-clear
 printf '%-36s | %s\n' \
   "FIELD" "VALUE" \
   "------------------------------------" "-----" \
   "SERVICE_RESTORE_ENABLED_ECPU_COUNT" "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" \
   "SERVICE_RESTORE_TOTAL_ECPU_COUNT" "$SERVICE_RESTORE_TOTAL_ECPU_COUNT" \
   "SERVICE_RESTORE_NODE_COUNT" "$SERVICE_RESTORE_NODE_COUNT" \
+  "SERVICE_RESTORE_BASTION_OCID" "$BASTION_VM_OCID" \
+  "SERVICE_RESTORE_BASTION_DISPLAY_NAME" "$SERVICE_RESTORE_BASTION_DISPLAY_NAME" \
+  "SERVICE_RESTORE_BASTION_SHAPE" "$SERVICE_RESTORE_BASTION_SHAPE" \
   "SERVICE_RESTORE_BASTION_STATE" "$SERVICE_RESTORE_BASTION_STATE"
 printf '\n%s\n' "wb16_card03"
 }
@@ -702,12 +769,15 @@ wb16_card03</code></pre>
 SERVICE_RESTORE_ENABLED_ECPU_COUNT   | 16
 SERVICE_RESTORE_TOTAL_ECPU_COUNT     | 24
 SERVICE_RESTORE_NODE_COUNT           | 2
+SERVICE_RESTORE_BASTION_OCID         | &lt;bastion_vm_ocid&gt;
+SERVICE_RESTORE_BASTION_DISPLAY_NAME | bastion-01
+SERVICE_RESTORE_BASTION_SHAPE        | VM.Standard.E5.Flex
 SERVICE_RESTORE_BASTION_STATE        | RUNNING
 
 wb16_card03</code></pre>
 </div>
-      </section><section id="bash-04-downscale-enabled-ecpus-to-zero" class="article-section">
-        <h2>BASH 04 - Downscale enabled ECPUs to zero</h2>
+      </section><section id="cluster-downscale" class="article-section">
+        <h2>Cluster Downscale</h2>
         <h3>BASH 04 - Downscale enabled ECPUs to zero</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -718,11 +788,12 @@ wb16_card03</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Update VMCluster-01 so enabled ECPUs are set to <code>0</code> for the service shutdown window.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
 
 wb16_card04() {
-DOWNSCALE_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-downscale-ecpu-response.json"
-DOWNSCALE_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-downscale-ecpu-error.txt"
+clear
+DOWNSCALE_RESPONSE_JSON="$JSON_DIR/service-downscale-ecpu-response.json"
+DOWNSCALE_ERROR_TXT="$REPORT_DIR/service-downscale-ecpu-error.txt"
 DOWNSCALE_TARGET_ENABLED_ECPUS="${DOWNSCALE_TARGET_ENABLED_ECPUS:-0}"
 
 printf 'Reading current Exadata VM cluster state before downscale ...\n'
@@ -742,7 +813,6 @@ CURRENT_ENABLED_ECPUS="$(
 )"
 
 if [ "$CLUSTER_STATE" != "AVAILABLE" ]; then
-  clear
   printf '\n%s\n%s\n%s\n\n' \
     "STOP: VM cluster is not AVAILABLE." \
     "Current state: $CLUSTER_STATE" \
@@ -754,7 +824,6 @@ if [ "$CURRENT_ENABLED_ECPUS" = "$DOWNSCALE_TARGET_ENABLED_ECPUS" ]; then
   DOWNSCALE_ACTION="SKIPPED_ALREADY_AT_TARGET"
   DOWNSCALE_STATUS="0"
 else
-  clear
   printf '%s\n%s\n%s\n' \
     "Confirm VM cluster downscale." \
     "Current enabled ECPUs: $CURRENT_ENABLED_ECPUS" \
@@ -764,7 +833,6 @@ else
   case "$CONFIRM_DOWNSCALE" in
     y|Y|yes|YES) ;;
     *)
-      clear
       printf '%s\n\n' "STOP: VM cluster downscale was not confirmed. No change was submitted." &gt;&amp;2
       return 1
       ;;
@@ -783,7 +851,6 @@ else
 fi
 
 if [ "$DOWNSCALE_STATUS" -ne 0 ]; then
-  clear
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to downscale enabled ECPUs." \
     "OCI CLI status: $DOWNSCALE_STATUS" \
@@ -796,7 +863,6 @@ if command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1; then
   upsert_cli_env DOWNSCALE_TARGET_ENABLED_ECPUS "$DOWNSCALE_TARGET_ENABLED_ECPUS" &gt;/dev/null
 fi
 
-clear
 printf '%-31s | %s\n' \
   "FIELD" "VALUE" \
   "-------------------------------" "-----" \
@@ -823,13 +889,13 @@ wb16_card04</code></pre>
 DOWNSCALE_ACTION                | SUBMITTED
 PREVIOUS_ENABLED_ECPUS          | 16
 TARGET_ENABLED_ECPUS            | 0
-DOWNSCALE_RESPONSE_JSON         | /home/oci/admin/service-downscale-ecpu-response.json
-DOWNSCALE_ERROR_TXT             | /home/oci/admin/service-downscale-ecpu-error.txt
+DOWNSCALE_RESPONSE_JSON         | /home/oci/workbook/json/service-downscale-ecpu-response.json
+DOWNSCALE_ERROR_TXT             | /home/oci/workbook/reports/service-downscale-ecpu-error.txt
 
 wb16_card04</code></pre>
 </div>
-      </section><section id="bash-05-stop-the-bastion-vm" class="article-section">
-        <h2>BASH 05 - Stop the bastion VM</h2>
+      </section><section id="bastion-stop" class="article-section">
+        <h2>Bastion Stop</h2>
         <h3>BASH 05 - Stop the bastion VM</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -840,11 +906,12 @@ wb16_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Gracefully stop the bastion VM so the approved administration host is not running during the shutdown window.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
 
 wb16_card05() {
-BASTION_STOP_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-stop-response.json"
-BASTION_STOP_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-stop-error.txt"
+clear
+BASTION_STOP_RESPONSE_JSON="$JSON_DIR/service-bastion-stop-response.json"
+BASTION_STOP_ERROR_TXT="$REPORT_DIR/service-bastion-stop-error.txt"
 
 printf 'Reading bastion VM state before stop ...\n'
 BASTION_STATE="$(
@@ -861,7 +928,6 @@ case "$BASTION_STATE" in
     BASTION_STOP_STATUS="0"
     ;;
   RUNNING)
-    clear
     printf '%s\n%s\n' \
       "Confirm bastion VM stop." \
       "Current state: $BASTION_STATE"
@@ -870,7 +936,6 @@ case "$BASTION_STATE" in
     case "$CONFIRM_BASTION_STOP" in
       y|Y|yes|YES) ;;
       *)
-        clear
         printf '%s\n\n' "STOP: Bastion VM stop was not confirmed. No change was submitted." &gt;&amp;2
         return 1
         ;;
@@ -887,7 +952,6 @@ case "$BASTION_STATE" in
     BASTION_STOP_ACTION="SOFTSTOP_SUBMITTED"
     ;;
   *)
-    clear
     printf '\n%s\n%s\n%s\n\n' \
       "STOP: Bastion VM is not in a state this card changes automatically." \
       "Current state: $BASTION_STATE" \
@@ -897,7 +961,6 @@ case "$BASTION_STATE" in
 esac
 
 if [ "$BASTION_STOP_STATUS" -ne 0 ]; then
-  clear
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to stop the bastion VM." \
     "OCI CLI status: $BASTION_STOP_STATUS" \
@@ -906,7 +969,6 @@ if [ "$BASTION_STOP_STATUS" -ne 0 ]; then
   return 1
 fi
 
-clear
 printf '%-28s | %s\n' \
   "FIELD" "VALUE" \
   "----------------------------" "-----" \
@@ -931,13 +993,13 @@ wb16_card05</code></pre>
 ---------------------------- | -----
 BASTION_PREVIOUS_STATE       | RUNNING
 BASTION_STOP_ACTION          | SOFTSTOP_SUBMITTED
-BASTION_STOP_RESPONSE_JSON   | /home/oci/admin/service-bastion-stop-response.json
-BASTION_STOP_ERROR_TXT       | /home/oci/admin/service-bastion-stop-error.txt
+BASTION_STOP_RESPONSE_JSON   | /home/oci/workbook/json/service-bastion-stop-response.json
+BASTION_STOP_ERROR_TXT       | /home/oci/workbook/reports/service-bastion-stop-error.txt
 
 wb16_card05</code></pre>
 </div>
-      </section><section id="bash-06-validate-the-shutdown-state" class="article-section">
-        <h2>BASH 06 - Validate the shutdown state</h2>
+      </section><section id="shutdown-status" class="article-section">
+        <h2>Shutdown Status</h2>
         <h3>BASH 06 - Validate the shutdown state</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -948,9 +1010,10 @@ wb16_card05</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Recheck the VM cluster enabled ECPU count and bastion VM lifecycle state after the downscale and stop actions.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
 
 wb16_card06() {
+clear
 printf 'Validating shutdown state for Exadata VM cluster and bastion VM ...\n'
 CLUSTER_DISPLAY_NAME="$(
   oci db exadb-vm-cluster get \
@@ -995,7 +1058,6 @@ BASTION_STATE="$(
     --raw-output
 )"
 
-clear
 printf '%-29s | %s\n' \
   "FIELD" "VALUE" \
   "-----------------------------" "-----" \
@@ -1029,9 +1091,9 @@ BASTION_STATE                 | STOPPED
 
 wb16_card06</code></pre>
 </div>
-      </section><section id="bash-07-discover-residual-cost-artifacts" class="article-section">
-        <h2>BASH 07 - Discover residual cost artifacts</h2>
-        <h3>BASH 07 - Discover residual cost artifacts</h3>
+      </section><section id="artifacts-report" class="article-section">
+        <h2>Artifacts Report</h2>
+        <h3>BASH 07 - Discover artifacts</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -1041,16 +1103,22 @@ wb16_card06</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Discover remaining artifacts in the assigned compartment and print the cost categories that can still accrue after downscaling enabled ECPUs and stopping the bastion VM.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
 
 wb16_card07() {
-DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"; R="$DIR/service-residual-artifacts.json"; OCI=oci; mkdir -p "$DIR"
+clear
+DIR="$JSON_DIR"; R="$DIR/service-residual-artifacts.json"; OCI=oci; mkdir -p "$DIR"; chmod 700 "$DIR"
 cnt(){ n="$(jq -r 'if (.data|type)=="array" then .data|length elif (.data.items|type)=="array" then .data.items|length else 0 end' "$1" 2&gt;/dev/null)"; case "$n" in ''|*[!0-9]*) printf 0;; *) printf '%s' "$n";; esac; }
 nam(){ jq -r 'if (.data|type)=="array" then .data[]? elif (.data.items|type)=="array" then .data.items[]? else empty end|."display-name"//.displayName//.name//."db-name"//.databaseName//.id//empty' "$1" 2&gt;/dev/null | awk 'BEGIN{s=""} NF{s=s (s?", ":"") $0} END{print s?s:"none discovered"}'; }
+vmart(){ jq -r 'if (.data|type)=="array" then .data[]? elif (.data.items|type)=="array" then .data.items[]? else empty end|[."display-name"//.displayName//.name//.id, (."vm-count"//.vmCount//."node-count"//.nodeCount//"unknown")]|@tsv' "$1" 2&gt;/dev/null | awk 'BEGIN{s=""} NF{s=s (s?", ":"") $1 " VMs " $2} END{print s?s:"none discovered"}'; }
+ecpuart(){ jq -r 'if (.data|type)=="array" then .data[]? elif (.data.items|type)=="array" then .data.items[]? else empty end|[."display-name"//.displayName//.name//.id, (."enabled-e-cpu-count"//.enabledEcpuCount//."enabled-ecpu-count"//.enabledECPUCount//"unknown"), (."total-e-cpu-count"//.totalEcpuCount//."total-ecpu-count"//.totalECPUCount//"unknown")]|@tsv' "$1" 2&gt;/dev/null | awk 'BEGIN{s=""} NF{s=s (s?", ":"") $1 " " $2 " Enabled , " $3 " Reserved"} END{print s?s:"none discovered"}'; }
+ecpubill(){ jq -r 'if (.data|type)=="array" then .data[]? elif (.data.items|type)=="array" then .data.items[]? else empty end|."enabled-e-cpu-count"//.enabledEcpuCount//."enabled-ecpu-count"//.enabledECPUCount//0' "$1" 2&gt;/dev/null | awk 'BEGIN{b="No"} $1+0&gt;0{b="Yes"} END{print b " - Only Enabled ECPUs are billed"}'; }
+flash(){ jq -r 'def items: if (.data|type)=="array" then .data elif (.data.items|type)=="array" then .data.items else [] end; items[]?|."additional-flash-cache-in-percent"//.additionalFlashCacheInPercent//."additional-flash-cache-in-gbs"//.additionalFlashCacheInGbs//."is-flash-cache-enabled"//.isFlashCacheEnabled//."flash-cache-enabled"//.flashCacheEnabled//"unknown"' "$1" 2&gt;/dev/null | awk 'BEGIN{s=""} NF{v=$0; if(v~/^[0-9]+$/) v=v"%"; s=s (s?", ":"") v} END{print s?s:"none discovered"}'; }
 run(){ l="$1"; f="$2"; shift 2; printf 'Discovering %s...\n' "$l"; "$@" &gt;"$f" 2&gt;/dev/null || printf '{"data":[]}\n' &gt;"$f"; printf 'Found %s %s.\n' "$(cnt "$f")" "$l"; }
 add(){ jq -s '{data:((.[0].data//[])+(.[1].data//[]))}' "$1" "$2" &gt;"$2.m" &amp;&amp; mv "$2.m" "$1"; }
 row(){ printf '%-28s | %s\n' "$1" "$2"; }
-wrap(){ printf '%s\n' "$2" | fold -s -w 80 | awk -v c="$1" 'NR==1{printf "%-38s | %s\n",c,$0;next}{printf "%-38s | %s\n","",$0}'; }
+wrap(){ printf '%s\n' "$2" | sed 's/ Artifacts:/\
+Artifacts:/' | fold -s -w 80 | awk -v c="$1" 'NR==1{printf "%-38s | %s\n",c,$0;next}{printf "%-38s | %s\n","",$0}'; }
 sep(){ printf '%-38s | %s\n' '--------------------------------------' '--------------------------------------------------------------------------------'; }
 
 C="$(oci db exadb-vm-cluster get --region "$REGION" --exadb-vm-cluster-id "$VM_CLUSTER_OCID" --query 'data."compartment-id"' --raw-output 2&gt;/dev/null)"
@@ -1118,12 +1186,14 @@ fi
 printf 'Found %s Object Storage objects across discovered buckets.\n' "$(cnt "$OBJ")"
 
 EXAC="$(cnt "$EXA")"; DBC="$(cnt "$DBS")"; BAKC="$(cnt "$BAK")"; RDBC="$(cnt "$RDB")"; CMPC="$(cnt "$CMP")"; BLC="$(cnt "$DIR/service-artifacts-block-volumes.json")"; BKTC="$(cnt "$BKT")"; OBJC="$(cnt "$OBJ")"; KMSC="$(cnt "$KMS")"; ESVC="$(cnt "$ESV")"; NATC="$(cnt "$DIR/service-artifacts-nat-gateways.json")"; LOGC="$(cnt "$DIR/service-artifacts-log-groups.json")"; DBMC="$(cnt "$DIR/service-artifacts-dbmgmt-managed-databases.json")"; DBMPC="$(cnt "$DIR/service-artifacts-dbmgmt-private-endpoints.json")"
-printf '{"compartmentId":"%s","exadbVmClusters":%s,"databases":%s,"databaseBackups":%s,"recoveryServiceProtectedDatabases":%s,"computeInstances":%s,"blockVolumes":%s,"objectStorageBuckets":%s,"objectStorageObjects":%s,"kmsVaults":%s,"exascaleStorageVaults":%s,"natGateways":%s,"logGroups":%s,"databaseManagementManagedDatabases":%s,"databaseManagementPrivateEndpoints":%s}\n' "$C" "$EXAC" "$DBC" "$BAKC" "$RDBC" "$CMPC" "$BLC" "$BKTC" "$OBJC" "$KMSC" "$ESVC" "$NATC" "$LOGC" "$DBMC" "$DBMPC" &gt;"$R"
+printf '{"compartmentId":"%s","exadbVmClusters":%s,"databases":%s,"databaseBackups":%s,"recoveryServiceProtectedDatabases":%s,"computeInstances":%s,"blockVolumes":%s,"objectStorageBuckets":%s,"objectStorageObjects":%s,"kmsVaults":%s,"exascaleStorageVaults":%s,"exascaleStorageVaultFlashCache":"%s","natGateways":%s,"logGroups":%s,"databaseManagementManagedDatabases":%s,"databaseManagementPrivateEndpoints":%s}\n' "$C" "$EXAC" "$DBC" "$BAKC" "$RDBC" "$CMPC" "$BLC" "$BKTC" "$OBJC" "$KMSC" "$ESVC" "$(flash "$ESV")" "$NATC" "$LOGC" "$DBMC" "$DBMPC" &gt;"$R"
 
 printf '%-28s | %s\n' 'ARTIFACT' 'COUNT' '----------------------------' '-----'
-row 'Exadata VM clusters' "$EXAC"; row 'Databases' "$DBC"; row 'Recovery protected DBs' "$RDBC"; row 'Compute instances' "$CMPC"; row 'Block volumes' "$BLC"; row 'Object Storage buckets' "$BKTC"; row 'Object Storage objects' "$OBJC"; row 'KMS vaults' "$KMSC"; row 'Exascale storage vaults' "$ESVC"; row 'NAT gateways' "$NATC"; row 'Log groups' "$LOGC"; row 'DB Mgmt managed DBs' "$DBMC"; row 'DB Mgmt private endpoints' "$DBMPC"; row 'Report JSON' "$R"
+row 'Exadata VM clusters' "$EXAC"; row 'Exascale storage vaults' "$ESVC"; row 'Databases' "$DBC"; row 'Recovery protected DBs' "$RDBC"; row 'Compute instances' "$CMPC"; row 'Block volumes' "$BLC"; row 'Object Storage buckets' "$BKTC"; row 'Object Storage objects' "$OBJC"; row 'KMS vaults' "$KMSC"; row 'NAT gateways' "$NATC"; row 'Log groups' "$LOGC"; row 'DB Mgmt managed DBs' "$DBMC"; row 'DB Mgmt private endpoints' "$DBMPC"; row 'Report JSON' "$R"
 printf '\n'; printf '%-38s | %s\n' 'COST_CATEGORY' 'STILL_CHARGED_WHEN_PAUSED'; sep
-wrap 'Exascale VM storage' "Yes - VM file system storage allocated to the Exadata VM cluster can remain billable even when enabled ECPUs are set to 0. Artifacts: Exascale storage vaults: $(nam "$ESV")"; sep
+wrap 'Exascale VM Cluster ECPUs' "$(ecpubill "$EXA") Artifacts: $(ecpuart "$EXA")"; sep
+wrap 'Exascale VM storage' "Yes - VM file system storage allocated to the Exadata VM cluster is billable even when enabled ECPUs are set to 0. Artifacts: $(vmart "$EXA")"; sep
+wrap 'Exascale Storage Vault' "YES - Storage vault capacity can remain billable. Artifacts: $(nam "$ESV"), Flash Cache $(flash "$ESV")"; sep
 wrap 'Database backups' "Yes - backups can remain billable. Artifacts: DB backups: $(nam "$BAK"); Recovery Service protected DBs: $(nam "$RDB")"; sep
 wrap 'Bastion storage' 'Yes - stopped compute keeps boot and block volume storage until deleted.'; sep
 wrap 'Object Storage' "Yes - buckets and objects remain charged until deleted or lifecycle-expired. Artifacts: buckets: $(nam "$BKT"); objects discovered: $OBJC"; sep
@@ -1163,24 +1233,43 @@ Found 3 Object Storage objects across discovered buckets.
 ARTIFACT                     | COUNT
 ---------------------------- | -----
 Exadata VM clusters          | 1
+Exascale storage vaults      | 1
 Databases                    | 1
 Recovery protected DBs       | 1
 Object Storage buckets       | 1
 Object Storage objects       | 3
 KMS vaults                   | 1
-Exascale storage vaults      | 1
-Report JSON                  | /home/oci/admin/service-residual-artifacts.json
+Report JSON                  | /home/oci/workbook/json/service-residual-artifacts.json
 
 COST_CATEGORY                          | STILL_CHARGED_WHEN_PAUSED
 -------------------------------------- | --------------------------------------------------------------------------------
-Exascale VM storage                    | Yes - VM file system storage allocated to the Exadata VM cluster can remain
-                                       | billable even when enabled ECPUs are set to 0.
+Exascale VM Cluster ECPUs              | No - Only Enabled ECPUs are billed
+                                       | Artifacts: VMCluster-01 0 Enabled , 24 Reserved
 -------------------------------------- | --------------------------------------------------------------------------------
-Database backups                       | Yes - backups can remain billable. Artifacts: DB backups:
-                                       | &lt;backup_name&gt;; Recovery Service protected DBs: &lt;database_name&gt;
+Exascale VM storage                    | Yes - VM file system storage allocated to the Exadata VM cluster is billable
+                                       | even when enabled ECPUs are set to 0.
+                                       | Artifacts: VMCluster-01 VMs 2
+-------------------------------------- | --------------------------------------------------------------------------------
+Exascale Storage Vault                 | YES - Storage vault capacity can remain billable.
+                                       | Artifacts: Vault-01, Flash Cache 0%
+-------------------------------------- | --------------------------------------------------------------------------------
+Database backups                       | Yes - backups can remain billable.
+                                       | Artifacts: DB backups: none discovered; Recovery Service protected DBs: CDB01
+-------------------------------------- | --------------------------------------------------------------------------------
+Bastion storage                        | Yes - stopped compute keeps boot and block volume storage until deleted.
 -------------------------------------- | --------------------------------------------------------------------------------
 Object Storage                         | Yes - buckets and objects remain charged until deleted or lifecycle-expired.
-                                       | Artifacts: buckets: &lt;bucket_name&gt;; objects discovered: 3
+                                       | Artifacts: buckets: &lt;object_storage_bucket_name&gt;; objects discovered: &lt;count&gt;
+-------------------------------------- | --------------------------------------------------------------------------------
+Observability, KMS, DB Mgmt            | Maybe - logging, telemetry, private endpoints, KMS configuration, and
+                                       | management services can charge by configuration and retention.
+                                       | Artifacts: KMS vaults: vault-01
+-------------------------------------- | --------------------------------------------------------------------------------
+Network services                       | Maybe - NAT Gateways, load balancers, public IPs, private endpoints, and data
+                                       | transfer can charge if provisioned or used.
+-------------------------------------- | --------------------------------------------------------------------------------
+Commitments                            | Contract-specific - credits, BYOL, subscriptions, support, and committed-spend
+                                       | terms are outside this runbook.
 -------------------------------------- | --------------------------------------------------------------------------------
 
 wb16_card07</code></pre>
@@ -1188,8 +1277,8 @@ wb16_card07</code></pre>
       </section><section id="start-services-after-the-shutdown-window" class="article-section">
         <h2>Start services after the shutdown window</h2>
         <p>When the service window reopens, reverse the shutdown in a controlled change window. Start the bastion VM so administrators can connect, restore the saved Exadata Exascale enabled ECPU count, then validate database, listener, backup, and Database Management health before releasing the environment to users.</p>
-      </section><section id="bash-08-start-the-bastion-vm" class="article-section">
-        <h2>BASH 08 - Start the bastion VM</h2>
+      </section><section id="bastion-start" class="article-section">
+        <h2>Bastion Start</h2>
         <h3>BASH 08 - Start the bastion VM</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -1200,11 +1289,12 @@ wb16_card07</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Start the bastion VM when the service window reopens.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
 
 wb16_card08() {
-BASTION_START_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-start-response.json"
-BASTION_START_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-bastion-start-error.txt"
+clear
+BASTION_START_RESPONSE_JSON="$JSON_DIR/service-bastion-start-response.json"
+BASTION_START_ERROR_TXT="$REPORT_DIR/service-bastion-start-error.txt"
 
 printf 'Reading bastion VM state before start ...\n'
 BASTION_STATE="$(
@@ -1232,7 +1322,6 @@ case "$BASTION_STATE" in
     BASTION_START_ACTION="START_SUBMITTED"
     ;;
   *)
-    clear
     printf '\n%s\n%s\n%s\n\n' \
       "STOP: Bastion VM is not in a state this card changes automatically." \
       "Current state: $BASTION_STATE" \
@@ -1242,7 +1331,6 @@ case "$BASTION_STATE" in
 esac
 
 if [ "$BASTION_START_STATUS" -ne 0 ]; then
-  clear
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to start the bastion VM." \
     "OCI CLI status: $BASTION_START_STATUS" \
@@ -1251,7 +1339,6 @@ if [ "$BASTION_START_STATUS" -ne 0 ]; then
   return 1
 fi
 
-clear
 printf '%-29s | %s\n' \
   "FIELD" "VALUE" \
   "-----------------------------" "-----" \
@@ -1276,13 +1363,13 @@ wb16_card08</code></pre>
 ----------------------------- | -----
 BASTION_PREVIOUS_STATE        | STOPPED
 BASTION_START_ACTION          | START_SUBMITTED
-BASTION_START_RESPONSE_JSON   | /home/oci/admin/service-bastion-start-response.json
-BASTION_START_ERROR_TXT       | /home/oci/admin/service-bastion-start-error.txt
+BASTION_START_RESPONSE_JSON   | /home/oci/workbook/json/service-bastion-start-response.json
+BASTION_START_ERROR_TXT       | /home/oci/workbook/reports/service-bastion-start-error.txt
 
 wb16_card08</code></pre>
 </div>
-      </section><section id="bash-09-restore-exadata-exascale-enabled-ecpus" class="article-section">
-        <h2>BASH 09 - Restore Exadata Exascale enabled ECPUs</h2>
+      </section><section id="cluster-restore" class="article-section">
+        <h2>Cluster Restore</h2>
         <h3>BASH 09 - Restore Exadata Exascale enabled ECPUs</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -1293,14 +1380,14 @@ wb16_card08</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Restore the VM cluster enabled ECPU count saved before the shutdown.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
 
 wb16_card09() {
-RESTORE_RESPONSE_JSON="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-restore-ecpu-response.json"
-RESTORE_ERROR_TXT="${SERVICE_ADMIN_DIR:-$HOME/admin}/service-restore-ecpu-error.txt"
+clear
+RESTORE_RESPONSE_JSON="$JSON_DIR/service-restore-ecpu-response.json"
+RESTORE_ERROR_TXT="$REPORT_DIR/service-restore-ecpu-error.txt"
 
 if [ -z "${SERVICE_RESTORE_ENABLED_ECPU_COUNT:-}" ]; then
-  clear
   printf '\n%s\n%s\n\n' \
     "STOP: SERVICE_RESTORE_ENABLED_ECPU_COUNT is not loaded." \
     "Action: run BASH 03 before shutdown, or set the approved enabled ECPU count in ~/admin/cli.env." &gt;&amp;2
@@ -1324,7 +1411,6 @@ CURRENT_ENABLED_ECPUS="$(
 )"
 
 if [ "$CLUSTER_STATE" != "AVAILABLE" ]; then
-  clear
   printf '\n%s\n%s\n%s\n\n' \
     "STOP: VM cluster is not AVAILABLE." \
     "Current state: $CLUSTER_STATE" \
@@ -1349,7 +1435,6 @@ else
 fi
 
 if [ "$RESTORE_STATUS" -ne 0 ]; then
-  clear
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to restore enabled ECPUs." \
     "OCI CLI status: $RESTORE_STATUS" \
@@ -1358,7 +1443,6 @@ if [ "$RESTORE_STATUS" -ne 0 ]; then
   return 1
 fi
 
-clear
 printf '%-32s | %s\n' \
   "FIELD" "VALUE" \
   "--------------------------------" "-----" \
@@ -1385,13 +1469,13 @@ wb16_card09</code></pre>
 RESTORE_ACTION                   | SUBMITTED
 PREVIOUS_ENABLED_ECPUS           | 0
 TARGET_ENABLED_ECPUS             | 16
-RESTORE_RESPONSE_JSON            | /home/oci/admin/service-restore-ecpu-response.json
-RESTORE_ERROR_TXT                | /home/oci/admin/service-restore-ecpu-error.txt
+RESTORE_RESPONSE_JSON            | /home/oci/workbook/json/service-restore-ecpu-response.json
+RESTORE_ERROR_TXT                | /home/oci/workbook/reports/service-restore-ecpu-error.txt
 
 wb16_card09</code></pre>
 </div>
-      </section><section id="bash-10-validate-started-services" class="article-section">
-        <h2>BASH 10 - Validate started services</h2>
+      </section><section id="started-service-status" class="article-section">
+        <h2>Started Service Status</h2>
         <h3>BASH 10 - Validate started services</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -1402,9 +1486,10 @@ wb16_card09</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Recheck the bastion VM and Exadata Exascale VM cluster after the start actions.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/admin/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
 
 wb16_card10() {
+clear
 printf 'Validating started state for Exadata VM cluster and bastion VM ...\n'
 CLUSTER_DISPLAY_NAME="$(
   oci db exadb-vm-cluster get \
@@ -1449,7 +1534,6 @@ BASTION_STATE="$(
     --raw-output
 )"
 
-clear
 printf '%-29s | %s\n' \
   "FIELD" "VALUE" \
   "-----------------------------" "-----" \
@@ -1483,6 +1567,657 @@ BASTION_STATE                 | RUNNING
 
 wb16_card10</code></pre>
 </div>
+      </section><section id="bastion-ssh-access" class="article-section">
+        <h2>Bastion SSH Access</h2>
+        <p>This card resolves the current Cloud Shell public IPv4 address by default and adds it as a <code>/32</code> TCP port 22 ingress rule on the bastion NSG discovered by BASH 01. It is idempotent: an existing matching rule is reported instead of duplicated. To allow another approved IPv4 address, run <code>wb16_card11 &lt;approved_source_ip&gt;</code>.</p>
+<h3>BASH 11 - Allow Cloud Shell SSH access to the bastion</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create and run a reusable <code>~/admin/bin</code> script that permits SSH from the current Cloud Shell public IP, or a supplied approved source IP.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
+
+wb16_card11() {
+clear
+SOURCE_IP="${1:-}"
+SOURCE_IP_MODE="provided"
+if [ -z "$SOURCE_IP" ]; then
+  SOURCE_IP="$(curl -fsS https://api.ipify.org)" || {
+    printf 'STOP: Unable to resolve the current Cloud Shell public IP. Run wb16_card11 &lt;approved_source_ip&gt;.\n' &gt;&amp;2
+    return 1
+  }
+  SOURCE_IP_MODE="current Cloud Shell public IP"
+fi
+
+SCRIPT_FILE="$BIN_DIR/allow-bastion-ssh-source.sh"
+mkdir -p "$BIN_DIR" "$JSON_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR" "$JSON_DIR" "$REPORT_DIR"
+
+cat &gt; "$SCRIPT_FILE" &lt;&lt;'SCRIPT'
+#!/bin/sh
+. "$HOME/admin/bin/env.sh" --quiet || return 1
+
+SOURCE_IP="${1:-}"
+SOURCE_IP_MODE="${2:-provided}"
+RULE_FILE="$JSON_DIR/nsg-bastion-ssh-source-rule.json"
+RULES_JSON="$JSON_DIR/nsg-bastion-existing-rules.json"
+RULE_ID_FILE="$REPORT_DIR/nsg-bastion-ssh-source-rule-id.txt"
+RULE_ADD_ERROR_FILE="$REPORT_DIR/nsg-bastion-ssh-source-rule-add-error.txt"
+SOURCE_SSH_CIDR="$SOURCE_IP/32"
+
+case "$SOURCE_IP" in
+  *[!0-9.]*|*.*.*.*.*|.*|*.) printf 'STOP: Source IP is not a valid IPv4 address: %s\n' "$SOURCE_IP" &gt;&amp;2; return 1 ;;
+esac
+for name in REGION NSG_BASTION_OCID; do
+  eval "value=\${$name:-}"
+  [ -n "$value" ] || { printf 'STOP: Missing required variable: %s\n' "$name" &gt;&amp;2; return 1; }
+done
+
+oci network nsg rules list \
+  --region "$REGION" \
+  --nsg-id "$NSG_BASTION_OCID" \
+  --direction INGRESS \
+  --all \
+  --output json &gt; "$RULES_JSON" || return 1
+NSG_RULE_ID="$(jq -r --arg cidr "$SOURCE_SSH_CIDR" '.data[] | select(.direction == "INGRESS" and .protocol == "6" and .source == $cidr and ."source-type" == "CIDR_BLOCK" and ."tcp-options"."destination-port-range".min == 22 and ."tcp-options"."destination-port-range".max == 22) | .id' "$RULES_JSON" | head -n 1)"
+
+if [ -z "$NSG_RULE_ID" ]; then
+  RULE_DESCRIPTION="Allow SSH from approved source IP - Custom"
+  [ "$SOURCE_IP_MODE" = "current Cloud Shell public IP" ] &amp;&amp; RULE_DESCRIPTION="Allow SSH from approved source IP - Cloud Shell"
+  cat &gt; "$RULE_FILE" &lt;&lt;EOF
+[{"description":"$RULE_DESCRIPTION","direction":"INGRESS","isStateless":false,"protocol":"6","source":"$SOURCE_SSH_CIDR","sourceType":"CIDR_BLOCK","tcpOptions":{"destinationPortRange":{"min":22,"max":22}}}]
+EOF
+  oci network nsg rules add \
+    --region "$REGION" \
+    --nsg-id "$NSG_BASTION_OCID" \
+    --security-rules "file://$RULE_FILE" \
+    --query 'data[].id' \
+    --raw-output &gt; "$RULE_ID_FILE" 2&gt; "$RULE_ADD_ERROR_FILE" || { printf 'STOP: OCI did not add the SSH ingress rule. Details: %s\n' "$RULE_ADD_ERROR_FILE" &gt;&amp;2; return 1; }
+  NSG_RULE_ID="$(head -n 1 "$RULE_ID_FILE")"
+  NSG_RULE_STATUS="added"
+else
+  NSG_RULE_STATUS="already present"
+fi
+
+printf '%-28s | %s\n' \
+  "FIELD" "VALUE" \
+  "----------------------------" "-----" \
+  "SOURCE_IP_MODE" "$SOURCE_IP_MODE" \
+  "SOURCE_IP" "$SOURCE_IP" \
+  "SOURCE_SSH_CIDR" "$SOURCE_SSH_CIDR" \
+  "NSG_BASTION_OCID" "$NSG_BASTION_OCID" \
+  "NSG_RULE_STATUS" "$NSG_RULE_STATUS" \
+  "NSG_RULE_ID" "$NSG_RULE_ID" \
+  "SCRIPT_FILE" "$HOME/admin/bin/allow-bastion-ssh-source.sh"
+SCRIPT
+
+chmod 700 "$SCRIPT_FILE"
+"$SCRIPT_FILE" "$SOURCE_IP" "$SOURCE_IP_MODE"
+printf '\n%s\n' "wb16_card11"
+}
+
+wb16_card11</code></pre>
+</div>
+<h3>OUTPUT 11 - Expected bastion NSG SSH ingress output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the approved source IP was added, or was already present, as an SSH <code>/32</code> ingress source for the bastion NSG.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                        | VALUE
+---------------------------- | -----
+SOURCE_IP_MODE               | current Cloud Shell public IP
+SOURCE_IP                    | &lt;source_ip&gt;
+SOURCE_SSH_CIDR              | &lt;source_ip&gt;/32
+NSG_BASTION_OCID             | &lt;bastion_nsg_ocid&gt;
+NSG_RULE_STATUS              | added
+NSG_RULE_ID                  | &lt;nsg_security_rule_id&gt;
+SCRIPT_FILE                  | /home/&lt;cloud_shell_user&gt;/admin/bin/allow-bastion-ssh-source.sh
+
+wb16_card11</code></pre>
+</div>
+      </section><section id="bastion-ssh-connection" class="article-section">
+        <h2>Bastion SSH Connection</h2>
+        <p>BASH 12 restores the bastion private key from the Object Storage bucket discovered by BASH 01, creates <code>~/admin/bin/connect-bastion-vm.sh</code>, adds <code>~/admin/bin</code> to the Cloud Shell <code>.bash_profile</code>, and opens an SSH session. The default bastion operating-system user is always <code>oracle</code>; use <code>opc</code> only when you explicitly need that account.</p>
+<h3>BASH 12 - Create reusable bastion SSH script</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Restore the bastion private key under <code>~/admin/keys</code>, create a reusable bastion connection script, and open the SSH session.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
+
+wb16_card12() {
+clear
+KEY_DIR="$HOME/admin/keys"
+KEY_OBJECT_NAME="$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
+KEY_PATH="$KEY_DIR/$KEY_OBJECT_NAME"
+BASTION_CONNECT_SCRIPT="$BIN_DIR/connect-bastion-vm.sh"
+BASTION_DEFAULT_USER="oracle"
+BASH_PROFILE="$HOME/.bash_profile"
+PATH_PROFILE_LINE='export PATH="$HOME/admin/bin:$PATH"'
+
+for name in REGION ADMIN_BUCKET_NAME OBJECT_STORAGE_NAMESPACE BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE; do
+  eval "value=\${$name:-}"
+  [ -n "$value" ] || { printf 'STOP: Missing required variable: %s. Run BASH 01 first.\n' "$name" &gt;&amp;2; return 1; }
+done
+
+mkdir -p "$KEY_DIR" "$BIN_DIR"
+chmod 700 "$KEY_DIR" "$BIN_DIR"
+if [ ! -s "$KEY_PATH" ]; then
+  printf 'Downloading bastion private key object: %s ...\n' "$KEY_OBJECT_NAME"
+  oci os object get \
+    --region "$REGION" \
+    --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+    --bucket-name "$ADMIN_BUCKET_NAME" \
+    --name "$KEY_OBJECT_NAME" \
+    --file "$KEY_PATH" || return 1
+fi
+chmod 600 "$KEY_PATH"
+
+cat &gt; "$BASTION_CONNECT_SCRIPT" &lt;&lt;SCRIPT
+#!/bin/sh
+BASTION_DEFAULT_USER='$BASTION_DEFAULT_USER'
+BASTION_HOST='$BASTION_PUBLIC_IP'
+BASTION_KEY_PATH='$KEY_PATH'
+BASTION_USER="\${1:-\$BASTION_DEFAULT_USER}"
+if [ ! -s "\$BASTION_KEY_PATH" ]; then
+  printf 'STOP: Missing bastion key: %s\\n' "\$BASTION_KEY_PATH" &gt;&amp;2
+else
+  printf 'Opening bastion SSH session to %s@%s\\n' "\$BASTION_USER" "\$BASTION_HOST"
+  printf 'When finished, run: exit\\n\\n'
+  exec ssh -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "\$BASTION_USER@\$BASTION_HOST"
+fi
+SCRIPT
+chmod 700 "$BASTION_CONNECT_SCRIPT"
+
+touch "$BASH_PROFILE"
+if ! grep -Fqx "$PATH_PROFILE_LINE" "$BASH_PROFILE"; then
+  printf '%s\n' "$PATH_PROFILE_LINE" &gt;&gt; "$BASH_PROFILE"
+fi
+
+printf '%-22s | %s\n' \
+  "FIELD" "VALUE" \
+  "----------------------" "-----" \
+  "DEFAULT_USER" "$BASTION_DEFAULT_USER" \
+  "CONNECT_AS_OPC" "connect-bastion-vm.sh opc" \
+  "CONNECT_AS_ORACLE" "connect-bastion-vm.sh oracle" \
+  "CONNECT_SCRIPT" "$BASTION_CONNECT_SCRIPT" \
+  "BASH_PROFILE" "$BASH_PROFILE"
+printf '%s\n\n' "New SSH host keys are accepted automatically; changed keys still stop the connection."
+"$BASTION_CONNECT_SCRIPT"
+. "$BASH_PROFILE" || return 1
+printf '\n%s\n' "wb16_card12"
+}
+
+wb16_card12</code></pre>
+</div>
+<h3>OUTPUT 12 - Expected bastion SSH script output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the reusable bastion SSH script was created and the bastion SSH session opens.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                  | VALUE
+---------------------- | -----
+DEFAULT_USER           | oracle
+CONNECT_AS_OPC         | connect-bastion-vm.sh opc
+CONNECT_AS_ORACLE      | connect-bastion-vm.sh oracle
+CONNECT_SCRIPT         | /home/&lt;cloud_shell_user&gt;/admin/bin/connect-bastion-vm.sh
+BASH_PROFILE           | /home/&lt;cloud_shell_user&gt;/.bash_profile
+New SSH host keys are accepted automatically; changed keys still stop the connection.
+
+Opening bastion SSH session to oracle@&lt;bastion_public_ip&gt;
+When finished, run: exit
+
+[oracle@bastion-01 ~]$ exit
+logout
+Connection to &lt;bastion_public_ip&gt; closed.
+
+wb16_card12</code></pre>
+</div>
+<p>After BASH 12 completes, <code>~/admin/bin</code> is available in the current Cloud Shell session and in later login sessions. Run <code>connect-bastion-vm.sh</code> to reconnect as the default <code>oracle</code> user. Use <code>connect-bastion-vm.sh opc</code> only when you explicitly need the <code>opc</code> account.</p>
+      </section><section id="cluster-node-ssh-connection" class="article-section">
+        <h2>Cluster Node SSH Connection</h2>
+        <p>This card adapts Chapter 17 BASH 06 for the Chapter 16 <code>~/admin</code> environment. It discovers the VM-cluster domain and node hostnames, restores the VM-cluster private key from the private admin bucket, and creates a reusable Cloud Shell connection script. On the bastion, it creates the same <code>~/admin</code> structure for both <code>opc</code> and <code>oracle</code> (<code>bin</code>, <code>lib</code>, <code>json</code>, and <code>reports</code>), installs the second-hop helper in <code>~/admin/lib</code>, stores the private key in <code>~/keys</code>, and adds <code>~/admin/bin</code> to each user’s <code>.bash_profile</code>. It does not open a node session automatically; use the printed command after the card completes.</p>
+<h3>BASH 13 - Create reusable cluster node SSH script</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Discover VM cluster nodes, restore the required key in <code>~/admin</code>, and create <code>connect-cluster-node.sh</code> for SSH access through the bastion.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
+
+wb16_card13() {
+clear
+KEY_DIR="$HOME/admin/keys"
+DATABASE_COMPARTMENT_OCID="${DATABASE_COMPARTMENT_OCID:-${POC_COMPARTMENT_OCID:-}}"
+BASTION_SSH_USER="${BASTION_SSH_USER:-opc}"
+CLUSTER_SSH_USER="${CLUSTER_SSH_USER:-opc}"
+TARGET_OS_USER="${TARGET_OS_USER:-oracle}"
+BASTION_KEY_PATH="$KEY_DIR/$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
+EXADATA_SSH_PRIVATE_KEY_FILE="$KEY_DIR/$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-vmcluster-01_rsa}")"
+CLUSTER_KEY_PATH="$EXADATA_SSH_PRIVATE_KEY_FILE"
+CLUSTER_KEY_OBJECT_NAME="$(basename "$CLUSTER_KEY_PATH")"
+DB_NODE_LIST_JSON="$JSON_DIR/cluster-node-list.json"
+CLUSTER_HOSTS_FILE="$REPORT_DIR/cluster-hosts.txt"
+LOCAL_CONNECT_SCRIPT="$BIN_DIR/connect-cluster-node.sh"
+SECOND_HOP_SCRIPT="$LIB_DIR/connect-cluster-node-remote.sh"
+REMOTE_SECOND_HOP_SCRIPT="~/admin/lib/connect-cluster-node-remote.sh"
+REMOTE_SETUP_SCRIPT="$LIB_DIR/install-cluster-node-ssh-assets.sh"
+REMOTE_SETUP_STAGE="/tmp/install-cluster-node-ssh-assets.sh"
+
+for name in REGION DATABASE_COMPARTMENT_OCID VM_CLUSTER_OCID BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE ADMIN_BUCKET_NAME OBJECT_STORAGE_NAMESPACE; do
+  eval "value=\${$name:-}"
+  [ -n "$value" ] || { printf 'STOP: Missing required variable: %s. Run BASH 01 first.\n' "$name" &gt;&amp;2; return 1; }
+done
+mkdir -p "$KEY_DIR" "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$KEY_DIR" "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
+[ -s "$BASTION_KEY_PATH" ] || { printf 'STOP: Missing bastion private key: %s. Run BASH 12 first.\n' "$BASTION_KEY_PATH" &gt;&amp;2; return 1; }
+
+printf 'Discovering Exadata VM cluster database-client subnet ...\n'
+EXADATA_SUBNET_OCID="$(oci db exadb-vm-cluster get \
+  --region "$REGION" \
+  --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+  --query 'data."subnet-id"' \
+  --raw-output)"
+[ -n "$EXADATA_SUBNET_OCID" ] &amp;&amp; [ "$EXADATA_SUBNET_OCID" != "null" ] || { printf 'STOP: The VM cluster database-client subnet could not be discovered.\n' &gt;&amp;2; return 1; }
+EXADATA_DOMAIN="$(oci network subnet get \
+  --region "$REGION" \
+  --subnet-id "$EXADATA_SUBNET_OCID" \
+  --query 'data."subnet-domain-name"' \
+  --raw-output)"
+[ -n "$EXADATA_DOMAIN" ] &amp;&amp; [ "$EXADATA_DOMAIN" != "null" ] || { printf 'STOP: The VM cluster subnet domain could not be discovered.\n' &gt;&amp;2; return 1; }
+
+if [ ! -s "$CLUSTER_KEY_PATH" ]; then
+  printf 'Restoring VM-cluster private key object: %s ...\n' "$CLUSTER_KEY_OBJECT_NAME"
+  oci os object get \
+    --region "$REGION" \
+    --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+    --bucket-name "$ADMIN_BUCKET_NAME" \
+    --name "$CLUSTER_KEY_OBJECT_NAME" \
+    --file "$CLUSTER_KEY_PATH" || return 1
+fi
+chmod 600 "$BASTION_KEY_PATH" "$CLUSTER_KEY_PATH"
+
+printf 'Discovering Exadata VM cluster nodes ...\n'
+oci db node list \
+  --region "$REGION" \
+  --compartment-id "$DATABASE_COMPARTMENT_OCID" \
+  --vm-cluster-id "$VM_CLUSTER_OCID" \
+  --all \
+  --output json &gt; "$DB_NODE_LIST_JSON" || return 1
+jq -r --arg domain "$EXADATA_DOMAIN" '.data | sort_by(."host-name" // .hostname // "")[] | (."host-name" // .hostname // empty) as $host | select($host != "") | if ($host | contains(".")) then $host else "\($host).\($domain)" end' "$DB_NODE_LIST_JSON" &gt; "$CLUSTER_HOSTS_FILE"
+[ "$(wc -l &lt; "$CLUSTER_HOSTS_FILE" | tr -d ' ')" -ge 2 ] || { printf 'STOP: Expected at least two VM cluster nodes in %s.\n' "$CLUSTER_HOSTS_FILE" &gt;&amp;2; return 1; }
+
+for item in \
+  "DATABASE_COMPARTMENT_OCID|$DATABASE_COMPARTMENT_OCID" \
+  "EXADATA_SSH_PRIVATE_KEY_FILE|$EXADATA_SSH_PRIVATE_KEY_FILE" \
+  "SUBNET_DBCLIENT_OCID|$EXADATA_SUBNET_OCID" \
+  "EXADATA_DOMAIN|$EXADATA_DOMAIN"; do
+  upsert_cli_env "${item%%|*}" "${item#*|}" &gt;/dev/null
+done
+
+cat &gt; "$SECOND_HOP_SCRIPT" &lt;&lt;SCRIPT
+#!/bin/sh
+CLUSTER_KEY="\$HOME/keys/$CLUSTER_KEY_OBJECT_NAME"
+TARGET_HOST="\$1"
+TARGET_OS_USER="\${2:-$TARGET_OS_USER}"
+if [ -z "\$TARGET_HOST" ] || [ ! -s "\$CLUSTER_KEY" ]; then
+  printf 'STOP: A target host and cluster key are required.\n' &gt;&amp;2
+else
+  chmod 700 "\$HOME/admin" "\$HOME/keys" "\$CLUSTER_KEY"
+  if [ "\$TARGET_OS_USER" = "$CLUSTER_SSH_USER" ]; then ssh -tt -i "\$CLUSTER_KEY" -o StrictHostKeyChecking=accept-new "$CLUSTER_SSH_USER@\$TARGET_HOST"; else ssh -tt -i "\$CLUSTER_KEY" -o StrictHostKeyChecking=accept-new "$CLUSTER_SSH_USER@\$TARGET_HOST" "sudo -iu \$TARGET_OS_USER"; fi
+fi
+SCRIPT
+chmod 700 "$SECOND_HOP_SCRIPT"
+
+cat &gt; "$REMOTE_SETUP_SCRIPT" &lt;&lt;SCRIPT
+#!/bin/sh
+set -eu
+KEY_STAGE="\$1"
+SCRIPT_STAGE="\$2"
+KEY_NAME="\$3"
+PATH_PROFILE_LINE='export PATH="\$HOME/admin/bin:\$PATH"'
+
+for user_name in opc oracle; do
+  home_dir="/home/\$user_name"
+  primary_group="\$(id -gn "\$user_name")"
+  install -d -m 700 -o "\$user_name" -g "\$primary_group" "\$home_dir/admin" "\$home_dir/admin/bin" "\$home_dir/admin/lib" "\$home_dir/admin/json" "\$home_dir/admin/reports" "\$home_dir/keys"
+  install -m 700 -o "\$user_name" -g "\$primary_group" "\$SCRIPT_STAGE" "\$home_dir/admin/lib/connect-cluster-node-remote.sh"
+  install -m 600 -o "\$user_name" -g "\$primary_group" "\$KEY_STAGE" "\$home_dir/keys/\$KEY_NAME"
+  touch "\$home_dir/.bash_profile"
+  chown "\$user_name:\$primary_group" "\$home_dir/.bash_profile"
+  grep -Fqx "\$PATH_PROFILE_LINE" "\$home_dir/.bash_profile" || printf '%s\n' "\$PATH_PROFILE_LINE" &gt;&gt; "\$home_dir/.bash_profile"
+done
+
+rm -f "\$KEY_STAGE" "\$SCRIPT_STAGE"
+SCRIPT
+chmod 700 "$REMOTE_SETUP_SCRIPT"
+
+cat &gt; "$LOCAL_CONNECT_SCRIPT" &lt;&lt;SCRIPT
+#!/bin/sh
+BASTION_USER='$BASTION_SSH_USER'
+BASTION_HOST='$BASTION_PUBLIC_IP'
+BASTION_KEY='$BASTION_KEY_PATH'
+CLUSTER_HOSTS_FILE='$CLUSTER_HOSTS_FILE'
+REMOTE_SCRIPT='$REMOTE_SECOND_HOP_SCRIPT'
+NODE_NUMBER="\${1:-1}"
+TARGET_OS_USER="\${2:-$TARGET_OS_USER}"
+TARGET_HOST="\$(sed -n "\${NODE_NUMBER}p" "\$CLUSTER_HOSTS_FILE")"
+if [ -z "\$TARGET_HOST" ]; then
+  printf 'STOP: No cluster host found for node %s.\n' "\$NODE_NUMBER" &gt;&amp;2
+else
+  printf 'Opening cluster node %s through bastion: %s as %s\n\n' "\$NODE_NUMBER" "\$TARGET_HOST" "\$TARGET_OS_USER"
+  ssh -tt -i "\$BASTION_KEY" -o StrictHostKeyChecking=accept-new "\$BASTION_USER@\$BASTION_HOST" "\$REMOTE_SCRIPT '\$TARGET_HOST' '\$TARGET_OS_USER'"
+fi
+SCRIPT
+chmod 700 "$LOCAL_CONNECT_SCRIPT"
+
+scp -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$CLUSTER_KEY_PATH" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP:/tmp/$CLUSTER_KEY_OBJECT_NAME" || return 1
+scp -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$SECOND_HOP_SCRIPT" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP:/tmp/connect-cluster-node.sh" || return 1
+scp -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$REMOTE_SETUP_SCRIPT" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP:$REMOTE_SETUP_STAGE" || return 1
+ssh -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" "chmod 700 $REMOTE_SETUP_STAGE &amp;&amp; sudo /bin/sh $REMOTE_SETUP_STAGE /tmp/$CLUSTER_KEY_OBJECT_NAME /tmp/connect-cluster-node.sh $CLUSTER_KEY_OBJECT_NAME" || return 1
+
+printf '%-34s | %s\n' \
+  "FIELD" "VALUE" \
+  "----------------------------------" "-----" \
+  "CONNECT_SCRIPT" "$LOCAL_CONNECT_SCRIPT" \
+  "OPC_REMOTE_HELPER" "/home/opc/admin/lib/connect-cluster-node-remote.sh" \
+  "ORACLE_REMOTE_HELPER" "/home/oracle/admin/lib/connect-cluster-node-remote.sh" \
+  "OPC_CLUSTER_KEY" "/home/opc/keys/$CLUSTER_KEY_OBJECT_NAME" \
+  "ORACLE_CLUSTER_KEY" "/home/oracle/keys/$CLUSTER_KEY_OBJECT_NAME" \
+  "NODE_1" "$(sed -n '1p' "$CLUSTER_HOSTS_FILE")" \
+  "NODE_2" "$(sed -n '2p' "$CLUSTER_HOSTS_FILE")" \
+  "CONNECT_NODE_1" "connect-cluster-node.sh 1 oracle" \
+  "CONNECT_NODE_2" "connect-cluster-node.sh 2 oracle"
+printf '\n%s\n' "wb16_card13"
+}
+
+wb16_card13</code></pre>
+</div>
+<h3>OUTPUT 13 - Expected cluster node SSH script output</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the reusable cluster SSH script was created and shows the connection commands for both VM cluster nodes.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                              | VALUE
+---------------------------------- | -----
+CONNECT_SCRIPT                     | /home/&lt;cloud_shell_user&gt;/admin/bin/connect-cluster-node.sh
+OPC_REMOTE_HELPER                  | /home/opc/admin/lib/connect-cluster-node-remote.sh
+ORACLE_REMOTE_HELPER               | /home/oracle/admin/lib/connect-cluster-node-remote.sh
+OPC_CLUSTER_KEY                    | /home/opc/keys/vmcluster-01_rsa
+ORACLE_CLUSTER_KEY                 | /home/oracle/keys/vmcluster-01_rsa
+NODE_1                             | exasc01&lt;node_1_suffix&gt;.client.poc.oraclevcn.com
+NODE_2                             | exasc01&lt;node_2_suffix&gt;.client.poc.oraclevcn.com
+CONNECT_NODE_1                     | connect-cluster-node.sh 1 oracle
+CONNECT_NODE_2                     | connect-cluster-node.sh 2 oracle
+
+wb16_card13</code></pre>
+</div>
+<p>After BASH 13 completes, you can open a VM cluster node from Cloud Shell at any time. For example, connect to node 1 as the <code>oracle</code> user with <code>connect-cluster-node.sh 1 oracle</code>. The Cloud Shell command calls the internal second-hop helper in each bastion user’s <code>~/admin/lib</code> directory.</p>
+      </section><section id="cluster-file-storage-mount" class="article-section">
+        <h2>Cluster File Storage Mount</h2>
+        <p>This card adapts the Chapter 17 recovery mount workflow for the Chapter 16 <code>~/admin</code> environment. It discovers the db-client File Storage mount target and private DNS name, restores the VM-cluster SSH key from the private admin bucket when necessary, and saves non-sensitive recovery values in <code>~/admin/cli.env</code>. It then creates the runnable <code>~/admin/bin/mount-filesystem-cluster.sh</code>, copies its internal helper, key, and host list to the bastion, and mounts the export on every discovered VM cluster node.</p>
+<h3>BASH 14 - Mount File Storage on Exadata VM cluster nodes</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Discover the File Storage and VM-cluster access values needed after restart, create a reusable <code>~/admin</code> mount helper, and validate the mount on all cluster nodes.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
+
+wb16_card14() {
+clear
+KEY_DIR="$HOME/admin/keys"
+DATABASE_COMPARTMENT_OCID="${DATABASE_COMPARTMENT_OCID:-${POC_COMPARTMENT_OCID:-}}"
+FSS_NAME="${FSS_NAME:-FileSystem-01}"
+FSS_EXPORT_PATH="${FSS_EXPORT_PATH:-/FileSystem-01}"
+FSS_MOUNT_POINT="${FSS_MOUNT_POINT:-/mnt/FileSystem-01}"
+FSS_DBCLIENT_MOUNT_TARGET_NAME="${FSS_DBCLIENT_MOUNT_TARGET_NAME:-mt-FileSystem-01-dbclient}"
+FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-all-nodes.sh}"
+EXADATA_SSH_PRIVATE_KEY_FILE="$KEY_DIR/$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-vmcluster-01_rsa}")"
+BASTION_KEY_PATH="$KEY_DIR/$(basename "$SSH_PRIVATE_KEY_FILE")"
+CLUSTER_KEY_PATH="$EXADATA_SSH_PRIVATE_KEY_FILE"
+CLUSTER_KEY_OBJECT_NAME="$(basename "$CLUSTER_KEY_PATH")"
+DB_NODE_LIST_JSON="$JSON_DIR/fss-db-node-list.json"
+CLUSTER_HOSTS_FILE="$REPORT_DIR/filesystem-01-cluster-hosts.txt"
+LOCAL_MOUNT_SCRIPT="$BIN_DIR/mount-filesystem-cluster.sh"
+REMOTE_MOUNT_SCRIPT="~/admin/lib/$FSS_REMOTE_SCRIPT_NAME"
+REMOTE_HOSTS_FILE="~/admin/reports/filesystem-01-cluster-hosts.txt"
+
+for name in REGION DATABASE_COMPARTMENT_OCID VM_CLUSTER_OCID BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE ADMIN_BUCKET_NAME OBJECT_STORAGE_NAMESPACE; do
+  eval "value=\${$name:-}"
+  [ -n "$value" ] || { printf 'STOP: Missing required variable: %s. Run BASH 01 first.\n' "$name" &gt;&amp;2; return 1; }
+done
+
+mkdir -p "$KEY_DIR" "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$KEY_DIR" "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
+[ -s "$BASTION_KEY_PATH" ] || { printf 'STOP: Missing bastion private key: %s. Run BASH 12 first.\n' "$BASTION_KEY_PATH" &gt;&amp;2; return 1; }
+
+printf 'Discovering File Storage db-client mount target ...\n'
+FSS_FILE_SYSTEM_OCID="${FSS_FILE_SYSTEM_OCID:-}"
+if [ -z "$FSS_FILE_SYSTEM_OCID" ] || [ "$FSS_FILE_SYSTEM_OCID" = "null" ]; then
+  printf 'Discovering File Storage file system from export path %s ...\n' "$FSS_EXPORT_PATH"
+  FSS_FILE_SYSTEM_OCID="$(oci fs export list \
+    --region "$REGION" \
+    --compartment-id "$DATABASE_COMPARTMENT_OCID" \
+    --query "data[?path=='$FSS_EXPORT_PATH'].\"file-system-id\" | [0]" \
+    --raw-output)"
+fi
+[ -n "$FSS_FILE_SYSTEM_OCID" ] &amp;&amp; [ "$FSS_FILE_SYSTEM_OCID" != "null" ] || { printf 'STOP: A File Storage file system with export path "%s" was not found.\n' "$FSS_EXPORT_PATH" &gt;&amp;2; return 1; }
+FSS_AVAILABILITY_DOMAIN="$(oci fs file-system get \
+  --region "$REGION" \
+  --file-system-id "$FSS_FILE_SYSTEM_OCID" \
+  --query 'data."availability-domain"' \
+  --raw-output)"
+[ -n "$FSS_AVAILABILITY_DOMAIN" ] &amp;&amp; [ "$FSS_AVAILABILITY_DOMAIN" != "null" ] || { printf 'STOP: The File Storage availability domain could not be discovered.\n' &gt;&amp;2; return 1; }
+FSS_DBCLIENT_MOUNT_TARGET_OCID="$(oci fs mount-target list \
+  --region "$REGION" \
+  --compartment-id "$DATABASE_COMPARTMENT_OCID" \
+  --availability-domain "$FSS_AVAILABILITY_DOMAIN" \
+  --display-name "$FSS_DBCLIENT_MOUNT_TARGET_NAME" \
+  --all \
+  --query 'data[0].id' \
+  --raw-output)"
+[ -n "$FSS_DBCLIENT_MOUNT_TARGET_OCID" ] &amp;&amp; [ "$FSS_DBCLIENT_MOUNT_TARGET_OCID" != "null" ] || { printf 'STOP: File Storage mount target "%s" was not found.\n' "$FSS_DBCLIENT_MOUNT_TARGET_NAME" &gt;&amp;2; return 1; }
+
+FSS_DBCLIENT_PRIVATE_IP_OCID="$(oci fs mount-target get \
+  --region "$REGION" \
+  --mount-target-id "$FSS_DBCLIENT_MOUNT_TARGET_OCID" \
+  --query 'data."private-ip-ids"[0]' \
+  --raw-output)"
+FSS_DBCLIENT_SUBNET_OCID="$(oci fs mount-target get \
+  --region "$REGION" \
+  --mount-target-id "$FSS_DBCLIENT_MOUNT_TARGET_OCID" \
+  --query 'data."subnet-id"' \
+  --raw-output)"
+FSS_MOUNT_TARGET_HOST_LABEL="$(oci network private-ip get \
+  --region "$REGION" \
+  --private-ip-id "$FSS_DBCLIENT_PRIVATE_IP_OCID" \
+  --query 'data."hostname-label"' \
+  --raw-output)"
+FSS_DBCLIENT_SUBNET_DNS_LABEL="$(oci network subnet get \
+  --region "$REGION" \
+  --subnet-id "$FSS_DBCLIENT_SUBNET_OCID" \
+  --query 'data."dns-label"' \
+  --raw-output)"
+FSS_VCN_OCID="$(oci network subnet get \
+  --region "$REGION" \
+  --subnet-id "$FSS_DBCLIENT_SUBNET_OCID" \
+  --query 'data."vcn-id"' \
+  --raw-output)"
+FSS_VCN_DNS_LABEL="$(oci network vcn get \
+  --region "$REGION" \
+  --vcn-id "$FSS_VCN_OCID" \
+  --query 'data."dns-label"' \
+  --raw-output)"
+for name in FSS_DBCLIENT_PRIVATE_IP_OCID FSS_DBCLIENT_SUBNET_OCID FSS_MOUNT_TARGET_HOST_LABEL FSS_DBCLIENT_SUBNET_DNS_LABEL FSS_VCN_DNS_LABEL; do
+  eval "value=\${$name:-}"
+  [ -n "$value" ] &amp;&amp; [ "$value" != "null" ] || { printf 'STOP: Could not discover %s for the File Storage mount target.\n' "$name" &gt;&amp;2; return 1; }
+done
+FSS_CLUSTER_MOUNT_HOST="$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_DBCLIENT_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com"
+
+if [ ! -s "$CLUSTER_KEY_PATH" ]; then
+  printf 'Restoring VM-cluster private key object: %s ...\n' "$CLUSTER_KEY_OBJECT_NAME"
+  oci os object get \
+    --region "$REGION" \
+    --namespace-name "$OBJECT_STORAGE_NAMESPACE" \
+    --bucket-name "$ADMIN_BUCKET_NAME" \
+    --name "$CLUSTER_KEY_OBJECT_NAME" \
+    --file "$CLUSTER_KEY_PATH" || return 1
+fi
+chmod 600 "$BASTION_KEY_PATH" "$CLUSTER_KEY_PATH"
+
+printf 'Discovering Exadata VM cluster nodes ...\n'
+oci db node list \
+  --region "$REGION" \
+  --compartment-id "$DATABASE_COMPARTMENT_OCID" \
+  --vm-cluster-id "$VM_CLUSTER_OCID" \
+  --all \
+  --output json &gt; "$DB_NODE_LIST_JSON" || return 1
+EXADATA_DOMAIN="${EXADATA_DOMAIN:-$FSS_DBCLIENT_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com}"
+jq -r --arg domain "$EXADATA_DOMAIN" '.data[] | (."host-name" // .hostname // empty) as $host | select($host != "") | if ($host | contains(".")) then $host else "\($host).\($domain)" end' "$DB_NODE_LIST_JSON" &gt; "$CLUSTER_HOSTS_FILE"
+[ -s "$CLUSTER_HOSTS_FILE" ] || { printf 'STOP: No VM cluster node hostnames were discovered.\n' &gt;&amp;2; return 1; }
+
+for item in \
+  "DATABASE_COMPARTMENT_OCID|$DATABASE_COMPARTMENT_OCID" \
+  "EXADATA_SSH_PRIVATE_KEY_FILE|$EXADATA_SSH_PRIVATE_KEY_FILE" \
+  "FSS_NAME|$FSS_NAME" \
+  "FSS_EXPORT_PATH|$FSS_EXPORT_PATH" \
+  "FSS_MOUNT_POINT|$FSS_MOUNT_POINT" \
+  "FSS_FILE_SYSTEM_OCID|$FSS_FILE_SYSTEM_OCID" \
+  "FSS_AVAILABILITY_DOMAIN|$FSS_AVAILABILITY_DOMAIN" \
+  "FSS_DBCLIENT_MOUNT_TARGET_NAME|$FSS_DBCLIENT_MOUNT_TARGET_NAME" \
+  "FSS_DBCLIENT_MOUNT_TARGET_OCID|$FSS_DBCLIENT_MOUNT_TARGET_OCID" \
+  "FSS_CLUSTER_MOUNT_HOST|$FSS_CLUSTER_MOUNT_HOST" \
+  "FSS_REMOTE_SCRIPT_NAME|$FSS_REMOTE_SCRIPT_NAME"; do
+  upsert_cli_env "${item%%|*}" "${item#*|}" &gt;/dev/null
+done
+
+cat &gt; "$LOCAL_MOUNT_SCRIPT" &lt;&lt;SCRIPT
+#!/bin/bash
+set -e
+BASTION_KEY_PATH='$BASTION_KEY_PATH'
+CLUSTER_KEY_PATH='$CLUSTER_KEY_PATH'
+CLUSTER_KEY_NAME='$CLUSTER_KEY_OBJECT_NAME'
+BASTION_PUBLIC_IP='$BASTION_PUBLIC_IP'
+CLUSTER_HOSTS_FILE='$CLUSTER_HOSTS_FILE'
+REMOTE_MOUNT_SCRIPT='$REMOTE_MOUNT_SCRIPT'
+REMOTE_HOSTS_FILE='$REMOTE_HOSTS_FILE'
+REMOTE_TMP="\$(mktemp)"
+cat &gt; "\$REMOTE_TMP" &lt;&lt;'REMOTE_SCRIPT'
+#!/bin/bash
+set -e
+CLUSTER_KEY="\$HOME/keys/$CLUSTER_KEY_OBJECT_NAME"
+CLUSTER_HOSTS_FILE="\$HOME/admin/reports/filesystem-01-cluster-hosts.txt"
+while IFS= read -r TARGET_HOST; do
+  [ -n "\$TARGET_HOST" ] || continue
+  printf '\\nChecking File Storage mount on %s ...\\n' "\$TARGET_HOST"
+  ssh -i "\$CLUSTER_KEY" -o StrictHostKeyChecking=accept-new "opc@\$TARGET_HOST" 'bash -s' &lt;&lt;'NODE_SCRIPT'
+set -e
+sudo mkdir -p '$FSS_MOUNT_POINT'
+if ! command -v mount.nfs &gt;/dev/null 2&gt;&amp;1; then sudo dnf install -y nfs-utils &gt;/dev/null 2&gt;&amp;1 || sudo yum install -y nfs-utils &gt;/dev/null 2&gt;&amp;1; fi
+if mountpoint -q '$FSS_MOUNT_POINT'; then printf 'File Storage is already mounted at %s.\\n' '$FSS_MOUNT_POINT'; else printf 'Mounting File Storage at %s ...\\n' '$FSS_MOUNT_POINT'; sudo mount '$FSS_CLUSTER_MOUNT_HOST:$FSS_EXPORT_PATH' '$FSS_MOUNT_POINT'; fi
+sudo chown oracle:oinstall '$FSS_MOUNT_POINT' 2&gt;/dev/null || true
+df -h '$FSS_MOUNT_POINT'
+NODE_SCRIPT
+done &lt; "\$CLUSTER_HOSTS_FILE"
+REMOTE_SCRIPT
+ssh -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "opc@\$BASTION_PUBLIC_IP" "mkdir -p ~/admin/bin ~/admin/lib ~/admin/json ~/admin/reports ~/keys &amp;&amp; chmod 700 ~/admin ~/admin/bin ~/admin/lib ~/admin/json ~/admin/reports ~/keys"
+scp -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "\$CLUSTER_KEY_PATH" "opc@\$BASTION_PUBLIC_IP:~/keys/\$CLUSTER_KEY_NAME"
+scp -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "\$CLUSTER_HOSTS_FILE" "opc@\$BASTION_PUBLIC_IP:\$REMOTE_HOSTS_FILE"
+scp -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "\$REMOTE_TMP" "opc@\$BASTION_PUBLIC_IP:\$REMOTE_MOUNT_SCRIPT"
+rm -f "\$REMOTE_TMP"
+ssh -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "opc@\$BASTION_PUBLIC_IP" "chmod 700 ~/keys ~/keys/\$CLUSTER_KEY_NAME \$REMOTE_MOUNT_SCRIPT &amp;&amp; chmod 600 \$REMOTE_HOSTS_FILE &amp;&amp; sudo install -d -m 700 -o oracle /home/oracle/admin /home/oracle/admin/bin /home/oracle/admin/lib /home/oracle/admin/json /home/oracle/admin/reports /home/oracle/keys &amp;&amp; sudo install -m 600 -o oracle ~/keys/\$CLUSTER_KEY_NAME /home/oracle/keys/\$CLUSTER_KEY_NAME &amp;&amp; sudo install -m 700 -o oracle \$REMOTE_MOUNT_SCRIPT /home/oracle/admin/lib/\$FSS_REMOTE_SCRIPT_NAME &amp;&amp; sudo install -m 600 -o oracle \$REMOTE_HOSTS_FILE /home/oracle/admin/reports/filesystem-01-cluster-hosts.txt &amp;&amp; \$REMOTE_MOUNT_SCRIPT"
+SCRIPT
+chmod 700 "$LOCAL_MOUNT_SCRIPT"
+
+printf '%-34s | %s\n' \
+  "FIELD" "VALUE" \
+  "----------------------------------" "-----" \
+  "FSS_FILE_SYSTEM_OCID" "$FSS_FILE_SYSTEM_OCID" \
+  "FSS_AVAILABILITY_DOMAIN" "$FSS_AVAILABILITY_DOMAIN" \
+  "FSS_CLUSTER_MOUNT_HOST" "$FSS_CLUSTER_MOUNT_HOST" \
+  "CLUSTER_KEY_PATH" "$CLUSTER_KEY_PATH" \
+  "CLUSTER_HOSTS_FILE" "$CLUSTER_HOSTS_FILE" \
+  "LOCAL_MOUNT_SCRIPT" "$LOCAL_MOUNT_SCRIPT" \
+  "OPC_REMOTE_HELPER" "$REMOTE_MOUNT_SCRIPT" \
+  "ORACLE_REMOTE_HELPER" "/home/oracle/admin/lib/$FSS_REMOTE_SCRIPT_NAME"
+"$LOCAL_MOUNT_SCRIPT" || return 1
+printf '\n%s\n' "wb16_card14"
+}
+
+wb16_card14</code></pre>
+</div>
+<h3>OUTPUT 14 - Expected File Storage mount validation</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the mount target was discovered, the reusable admin helper was created, and each VM cluster node reports the File Storage mount.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                              | VALUE
+---------------------------------- | -----
+FSS_FILE_SYSTEM_OCID               | &lt;file_system_ocid&gt;
+FSS_AVAILABILITY_DOMAIN            | &lt;availability_domain&gt;
+FSS_CLUSTER_MOUNT_HOST             | fs01.client.poc.oraclevcn.com
+CLUSTER_KEY_PATH                   | /home/&lt;cloud_shell_user&gt;/admin/keys/vmcluster-01_rsa
+CLUSTER_HOSTS_FILE                 | /home/&lt;cloud_shell_user&gt;/admin/reports/filesystem-01-cluster-hosts.txt
+LOCAL_MOUNT_SCRIPT                 | /home/&lt;cloud_shell_user&gt;/admin/bin/mount-filesystem-cluster.sh
+OPC_REMOTE_HELPER                  | ~/admin/lib/configure-filesystem-01-all-nodes.sh
+ORACLE_REMOTE_HELPER               | /home/oracle/admin/lib/configure-filesystem-01-all-nodes.sh
+
+Checking File Storage mount on exasc01&lt;node_suffix&gt;.client.poc.oraclevcn.com ...
+File Storage is already mounted at /mnt/FileSystem-01.
+Filesystem                                      Size  Used Avail Use% Mounted on
+fs01.client.poc.oraclevcn.com:/FileSystem-01   &lt;size&gt; &lt;used&gt; &lt;free&gt; &lt;pct&gt; /mnt/FileSystem-01
+
+wb16_card14</code></pre>
+</div>
+      </section><section id="node-count-change-follow-up" class="article-section">
+        <h2>Node-count change follow-up</h2>
+        <p>After an Exadata VM cluster node-count change, rerun these cards before using the new or changed nodes. This refreshes the independent administrator account's discovered values and avoids using a stale cluster host list.</p>
+<ul class="article-list">
+<li>BASH 01 - Prepare admin working files: rediscover the VCN, VM cluster, bastion, and related <code>~/admin/cli.env</code> values.</li>
+<li>BASH 02 - Review current service runtime state: confirm the updated VM cluster node count and lifecycle state.</li>
+<li>BASH 13 - Create reusable cluster node SSH script: rediscover all node hostnames and rebuild <code>~/admin/bin/connect-cluster-node.sh</code>.</li>
+<li>BASH 14 - Mount File Storage on Exadata VM cluster nodes: rediscover the File Storage mount target and validate or mount <code>FileSystem-01</code> on every current node.</li>
+</ul>
+<h3>Manual enabled-ECPU upscale or downscale follow-up</h3>
+<p>If an administrator changes the enabled ECPU count manually in the OCI Console or CLI, wait until the VM cluster returns to <code>AVAILABLE</code>, then follow this procedure:</p>
+<ol class="article-list ordered">
+<li>Run BASH 02 - Review current service runtime state to confirm the new enabled ECPU count and cluster state.</li>
+<li>Run BASH 03 - Save restore values to replace <code>SERVICE_RESTORE_ENABLED_ECPU_COUNT</code> with the newly approved enabled ECPU count before the next shutdown window.</li>
+<li>For a manual downscale to <code>0</code> that begins a shutdown window, run BASH 05 - Stop the bastion VM, then BASH 06 - Validate the shutdown state.</li>
+<li>For a manual upscale to a nonzero value, run BASH 10 - Validate started services. Run BASH 08 first only if the bastion VM is stopped and must be started.</li>
+<li>Do not rerun BASH 13 or BASH 14 for an enabled-ECPU-only change. Rerun them only when the VM cluster node count changes.</li>
+</ol>
       </section><section id="oracle-documentation-references" class="article-section">
         <h2>Oracle documentation references</h2>
         <div class="table-wrap">

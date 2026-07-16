@@ -31,9 +31,9 @@
       <div class="hero-copy">
         <p class="eyebrow">Chapter 15</p>
         <h1>OCI File Storage</h1>
-        <p class="subtitle">This workbook creates and configures OCI File Storage for the PoC environment. The file system is named <code>FileSystem-01</code>, is created in the assigned <code>LAD-01</code> compartment, and is exported through mount targets in <code>subnet-admin</code>, <code>subnet-dbclient</code>, and <code>subnet-applications</code>. The bastion VM uses the admin mount target. Exadata VM cluster nodes use the db client mount target, which confirms there is a File Storage mount point in the db client subnet.</p>
+        <p class="subtitle">This workbook creates and configures OCI File Storage for the PoC environment. It creates <code>FileSystem-01</code> in the assigned <code>LAD-01</code> compartment and exports it through mount targets in <code>subnet-admin</code>, <code>subnet-dbclient</code>, and <code>subnet-applications</code>. The bastion VM uses the admin mount target, while Exadata VM cluster nodes use the db-client mount target.</p>
         <div class="hero-meta">
-          <span>Last updated July 13, 2026</span>
+          <span>Last updated July 15, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -53,7 +53,7 @@
       </nav>
       <section id="section-purpose" class="article-section">
         <h2>Section purpose</h2>
-        <div class="note-box">This workbook creates and configures OCI File Storage for the PoC environment. The file system is named <code>FileSystem-01</code>, is created in the assigned <code>LAD-01</code> compartment, and is exported through mount targets in <code>subnet-admin</code>, <code>subnet-dbclient</code>, and <code>subnet-applications</code>. The bastion VM uses the admin mount target. Exadata VM cluster nodes use the db client mount target, which confirms there is a File Storage mount point in the db client subnet.</div>
+        <div class="note-box">This workbook creates and configures OCI File Storage for the PoC environment. It creates <code>FileSystem-01</code> in the assigned <code>LAD-01</code> compartment and exports it through mount targets in <code>subnet-admin</code>, <code>subnet-dbclient</code>, and <code>subnet-applications</code>. The bastion VM uses the admin mount target, while Exadata VM cluster nodes use the db-client mount target.</div>
 <div class="note-box">After the OCI service is ready, the workbook uses SSH from Cloud Shell to run remote commands on the bastion VM as <code>opc</code>. On the bastion VM only, the workflow creates or normalizes the <code>oracle</code> user and <code>oinstall</code> group with UID/GID <code>1001</code>, mounts the file system at <code>/mnt/FileSystem-01</code>, changes ownership to <code>oracle:oinstall</code>, and validates the mount with <code>df -h</code> and <code>du -hs</code>.</div>
 <div class="note-box">For the Exadata VM cluster nodes, the workflow copies a reusable script to <code>~/admin</code> on the bastion VM and runs it from the bastion for each discovered cluster node. The cluster-node step does not create the <code>oracle</code> user or <code>oinstall</code> group; it connects as <code>opc</code> and runs only the mount configuration and validation commands through <code>sudo</code>.</div>
 <div class="note-box">All variables needed by this workbook are loaded from <code>~/workbook/cli.env</code> through the standard helper scripts. If Cloud Shell storage was reset or another user account is continuing the PoC, run the Recover Variables workbook first so the helper scripts rebuild the required compartment, VCN, subnet, NSG, bastion, SSH key, VM cluster, and database discovery values before starting this chapter.</div>

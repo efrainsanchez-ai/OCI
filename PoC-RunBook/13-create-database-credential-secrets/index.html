@@ -33,7 +33,7 @@
         <h1>Create Database Credential Secrets</h1>
         <p class="subtitle">This section creates the OCI Vault resources required before OCI Database Management can use database credentials. The workbook creates or reuses a Vault in the assigned PoC compartment through SECURITY_COMPARTMENT_OCID identified by <code>SECURITY_COMPARTMENT_OCID</code>, which chapter 05 aliases to the assigned PoC compartment, creates or reuses an AES KMS key in that Vault, and stores the <code>CDB_ADMIN_PASSWORD</code> value from Chapter 10 as separate Vault secrets for the <code>SYS</code> and <code>SYSTEM</code> users.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 15, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -326,7 +326,7 @@ wb12_card02</code></pre>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 
 wb12_card03() {
-VAULT_CREATE_RESPONSE_JSON="$HOME/workbook/cdb-credential-vault-create-response.json"
+VAULT_CREATE_RESPONSE_JSON="$JSON_DIR/cdb-credential-vault-create-response.json"
 
 missing_vars=""
 for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_NAME; do
@@ -609,8 +609,8 @@ wb12_card05</code></pre>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 
 wb12_card06() {
-KEY_SHAPE_JSON="$HOME/workbook/cdb-credential-key-shape.json"
-KEY_CREATE_RESPONSE_JSON="$HOME/workbook/cdb-credential-key-create-response.json"
+KEY_SHAPE_JSON="$JSON_DIR/cdb-credential-key-shape.json"
+KEY_CREATE_RESPONSE_JSON="$JSON_DIR/cdb-credential-key-create-response.json"
 
 missing_vars=""
 for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT CDB_CREDENTIAL_KEY_NAME; do
@@ -1066,8 +1066,8 @@ if [ -n "$missing_vars" ]; then
   return 1
 fi
 
-CDB_SECRET_REPORT="$HOME/workbook/cdb01-credential-secrets.txt"
-CDB_SECRET_REPORT_SCRIPT="$HOME/workbook/show-cdb01-credential-secrets.sh"
+CDB_SECRET_REPORT="$REPORT_DIR/cdb01-credential-secrets.txt"
+CDB_SECRET_REPORT_SCRIPT="$BIN_DIR/show-cdb01-credential-secrets.sh"
 
 cat &gt; "$CDB_SECRET_REPORT_SCRIPT" &lt;&lt;'SCRIPT'
 #!/bin/sh

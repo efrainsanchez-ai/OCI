@@ -33,7 +33,7 @@
         <h1>Upscale the Cluster to Two Nodes</h1>
         <p class="subtitle">This section adds a second VM to VMCluster-01 using the Exadata Database Service on Exascale Infrastructure update path. The cards are deliberately split into preflight, execute, monitor, and validation so each step can be run under change control.</p>
         <div class="hero-meta">
-          <span>Last updated July 6, 2026</span>
+          <span>Last updated July 15, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -107,7 +107,7 @@ etag: 9cd7bff4--gzip</code></pre>
   <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
 wb09_card02() {
 
-UPDATE_RESPONSE_JSON="$WORKBOOK_DIR/vmcluster-two-node-update.json"
+UPDATE_RESPONSE_JSON="$JSON_DIR/vmcluster-two-node-update.json"
 
 oci db exadb-vm-cluster update \
   --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
@@ -155,7 +155,7 @@ REQUESTED_NODE_COUNT     | 2
 ENABLED_ECPUS            | 8
 TOTAL_ECPUS              | 12
 WORK_REQUEST_ID          | &lt;work_request_ocid&gt;
-UPDATE_RESPONSE_JSON     | /home/&lt;cloud_shell_user&gt;/workbook/vmcluster-two-node-update.json
+UPDATE_RESPONSE_JSON     | /home/&lt;cloud_shell_user&gt;/workbook/json/vmcluster-two-node-update.json
 
 wb09_card02</code></pre>
 </div>
