@@ -33,7 +33,7 @@
         <h1>Stop and Start Services</h1>
         <p class="subtitle">This section stops and starts the compute-heavy parts of a non-production PoC environment when the environment does not need 24/7 operation. The stop path downscales <code>VMCluster-01</code> enabled ECPUs to <code>0</code>, stops the bastion VM with a graceful <code>SOFTSTOP</code>, and validates both resources after the change. The start path restores Exadata Exascale enabled ECPUs and starts the bastion VM when the service window reopens.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -189,6 +189,7 @@ clear
 SERVICE_ADMIN_DIR="${SERVICE_ADMIN_DIR:-$HOME/admin}"
 BIN_DIR="${BIN_DIR:-$SERVICE_ADMIN_DIR/bin}"
 LIB_DIR="${LIB_DIR:-$SERVICE_ADMIN_DIR/lib}"
+KEY_DIR="${KEY_DIR:-$SERVICE_ADMIN_DIR/keys}"
 REPORT_DIR="${REPORT_DIR:-$SERVICE_ADMIN_DIR/reports}"
 JSON_DIR="${JSON_DIR:-$SERVICE_ADMIN_DIR/json}"
 CLI_ENV="${CLI_ENV:-$SERVICE_ADMIN_DIR/cli.env}"
@@ -198,8 +199,8 @@ CLUSTER_STATUS_SCRIPT="$BIN_DIR/cluster-status.sh"
 CLUSTER_STOP_SCRIPT="$BIN_DIR/cluster-stop.sh"
 CLUSTER_START_SCRIPT="$BIN_DIR/cluster-start.sh"
 
-mkdir -p "$SERVICE_ADMIN_DIR" "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
-chmod 700 "$SERVICE_ADMIN_DIR" "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
+mkdir -p "$SERVICE_ADMIN_DIR" "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$REPORT_DIR" "$JSON_DIR"
+chmod 700 "$SERVICE_ADMIN_DIR" "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$REPORT_DIR" "$JSON_DIR"
 BASH_PROFILE="$HOME/.bash_profile"
 PATH_PROFILE_LINE='export PATH="$HOME/admin/bin:$PATH"'
 touch "$BASH_PROFILE"
@@ -239,17 +240,19 @@ HELPERS
 chmod 700 "$HELPERS_FILE"
 
 cat &gt; "$ENV_FILE" &lt;&lt;'EOF'
-cd ~/admin || return 1
-. ./lib/helpers.sh || return 1
+SERVICE_ADMIN_DIR="$HOME/admin"
+cd "$SERVICE_ADMIN_DIR" || return 1
+LIB_DIR="$SERVICE_ADMIN_DIR/lib"
+. "$LIB_DIR/helpers.sh" || return 1
 load_cli_env || return 1
 PS1='$ '
-BIN_DIR="${BIN_DIR:-$HOME/admin/bin}"
-LIB_DIR="${LIB_DIR:-$HOME/admin/lib}"
-REPORT_DIR="${REPORT_DIR:-$HOME/admin/reports}"
-JSON_DIR="${JSON_DIR:-$HOME/admin/json}"
-mkdir -p "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
-chmod 700 "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
-export BIN_DIR LIB_DIR REPORT_DIR JSON_DIR
+BIN_DIR="$SERVICE_ADMIN_DIR/bin"
+KEY_DIR="$SERVICE_ADMIN_DIR/keys"
+JSON_DIR="$SERVICE_ADMIN_DIR/json"
+REPORT_DIR="$SERVICE_ADMIN_DIR/reports"
+mkdir -p "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+export SERVICE_ADMIN_DIR BIN_DIR LIB_DIR KEY_DIR JSON_DIR REPORT_DIR
 
 if [ "${1:-}" = "--quiet" ]; then
   return 0

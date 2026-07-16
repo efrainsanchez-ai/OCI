@@ -33,7 +33,7 @@
         <h1>Create Database Credential Secrets</h1>
         <p class="subtitle">This section creates the OCI Vault resources required before OCI Database Management can use database credentials. The workbook creates or reuses a Vault in the assigned PoC compartment through SECURITY_COMPARTMENT_OCID identified by <code>SECURITY_COMPARTMENT_OCID</code>, which chapter 05 aliases to the assigned PoC compartment, creates or reuses an AES KMS key in that Vault, and stores the <code>CDB_ADMIN_PASSWORD</code> value from Chapter 10 as separate Vault secrets for the <code>SYS</code> and <code>SYSTEM</code> users.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -164,9 +164,9 @@
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Display the assigned PoC compartment through SECURITY_COMPARTMENT_OCID, CDB01, and password variable prerequisites before creating Vault resources.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb12_card01() {
+  <pre class="code-scroll"><code>wb13_card01() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 EXPECTED_OCI_CLI_VERSION="3.73.1"
 ACTUAL_OCI_CLI_VERSION="$(oci --version 2&gt;/dev/null || true)"
 
@@ -183,7 +183,7 @@ for name in REGION SECURITY_COMPARTMENT_OCID CDB_NAME CDB_ADMIN_PASSWORD; do
 done
 
 if [ -n "$missing_vars" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Missing required workbook variables." \
     "Missing: $missing_vars" \
@@ -194,7 +194,6 @@ if [ -n "$missing_vars" ]; then
   return 1
 fi
 
-clear
 printf '%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n\n' \
   "VARIABLE" "VALUE" \
   "------------------------------------" "-----" \
@@ -204,10 +203,10 @@ printf '%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n
   "SECURITY_COMPARTMENT_OCID" "$SECURITY_COMPARTMENT_OCID" \
   "CDB_NAME" "$CDB_NAME" \
   "CDB_ADMIN_PASSWORD" "loaded"
-printf '\n%s\n' "wb12_card01"
+  printf '\n%s\n' "wb13_card01"
 }
 
-wb12_card01</code></pre>
+wb13_card01</code></pre>
 </div>
 <h3>OUTPUT 01 - Expected security prerequisite table</h3>
 <div class="code-card">
@@ -240,9 +239,9 @@ wb12_card01</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Persist the new Vault, key, SYS secret, and SYSTEM secret naming variables.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb12_card02() {
-
+  <pre class="code-scroll"><code>wb13_card02() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 CDB_CREDENTIAL_VAULT_NAME="${CDB_CREDENTIAL_VAULT_NAME:-vault-01}"
 CDB_CREDENTIAL_KEY_NAME="${CDB_CREDENTIAL_KEY_NAME:-key-01}"
 CDB_SYS_SECRET_NAME="${CDB_SYS_SECRET_NAME:-cdb01-sys-password}"
@@ -253,7 +252,6 @@ upsert_cli_env CDB_CREDENTIAL_KEY_NAME "$CDB_CREDENTIAL_KEY_NAME" &gt;/dev/null
 upsert_cli_env CDB_SYS_SECRET_NAME "$CDB_SYS_SECRET_NAME" &gt;/dev/null
 upsert_cli_env CDB_SYSTEM_SECRET_NAME "$CDB_SYSTEM_SECRET_NAME" &gt;/dev/null
 
-clear
 printf '%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n\n' \
   "VARIABLE" "VALUE" \
   "------------------------------------" "-----" \
@@ -261,10 +259,10 @@ printf '%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n%-36s | %s\n
   "CDB_CREDENTIAL_KEY_NAME" "$CDB_CREDENTIAL_KEY_NAME" \
   "CDB_SYS_SECRET_NAME" "$CDB_SYS_SECRET_NAME" \
   "CDB_SYSTEM_SECRET_NAME" "$CDB_SYSTEM_SECRET_NAME"
-printf '\n%s\n' "wb12_card02"
+  printf '\n%s\n' "wb13_card02"
 }
 
-wb12_card02</code></pre>
+wb13_card02</code></pre>
 </div>
 <h3>OUTPUT 02 - Expected Vault and secret names</h3>
 <div class="code-card">
@@ -323,9 +321,9 @@ wb12_card02</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create or reuse the CDB credential Vault in the assigned PoC compartment through SECURITY_COMPARTMENT_OCID and capture its Vault OCID.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb12_card03() {
+  <pre class="code-scroll"><code>wb13_card03() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 VAULT_CREATE_RESPONSE_JSON="$JSON_DIR/cdb-credential-vault-create-response.json"
 
 missing_vars=""
@@ -337,7 +335,7 @@ for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_NAME; do
 done
 
 if [ -n "$missing_vars" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Missing required workbook variables." \
     "Missing: $missing_vars" \
@@ -374,7 +372,7 @@ if [ -z "$CDB_CREDENTIAL_VAULT_OCID" ] || [ "$CDB_CREDENTIAL_VAULT_OCID" = "null
 fi
 
 if [ -z "$CDB_CREDENTIAL_VAULT_OCID" ] || [ "$CDB_CREDENTIAL_VAULT_OCID" = "null" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to create or locate the credential Vault." \
     "Vault name: $CDB_CREDENTIAL_VAULT_NAME" \
@@ -385,15 +383,14 @@ fi
 
 upsert_cli_env CDB_CREDENTIAL_VAULT_OCID "$CDB_CREDENTIAL_VAULT_OCID" &gt;/dev/null
 
-clear
 printf '%-30s | %s\n' \
   "VARIABLE" "VALUE" \
   "------------------------------" "-----" \
   "CDB_CREDENTIAL_VAULT_OCID" "$CDB_CREDENTIAL_VAULT_OCID"
-printf '\n%s\n' "wb12_card03"
+  printf '\n%s\n' "wb13_card03"
 }
 
-wb12_card03</code></pre>
+wb13_card03</code></pre>
 </div>
 <h3>OUTPUT 03 - Expected Vault OCID capture</h3>
 <div class="code-card">
@@ -421,9 +418,9 @@ wb12_card03</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Capture the Vault management endpoint after OCI finishes populating it.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb12_card04() {
+  <pre class="code-scroll"><code>wb13_card04() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 missing_vars=""
 for name in REGION CDB_CREDENTIAL_VAULT_OCID; do
   eval "value=\${$name:-}"
@@ -433,7 +430,7 @@ for name in REGION CDB_CREDENTIAL_VAULT_OCID; do
 done
 
 if [ -n "$missing_vars" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Missing required workbook variables." \
     "Missing: $missing_vars" \
@@ -451,7 +448,7 @@ CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT="$(
 )"
 
 if [ -z "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" ] || [ "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" = "null" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Vault management endpoint is not available yet." \
     "Vault OCID: $CDB_CREDENTIAL_VAULT_OCID" \
@@ -462,15 +459,14 @@ fi
 
 upsert_cli_env CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" &gt;/dev/null
 
-clear
 printf '%-42s | %s\n' \
   "VARIABLE" "VALUE" \
   "------------------------------------------" "-----" \
   "CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT"
-printf '\n%s\n' "wb12_card04"
+  printf '\n%s\n' "wb13_card04"
 }
 
-wb12_card04</code></pre>
+wb13_card04</code></pre>
 </div>
 <h3>OUTPUT 04 - Expected Vault endpoint capture</h3>
 <div class="code-card">
@@ -498,9 +494,9 @@ wb12_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the credential Vault lifecycle state before creating the key.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb12_card05() {
+  <pre class="code-scroll"><code>wb13_card05() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 missing_vars=""
 for name in REGION CDB_CREDENTIAL_VAULT_OCID; do
   eval "value=\${$name:-}"
@@ -510,7 +506,7 @@ for name in REGION CDB_CREDENTIAL_VAULT_OCID; do
 done
 
 if [ -n "$missing_vars" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Missing required workbook variables." \
     "Missing: $missing_vars" \
@@ -519,16 +515,15 @@ if [ -n "$missing_vars" ]; then
   return 1
 fi
 
-clear
 oci kms management vault get \
   --region "$REGION" \
   --vault-id "$CDB_CREDENTIAL_VAULT_OCID" \
   --query '[{"field":`displayName`,"value":data."display-name"},{"field":`state`,"value":data."lifecycle-state"},{"field":`vaultType`,"value":data."vault-type"},{"field":`managementEndpoint`,"value":data."management-endpoint"}]' \
   --output table
-printf '\n%s\n' "wb12_card05"
+  printf '\n%s\n' "wb13_card05"
 }
 
-wb12_card05</code></pre>
+wb13_card05</code></pre>
 </div>
 <h3>OUTPUT 05 - Expected Vault state</h3>
 <div class="code-card">
@@ -606,9 +601,9 @@ wb12_card05</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create or reuse the AES KMS key used to encrypt the CDB password secrets.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb12_card06() {
+  <pre class="code-scroll"><code>wb13_card06() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 KEY_SHAPE_JSON="$JSON_DIR/cdb-credential-key-shape.json"
 KEY_CREATE_RESPONSE_JSON="$JSON_DIR/cdb-credential-key-create-response.json"
 
@@ -621,7 +616,7 @@ for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_MANAGEMENT_END
 done
 
 if [ -n "$missing_vars" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Missing required workbook variables." \
     "Missing: $missing_vars" \
@@ -668,7 +663,7 @@ if [ -z "$CDB_CREDENTIAL_KEY_OCID" ] || [ "$CDB_CREDENTIAL_KEY_OCID" = "null" ];
 fi
 
 if [ -z "$CDB_CREDENTIAL_KEY_OCID" ] || [ "$CDB_CREDENTIAL_KEY_OCID" = "null" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n\n' \
     "STOP: Unable to create or locate the credential KMS key." \
     "Key name: $CDB_CREDENTIAL_KEY_NAME" \
@@ -677,15 +672,15 @@ if [ -z "$CDB_CREDENTIAL_KEY_OCID" ] || [ "$CDB_CREDENTIAL_KEY_OCID" = "null" ];
 fi
 
 upsert_cli_env CDB_CREDENTIAL_KEY_OCID "$CDB_CREDENTIAL_KEY_OCID" &gt;/dev/null
-clear
+
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
   "CDB_CREDENTIAL_KEY_OCID" "$CDB_CREDENTIAL_KEY_OCID"
-printf '\n%s\n' "wb12_card06"
+  printf '\n%s\n' "wb13_card06"
 }
 
-wb12_card06</code></pre>
+wb13_card06</code></pre>
 </div>
 <h3>OUTPUT 06 - Expected KMS key capture</h3>
 <div class="code-card">
@@ -762,9 +757,9 @@ wb12_card06</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Store the CDB_ADMIN_PASSWORD value as the CDB01 SYS password secret.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb12_card07() {
+  <pre class="code-scroll"><code>wb13_card07() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 missing_vars=""
 for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_OCID CDB_CREDENTIAL_KEY_OCID CDB_SYS_SECRET_NAME CDB_ADMIN_PASSWORD; do
   eval "value=\${$name:-}"
@@ -774,7 +769,7 @@ for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_OCID CDB_CREDE
 done
 
 if [ -n "$missing_vars" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Missing required workbook variables." \
     "Missing: $missing_vars" \
@@ -815,7 +810,7 @@ if [ -z "$CDB_SYS_SECRET_OCID" ] || [ "$CDB_SYS_SECRET_OCID" = "null" ]; then
 fi
 
 if [ -z "$CDB_SYS_SECRET_OCID" ] || [ "$CDB_SYS_SECRET_OCID" = "null" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n\n' \
     "STOP: Unable to create or locate the SYS password secret." \
     "Secret name: $CDB_SYS_SECRET_NAME" \
@@ -824,15 +819,15 @@ if [ -z "$CDB_SYS_SECRET_OCID" ] || [ "$CDB_SYS_SECRET_OCID" = "null" ]; then
 fi
 
 upsert_cli_env CDB_SYS_SECRET_OCID "$CDB_SYS_SECRET_OCID" &gt;/dev/null
-clear
+
 printf '%-20s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------" "-----" \
   "CDB_SYS_SECRET_OCID" "$CDB_SYS_SECRET_OCID"
-printf '\n%s\n' "wb12_card07"
+  printf '\n%s\n' "wb13_card07"
 }
 
-wb12_card07</code></pre>
+wb13_card07</code></pre>
 </div>
 <h3>OUTPUT 07 - Expected SYS secret capture</h3>
 <div class="code-card">
@@ -860,9 +855,9 @@ wb12_card07</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Store the CDB_ADMIN_PASSWORD value as the CDB01 SYSTEM password secret for Database Management.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb12_card08() {
+  <pre class="code-scroll"><code>wb13_card08() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 missing_vars=""
 for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_OCID CDB_CREDENTIAL_KEY_OCID CDB_SYSTEM_SECRET_NAME CDB_ADMIN_PASSWORD; do
   eval "value=\${$name:-}"
@@ -872,7 +867,7 @@ for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_OCID CDB_CREDE
 done
 
 if [ -n "$missing_vars" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Missing required workbook variables." \
     "Missing: $missing_vars" \
@@ -913,7 +908,7 @@ if [ -z "$CDB_SYSTEM_SECRET_OCID" ] || [ "$CDB_SYSTEM_SECRET_OCID" = "null" ]; t
 fi
 
 if [ -z "$CDB_SYSTEM_SECRET_OCID" ] || [ "$CDB_SYSTEM_SECRET_OCID" = "null" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n\n' \
     "STOP: Unable to create or locate the SYSTEM password secret." \
     "Secret name: $CDB_SYSTEM_SECRET_NAME" \
@@ -923,16 +918,16 @@ fi
 
 upsert_cli_env CDB_SYSTEM_SECRET_OCID "$CDB_SYSTEM_SECRET_OCID" &gt;/dev/null
 upsert_cli_env DBMGMT_SYSTEM_SECRET_OCID "$CDB_SYSTEM_SECRET_OCID" &gt;/dev/null
-clear
+
 printf '%-25s | %s\n' \
   "VARIABLE" "VALUE" \
   "-------------------------" "-----" \
   "CDB_SYSTEM_SECRET_OCID" "$CDB_SYSTEM_SECRET_OCID" \
   "DBMGMT_SYSTEM_SECRET_OCID" "$CDB_SYSTEM_SECRET_OCID"
-printf '\n%s\n' "wb12_card08"
+  printf '\n%s\n' "wb13_card08"
 }
 
-wb12_card08</code></pre>
+wb13_card08</code></pre>
 </div>
 <h3>OUTPUT 08 - Expected SYSTEM secret capture</h3>
 <div class="code-card">
@@ -961,9 +956,9 @@ wb12_card08</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the SYS and SYSTEM secrets are active in the assigned PoC compartment through SECURITY_COMPARTMENT_OCID Vault.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb12_card09() {
+  <pre class="code-scroll"><code>wb13_card09() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 missing_vars=""
 for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_OCID CDB_SYS_SECRET_NAME CDB_SYSTEM_SECRET_NAME; do
   eval "value=\${$name:-}"
@@ -973,7 +968,7 @@ for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_OCID CDB_SYS_S
 done
 
 if [ -n "$missing_vars" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Missing required workbook variables." \
     "Missing: $missing_vars" \
@@ -982,7 +977,6 @@ if [ -n "$missing_vars" ]; then
   return 1
 fi
 
-clear
 SECRETS_JSON="$(
   oci vault secret list \
     --region "$REGION" \
@@ -1008,10 +1002,10 @@ printf '%s' "$SECRETS_JSON" \
         if $entry.key == (($items | length) - 1) then empty else "" end
       )
   '
-printf '\n%s\n' "wb12_card09"
+  printf '\n%s\n' "wb13_card09"
 }
 
-wb12_card09</code></pre>
+wb13_card09</code></pre>
 </div>
 <h3>OUTPUT 09 - Expected secret validation report</h3>
 <div class="code-card">
@@ -1045,9 +1039,9 @@ wb12_card09</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Write a local report with the Vault, key, and secret identifiers needed by Database Management.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb12_card10() {
+  <pre class="code-scroll"><code>wb13_card10() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 missing_vars=""
 for name in SECURITY_COMPARTMENT_OCID CDB_NAME CDB_CREDENTIAL_VAULT_NAME CDB_CREDENTIAL_VAULT_OCID CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT CDB_CREDENTIAL_KEY_NAME CDB_CREDENTIAL_KEY_OCID CDB_SYS_SECRET_NAME CDB_SYS_SECRET_OCID CDB_SYSTEM_SECRET_NAME CDB_SYSTEM_SECRET_OCID DBMGMT_SYSTEM_SECRET_OCID; do
   eval "value=\${$name:-}"
@@ -1057,7 +1051,7 @@ for name in SECURITY_COMPARTMENT_OCID CDB_NAME CDB_CREDENTIAL_VAULT_NAME CDB_CRE
 done
 
 if [ -n "$missing_vars" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Missing required workbook variables." \
     "Missing: $missing_vars" \
@@ -1097,12 +1091,11 @@ chmod +x "$CDB_SECRET_REPORT_SCRIPT"
   printf '%s=%s\n' "DBMGMT_SYSTEM_SECRET_OCID" "$DBMGMT_SYSTEM_SECRET_OCID"
 } &gt; "$CDB_SECRET_REPORT"
 
-clear
 "$CDB_SECRET_REPORT_SCRIPT" "$CDB_SECRET_REPORT"
-printf '\n%s\n' "wb12_card10"
+  printf '\n%s\n' "wb13_card10"
 }
 
-wb12_card10</code></pre>
+wb13_card10</code></pre>
 </div>
 <h3>OUTPUT 10 - Expected credential secret report</h3>
 <div class="code-card">

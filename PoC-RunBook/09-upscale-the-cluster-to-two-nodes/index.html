@@ -33,7 +33,7 @@
         <h1>Upscale the Cluster to Two Nodes</h1>
         <p class="subtitle">This section adds a second VM to VMCluster-01 using the Exadata Database Service on Exascale Infrastructure update path. The cards are deliberately split into preflight, execute, monitor, and validation so each step can be run under change control.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -66,13 +66,14 @@
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm VMCluster-01 is available, currently one node, and has the expected ECPU settings before the upscale.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb09_card01() {
-
+  <pre class="code-scroll"><code>wb09_card01() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 oci db exadb-vm-cluster get \
   --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
   --query 'data.{displayName:"display-name",state:"lifecycle-state",nodeCount:"node-count",enabledEcpus:"enabled-e-cpu-count",totalEcpus:"total-e-cpu-count"}' \
   --output table
+  printf '\n%s\n' "wb09_card01"
 }
 
 wb09_card01</code></pre>
@@ -104,9 +105,9 @@ etag: 9cd7bff4--gzip</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Update VMCluster-01 to a two-node cluster.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb09_card02() {
-
+  <pre class="code-scroll"><code>wb09_card02() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 UPDATE_RESPONSE_JSON="$JSON_DIR/vmcluster-two-node-update.json"
 
 oci db exadb-vm-cluster update \
@@ -121,7 +122,6 @@ ENABLED_ECPUS="$(jq -r '.data."enabled-e-cpu-count" // empty' "$UPDATE_RESPONSE_
 TOTAL_ECPUS="$(jq -r '.data."total-e-cpu-count" // empty' "$UPDATE_RESPONSE_JSON")"
 WORK_REQUEST_ID="$(jq -r '."opc-work-request-id" // empty' "$UPDATE_RESPONSE_JSON")"
 
-clear
 printf '%-24s | %s\n' \
   "FIELD" "VALUE" \
   "------------------------" "-----" \
@@ -133,7 +133,7 @@ printf '%-24s | %s\n' \
   "TOTAL_ECPUS" "$TOTAL_ECPUS" \
   "WORK_REQUEST_ID" "$WORK_REQUEST_ID" \
   "UPDATE_RESPONSE_JSON" "$UPDATE_RESPONSE_JSON"
-printf '\n%s\n' "wb09_card02"
+  printf '\n%s\n' "wb09_card02"
 }
 
 wb09_card02</code></pre>
@@ -171,9 +171,9 @@ wb09_card02</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Poll the VM cluster lifecycle state every 120 seconds until the second node operation completes.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb09_card03() {
-
+  <pre class="code-scroll"><code>wb09_card03() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 cluster_value() {
   oci db exadb-vm-cluster get \
     --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
@@ -192,7 +192,7 @@ while true; do
   total_ecpus="$(cluster_value 'data."total-e-cpu-count"')"
 
   if [ "$printed_header" = false ]; then
-    clear
+
     printf '+---------------------+--------------+-----------+----------+------------+\n'
     printf '| dateTime            | enabledEcpus | nodeCount | state    | totalEcpus |\n'
     printf '+---------------------+--------------+-----------+----------+------------+\n'
@@ -207,7 +207,21 @@ while true; do
 done
 
 printf '+---------------------+--------------+-----------+----------+------------+\n'
+  printf '\n%s\n' "wb09_card03"
 }
+
+wb09_card03</code></pre>
+</div>
+<h3>OUTPUT 03 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb09_card03</code></pre>
 </div>
@@ -223,13 +237,14 @@ wb09_card03</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Validate that VMCluster-01 now reports two nodes and the intended ECPU allocation.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb09_card04() {
-
+  <pre class="code-scroll"><code>wb09_card04() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 oci db exadb-vm-cluster get \
   --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
   --query 'data.{displayName:"display-name",state:"lifecycle-state",nodeCount:"node-count",enabledEcpus:"enabled-e-cpu-count",totalEcpus:"total-e-cpu-count"}' \
   --output table
+  printf '\n%s\n' "wb09_card04"
 }
 
 wb09_card04</code></pre>

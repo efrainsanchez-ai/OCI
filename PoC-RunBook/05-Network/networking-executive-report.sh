@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 
-REPORT_SCRIPT_UPDATED_DATE="2026-07-14 14:44:28 CDT"
+REPORT_SCRIPT_UPDATED_DATE="2026-07-16 12:51:47 CST"
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+LIB_DIR="${LIB_DIR:-$WORKBOOK_DIR/lib}"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
 mkdir -p "$REPORT_DIR"
 chmod 700 "$REPORT_DIR"
 REPORT_FILE="$REPORT_DIR/networking-executive-report.txt"
 
 cd "$WORKBOOK_DIR" || exit 1
-. ./helpers.sh
+. "$LIB_DIR/helpers.sh" || exit 1
 load_cli_env
 
 line() {
@@ -477,7 +478,7 @@ show_full_report() {
   kv "VCN" "${VCN_NAME:-VCN-${POC_COMPARTMENT_NAME:-LAD-01}}"
   kv "Gateways" "gw-internet, gw-service, gw-nat, optional dynamic-routing-gateway"
   kv "Route tables" "rt-public, rt-private"
-  kv "Subnets" "subnet-admin, subnet-dbclient, subnet-db-backup, subnet-dbtools, subnet-public-lb, subnet-applications"
+  kv "Subnets" "subnet-admin, subnet-dbclient, subnet-dbbackup, subnet-dbtools, subnet-public-lb, subnet-applications"
   kv "Security lists" "default security list, sl-backup"
   kv "NSGs" "nsg-database-client, nsg-applications, nsg-dbtools-endpoint, nsg-bastion-admin, nsg-public-lb"
   kv "Service access" "Route tables provide NAT, Service Gateway, and Internet Gateway paths; security-list baseline uses the default list plus sl-backup"

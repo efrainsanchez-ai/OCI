@@ -33,7 +33,7 @@
         <h1>Addressing, Naming, and DNS</h1>
         <p class="subtitle">This chapter defines the IP addressing, subnet names, DNS labels, and resolver posture required for an Exadata-ready OCI VCN baseline.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -81,7 +81,7 @@
       <div class="architecture-node node-client">
         <span class="node-icon" aria-hidden="true">CLI</span>
         <strong>Private services</strong>
-        <span><code>subnet-dbclient</code>, <code>subnet-db-backup</code>, <code>subnet-dbtools</code>, and <code>subnet-applications</code>.</span>
+        <span><code>subnet-dbclient</code>, <code>subnet-dbbackup</code>, <code>subnet-dbtools</code>, and <code>subnet-applications</code>.</span>
       </div>
     </div>
   </div>
@@ -167,7 +167,7 @@
 <td>Enough headroom for Exadata client interface IPs, SCAN, VIPs, and planned growth</td>
 </tr>
 <tr>
-<td><code>subnet-db-backup</code></td>
+<td><code>subnet-dbbackup</code></td>
 <td class="align-right"><code>10.0.2.0/24</code></td>
 <td>Enough headroom for backup interfaces and target database nodes</td>
 </tr>
@@ -227,7 +227,7 @@
 </tr>
 <tr>
 <td>Exadata backup subnet</td>
-<td><code>subnet-db-backup</code></td>
+<td><code>subnet-dbbackup</code></td>
 </tr>
 <tr>
 <td>Database Tools endpoint subnet</td>

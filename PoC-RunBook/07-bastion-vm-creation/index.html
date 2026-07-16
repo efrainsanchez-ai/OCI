@@ -33,7 +33,7 @@
         <h1>Bastion VM Creation</h1>
         <p class="subtitle">This section creates a bastion VM in the assigned PoC compartment through ADMIN_COMPARTMENT_OCID using the approved admin subnet and bastion NSG. The VM is the controlled administration host for SSH, SQL*Plus, SQL Loader, RMAN client utilities, JDBC testing, and Java-based database tools.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -140,9 +140,8 @@
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb07_card01() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
-
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 SSH_PRIVATE_KEY_FILE="${WORKBOOK_DIR}/bastion-01_rsa"
 SSH_PUBLIC_KEY_FILE="${SSH_PRIVATE_KEY_FILE}.pub"
@@ -196,7 +195,21 @@ printf 'AVAILABILITY_DOMAIN=%s\n' "$AVAILABILITY_DOMAIN"
 printf 'BASTION_SHAPE=%s\n' "$BASTION_SHAPE"
 printf 'OL9_MARKETPLACE_IMAGE_OCID=%s\n' "$OL9_MARKETPLACE_IMAGE_OCID"
 printf 'SSH_PUBLIC_KEY_FILE=%s\n' "$SSH_PUBLIC_KEY_FILE"
+  printf '\n%s\n' "wb07_card01"
 }
+
+wb07_card01</code></pre>
+</div>
+<h3>OUTPUT 01 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb07_card01</code></pre>
 </div>
@@ -214,9 +227,8 @@ wb07_card01</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb07_card02() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
-
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 : "${AVAILABILITY_DOMAIN:?Set AVAILABILITY_DOMAIN in ~/workbook/cli.env}"
 : "${OL9_MARKETPLACE_IMAGE_OCID:?Set OL9_MARKETPLACE_IMAGE_OCID in ~/workbook/cli.env}"
 : "${SSH_PUBLIC_KEY_FILE:?Set SSH_PUBLIC_KEY_FILE in ~/workbook/cli.env}"
@@ -247,7 +259,21 @@ BASTION_VM_OCID="$(
 
 upsert_cli_env BASTION_VM_OCID "$BASTION_VM_OCID" &gt;/dev/null
 printf 'BASTION_VM_OCID=%s\n' "$BASTION_VM_OCID"
+  printf '\n%s\n' "wb07_card02"
 }
+
+wb07_card02</code></pre>
+</div>
+<h3>OUTPUT 02 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb07_card02</code></pre>
 </div>
@@ -265,9 +291,8 @@ wb07_card02</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb07_card03() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
-
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 ADMIN_BUCKET_NAME="${REGION}-${POC_PARENT_COMPARTMENT_NAME}-${POC_COMPARTMENT_NAME}"
 OBJECT_STORAGE_NAMESPACE="$(
   oci os ns get \
@@ -318,7 +343,7 @@ printf '%-24s | %s\n' \
   "PRIVATE_KEY_OBJECT" "$(basename "$SSH_PRIVATE_KEY_FILE")" \
   "PUBLIC_KEY_OBJECT" "$(basename "$SSH_PUBLIC_KEY_FILE")" \
   "STATUS" "uploaded"
-printf '\n%s\n' "wb07_card03"
+  printf '\n%s\n' "wb07_card03"
 }
 
 wb07_card03</code></pre>
@@ -353,9 +378,8 @@ wb07_card03</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb07_card04() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
-
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 BASTION_VNIC_ID="$(
   oci compute instance list-vnics \
     --instance-id "$BASTION_VM_OCID" \
@@ -371,7 +395,8 @@ BASTION_PUBLIC_IP="$(
 )"
 
 upsert_cli_env BASTION_PUBLIC_IP "$BASTION_PUBLIC_IP" &gt;/dev/null
-ssh -i "$SSH_PRIVATE_KEY_FILE" opc@"$BASTION_PUBLIC_IP"
+ssh -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new opc@"$BASTION_PUBLIC_IP"
+  printf '\n%s\n' "wb07_card04"
 }
 
 wb07_card04</code></pre>
@@ -419,7 +444,8 @@ Warning: Permanently added '&lt;bastion_public_ip&gt;' (ECDSA) to the list of kn
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb07_card05() {
-clear
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 sudo dnf install -y oracle-instantclient-release-26ai-el9
 sudo dnf install -y libaio nmap nfs-utils
 
@@ -439,7 +465,6 @@ if ! grep -q "$SQLPLUS_BIN_DIR" ~/.bash_profile 2&gt;/dev/null; then
   printf 'export PATH=$PATH:%s\n' "$SQLPLUS_BIN_DIR" &gt;&gt; ~/.bash_profile
 fi
 
-clear
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
@@ -447,6 +472,7 @@ printf '%-28s | %s\n' \
 sqlplus -v
 expdp -help | sed -n '1,3p'
 impdp -help | sed -n '1,3p'
+  printf '\n%s\n' "wb07_card05"
 }
 
 wb07_card05</code></pre>
@@ -485,14 +511,26 @@ Version 26.&lt;version&gt;</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb07_card06() {
-
-clear
-
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 sudo dnf install -y jdk
 java -version
 javac -version
-printf '\n%s\n' "wb07_card06"
+  printf '\n%s\n' "wb07_card06"
 }
+
+wb07_card06</code></pre>
+</div>
+<h3>OUTPUT 06 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb07_card06</code></pre>
 </div>
@@ -509,12 +547,11 @@ wb07_card06</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb07_card07() {
-
-clear
-
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 sudo dnf update-minimal --security -y
 sudo dnf needs-restarting -r || true
-printf '\n%s\n' "wb07_card07"
+  printf '\n%s\n' "wb07_card07"
 }
 
 wb07_card07</code></pre>
@@ -547,11 +584,24 @@ More information: man needs-restarting</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb07_card08() {
-
-clear
-
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 sudo reboot
+  printf '\n%s\n' "wb07_card08"
 }
+
+wb07_card08</code></pre>
+</div>
+<h3>OUTPUT 08 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb07_card08</code></pre>
 </div>

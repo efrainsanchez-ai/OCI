@@ -33,7 +33,7 @@
         <h1>Recover Variables</h1>
         <p class="subtitle">This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, another OCI user takes over, or the original <code>~/workbook/cli.env</code> file is unavailable. It does not recreate OCI resources. Instead, it discovers existing resources by using the names, compartment assumptions, and discovery approach established in earlier workbooks, especially Chapter 16.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -54,7 +54,7 @@
       <section id="introduction" class="article-section">
         <h2>Introduction</h2>
         <p>This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, another OCI user takes over, or the original <code>~/workbook/cli.env</code> file is unavailable. It does not recreate OCI resources. Instead, it discovers existing resources by using the names, compartment assumptions, and discovery approach established in earlier workbooks, especially Chapter 16.</p>
-<p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, stores shell scripts under <code>~/workbook/bin</code>, creates compatibility symlinks for <code>env.sh</code> and <code>helpers.sh</code>, and creates a minimal export-enabled <code>cli.env</code>. BASH 01A confirms and saves the active profile, parent and assigned compartment, and VCN name. BASH 02 downloads the reusable discovery tool under <code>~/workbook/bin</code> and writes recovered variables back into <code>~/workbook/cli.env</code>. Text reports are stored under <code>~/workbook/reports</code>, and JSON discovery files are stored under <code>~/workbook/json</code>.</p>
+<p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, stores <code>helpers.sh</code> under <code>~/workbook/lib</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, and creates a minimal export-enabled <code>cli.env</code>. BASH 01A confirms and saves the active profile, parent and assigned compartment, and VCN name. BASH 02 downloads the reusable discovery tool under <code>~/workbook/bin</code> and writes recovered variables back into <code>~/workbook/cli.env</code>. Text reports are stored under <code>~/workbook/reports</code>, and JSON discovery files are stored under <code>~/workbook/json</code>.</p>
 <p>The default compartment path is <code>(root)/Partner/LAD-01</code>. If your deployment used another assigned child compartment under <code>Partner</code>, enter that name when prompted. The script stops before discovery unless you confirm the resolved path.</p>
       </section><section id="what-gets-recovered" class="article-section">
         <h2>What gets recovered</h2>
@@ -150,20 +150,22 @@
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, store <code>helpers.sh</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, create compatibility symlinks, and persist the local workbook path variables in export-enabled <code>cli.env</code> so recovery can run even when the Cloud Shell home directory was reset.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, store <code>helpers.sh</code> under <code>~/workbook/lib</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, and persist the local workbook path variables in export-enabled <code>cli.env</code> so recovery can run even when the Cloud Shell home directory was reset.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb17_card01() {
-
-WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
-BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
-REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
-JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
-mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
-chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+  clear
+WORKBOOK_DIR="$HOME/workbook"
+BIN_DIR="$WORKBOOK_DIR/bin"
+LIB_DIR="$WORKBOOK_DIR/lib"
+KEY_DIR="$WORKBOOK_DIR/keys"
+JSON_DIR="$WORKBOOK_DIR/json"
+REPORT_DIR="$WORKBOOK_DIR/reports"
+mkdir -p "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 BIN_DIR="$WORKBOOK_DIR/bin"
-HELPERS_FILE="$BIN_DIR/helpers.sh"; ENV_FILE="$BIN_DIR/env.sh"
+HELPERS_FILE="$LIB_DIR/helpers.sh"; ENV_FILE="$BIN_DIR/env.sh"
 
 mkdir -p "$WORKBOOK_DIR" "$BIN_DIR"; chmod 700 "$WORKBOOK_DIR" "$BIN_DIR"
 cat &gt; "$CLI_ENV" &lt;&lt;'EOF'
@@ -173,12 +175,14 @@ EOF
 chmod 600 "$CLI_ENV"
 
 cat &gt; "$HELPERS_FILE" &lt;&lt;'HELPERS'
-WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
-BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
-REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
-JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
-mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
-chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+WORKBOOK_DIR="$HOME/workbook"
+BIN_DIR="$WORKBOOK_DIR/bin"
+LIB_DIR="$WORKBOOK_DIR/lib"
+KEY_DIR="$WORKBOOK_DIR/keys"
+JSON_DIR="$WORKBOOK_DIR/json"
+REPORT_DIR="$WORKBOOK_DIR/reports"
+mkdir -p "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 
 load_cli_env() {
@@ -212,24 +216,25 @@ HELPERS
 chmod 700 "$HELPERS_FILE"
 
 cat &gt; "$ENV_FILE" &lt;&lt;'EOF'
-WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+WORKBOOK_DIR="$HOME/workbook"
 cd "$WORKBOOK_DIR" || return 1
-. "$WORKBOOK_DIR/helpers.sh" || return 1
+LIB_DIR="$WORKBOOK_DIR/lib"
+. "$LIB_DIR/helpers.sh" || return 1
 load_cli_env || return 1
-PATH="$WORKBOOK_DIR/bin:$PATH"
+export PATH="$WORKBOOK_DIR/bin:$PATH"
 PS1='$ '
-BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
-REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
-JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
-mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
-chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
-export BIN_DIR REPORT_DIR JSON_DIR
+BIN_DIR="$WORKBOOK_DIR/bin"
+KEY_DIR="$WORKBOOK_DIR/keys"
+JSON_DIR="$WORKBOOK_DIR/json"
+REPORT_DIR="$WORKBOOK_DIR/reports"
+mkdir -p "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+export WORKBOOK_DIR BIN_DIR LIB_DIR KEY_DIR JSON_DIR REPORT_DIR
 
 if [ "${1:-}" = "--quiet" ]; then
   return 0
 fi
 
-clear
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
@@ -241,17 +246,22 @@ printf '%-28s | %s\n' \
   "CDB_OCID" "${CDB_OCID:-}"
 EOF
 chmod 700 "$ENV_FILE"
-ln -sfn "bin/helpers.sh" "$WORKBOOK_DIR/helpers.sh"
-ln -sfn "bin/env.sh" "$WORKBOOK_DIR/env.sh"
+
+BASH_PROFILE="$HOME/.bash_profile"
+PATH_EXPORT='export PATH="$HOME/workbook/bin:$PATH"'
+touch "$BASH_PROFILE"
+grep -Fqx "$PATH_EXPORT" "$BASH_PROFILE" || printf '%s\n' "$PATH_EXPORT" &gt;&gt; "$BASH_PROFILE"
+. "$BASH_PROFILE" || return 1
 
 . "$HELPERS_FILE"
 upsert_cli_env WORKBOOK_DIR "$WORKBOOK_DIR" &gt;/dev/null
 upsert_cli_env BIN_DIR "$BIN_DIR" &gt;/dev/null
+upsert_cli_env LIB_DIR "$LIB_DIR" &gt;/dev/null
+upsert_cli_env KEY_DIR "$KEY_DIR" &gt;/dev/null
 upsert_cli_env REPORT_DIR "$REPORT_DIR" &gt;/dev/null
 upsert_cli_env JSON_DIR "$JSON_DIR" &gt;/dev/null
 PS1='$ '
 
-clear
 printf '%-18s | %s\n' \
   "FIELD" "VALUE" "------------------" "-----" \
   "WORKBOOK_DIR" "$WORKBOOK_DIR" \
@@ -262,7 +272,7 @@ printf '%-18s | %s\n' \
   "HELPERS_FILE" "$HELPERS_FILE" \
   "ENV_FILE" "$ENV_FILE" \
   "PROMPT" "$PS1"
-printf '\n%s\n' "wb17_card01"
+  printf '\n%s\n' "wb17_card01"
 }
 
 wb17_card01</code></pre>
@@ -282,7 +292,7 @@ CLI_ENV            | /home/&lt;cloud_shell_user&gt;/workbook/cli.env
 BIN_DIR            | /home/&lt;cloud_shell_user&gt;/workbook/bin
 REPORT_DIR         | /home/&lt;cloud_shell_user&gt;/workbook/reports
 JSON_DIR           | /home/&lt;cloud_shell_user&gt;/workbook/json
-HELPERS_FILE       | /home/&lt;cloud_shell_user&gt;/workbook/bin/helpers.sh
+HELPERS_FILE       | /home/&lt;cloud_shell_user&gt;/workbook/lib/helpers.sh
 ENV_FILE           | /home/&lt;cloud_shell_user&gt;/workbook/bin/env.sh
 PROMPT             | $ 
 
@@ -300,13 +310,13 @@ wb17_card01</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Before downloading the recovery script, confirm the active OCI CLI profile and one assigned PoC compartment, save those variables to <code>~/workbook/cli.env</code>, and select the VCN name that the recovery script will discover.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb17_card01a() {
-if [ ! -f ~/workbook/env.sh ]; then
-  printf 'STOP: Missing ~/workbook/env.sh. Run wb17_card01 first.\n' &gt;&amp;2
+  <pre class="code-scroll"><code>wb17_card02() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+if [ ! -f ~/workbook/bin/env.sh ]; then
+  printf 'STOP: Missing ~/workbook/bin/env.sh. Run wb17_card01 first.\n' &gt;&amp;2
   return 1
 fi
-. ~/workbook/env.sh --quiet || return 1
-clear
 
 read_profile() {
   cfg="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
@@ -387,7 +397,6 @@ for item in \
   upsert_cli_env "${item%%|*}" "${item#*|}" &gt;/dev/null
 done
 
-clear
 printf '%-30s | %s\n' \
   "VARIABLE" "VALUE" \
   "------------------------------" "-----" \
@@ -398,10 +407,23 @@ printf '%-30s | %s\n' \
   "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID" \
   "VCN_NAME" "$VCN_NAME" \
   "VCN_OCID" "${VCN_OCID:-&lt;not_found&gt;}"
-printf '\n%s\n' "wb17_card01a"
+  printf '\n%s\n' "wb17_card02"
 }
 
-wb17_card01a</code></pre>
+wb17_card02</code></pre>
+</div>
+<h3>OUTPUT 02 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb17_card02</code></pre>
 </div>
       </section><section id="bash-02-download-and-run-recovery-discovery-tools" class="article-section">
         <h2>BASH 02 - Download and run recovery discovery tools</h2>
@@ -415,10 +437,9 @@ wb17_card01a</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Download the maintained recovery script into <code>~/workbook/bin</code>, use the confirmed profile, compartment, and VCN values from BASH 01A, discover existing OCI resources from their workbook names, show recovery status feedback while discovery runs, and save recovered values to <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb17_card02() {
-
-clear
+  <pre class="code-scroll"><code>wb17_card03() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 BIN_DIR="$WORKBOOK_DIR/bin"
 RECOVERY_SCRIPT="$BIN_DIR/recover-poc-variables.sh"
 REPORT_DIR="$WORKBOOK_DIR/reports"
@@ -447,10 +468,23 @@ set -o pipefail
 "$RECOVERY_SCRIPT" | tee "$RECOVERY_REPORT"
 rc=${PIPESTATUS[0]}
 [ "$rc" -eq 0 ] || return "$rc"
-printf '\n%s\n' "wb17_card02"
+  printf '\n%s\n' "wb17_card03"
 }
 
-wb17_card02</code></pre>
+wb17_card03</code></pre>
+</div>
+<h3>OUTPUT 03 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb17_card03</code></pre>
 </div>
 <h3>OUTPUT 02 - Expected recovery discovery output</h3>
 <p><code>DBMGMT_SECRET_POLICY_OCID</code> is optional during recovery. If the Chapter 14 policy does not yet exist, it is recorded as <code>OPTIONAL</code> in the recovery status file rather than listed as missing; Chapter 14 BASH 05 creates the policy when required.</p>
@@ -543,10 +577,9 @@ wb17_card02</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Reload the recovered <code>~/workbook/cli.env</code> file and print the variables most commonly required by later workbooks.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb17_card03() {
-
-clear
+  <pre class="code-scroll"><code>wb17_card04() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 printf '%-34s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------------" "-----" \
@@ -587,10 +620,23 @@ printf '%-34s | %s\n' \
   "FSS_CLUSTER_MOUNT_HOST" "${FSS_CLUSTER_MOUNT_HOST:-}" \
   "FSS_EXPORT_PATH" "${FSS_EXPORT_PATH:-}" \
   "FSS_MOUNT_POINT" "${FSS_MOUNT_POINT:-}"
-printf '\n%s\n' "wb17_card03"
+  printf '\n%s\n' "wb17_card04"
 }
 
-wb17_card03</code></pre>
+wb17_card04</code></pre>
+</div>
+<h3>OUTPUT 04 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb17_card04</code></pre>
 </div>
 <h3>OUTPUT 03 - Expected recovered variable validation</h3>
 <div class="code-card">
@@ -649,9 +695,9 @@ wb17_card03</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create and run a reusable script that adds an SSH ingress rule for the current Cloud Shell public IP, or a supplied approved source IP, to the recovered bastion NSG.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb17_card04() {
-
+  <pre class="code-scroll"><code>wb17_card05() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
 JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
@@ -786,7 +832,6 @@ EOF
     NSG_RULE_ID="$EXISTING_RULE_ID"
   fi
 
-  clear
   printf '%-28s | %s\n' \
     "FIELD" "VALUE" \
     "----------------------------" "-----" \
@@ -804,10 +849,23 @@ SCRIPT
 
 chmod 700 "$SCRIPT_FILE"
 "$SCRIPT_FILE" "$SOURCE_IP" "$SOURCE_IP_MODE"
-printf '\n%s\n' "wb17_card04"
+  printf '\n%s\n' "wb17_card05"
 }
 
-wb17_card04</code></pre>
+wb17_card05</code></pre>
+</div>
+<h3>OUTPUT 05 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb17_card05</code></pre>
 </div>
 <h3>OUTPUT 04 - Expected bastion NSG SSH ingress output</h3>
 <div class="code-card">
@@ -842,9 +900,9 @@ wb17_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Recreate the bastion and Exadata VM cluster private keys under <code>~/keys</code> when needed, create <code>~/workbook/bin/connect-bastion-vm.sh</code> that connects as <code>oracle</code> by default or as a specified user, and open the bastion SSH session.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb17_card05() {
-
+  <pre class="code-scroll"><code>wb17_card06() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 KEY_DIR="$HOME/keys"
 BASTION_KEY_OBJECT_NAME="$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
 BASTION_PRIVATE_KEY_PATH="$KEY_DIR/$BASTION_KEY_OBJECT_NAME"
@@ -899,27 +957,39 @@ connect_bastion_vm() {
   chmod 700 "\$HOME/keys" "\$BASTION_KEY_PATH"
   printf 'Opening bastion SSH session to %s@%s\n' "\$BASTION_USER" "\$BASTION_HOST"
   printf 'When finished, run: exit\n'
-  ssh -i "\$BASTION_KEY_PATH" "\$BASTION_USER@\$BASTION_HOST"
+  ssh -i " -o StrictHostKeyChecking=accept-new\$BASTION_KEY_PATH" "\$BASTION_USER@\$BASTION_HOST"
 }
 
 connect_bastion_vm "\$@"
 SCRIPT
 chmod 700 "$BASTION_CONNECT_SCRIPT"
-if ! grep -q '$HOME/workbook/bin' "$WORKBOOK_DIR/env.sh" 2&gt;/dev/null; then
-  printf 'PATH="$HOME/workbook/bin:$PATH"\n' &gt;&gt; "$WORKBOOK_DIR/env.sh"
+if ! grep -q '$HOME/workbook/bin' "$WORKBOOK_DIR/bin/env.sh" 2&gt;/dev/null; then
+  printf 'PATH="$HOME/workbook/bin:$PATH"\n' &gt;&gt; "$WORKBOOK_DIR/bin/env.sh"
 fi
 
-clear
 printf '%s\n' "Opening bastion SSH session."
 printf '%s\n' "Default user: oracle. To use opc later: connect-bastion-vm.sh opc"
 printf '%s\n' "Cluster private key restored: $CLUSTER_PRIVATE_KEY_PATH"
 printf '%s\n' "When the bastion prompt appears, run: exit"
 printf 'Reusable script: %s\n\n' "$BASTION_CONNECT_SCRIPT"
 "$BASTION_CONNECT_SCRIPT"
-printf '\n%s\n' "wb17_card05"
+  printf '\n%s\n' "wb17_card06"
 }
 
-wb17_card05</code></pre>
+wb17_card06</code></pre>
+</div>
+<h3>OUTPUT 06 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb17_card06</code></pre>
 </div>
 <h3>OUTPUT 05 - Expected bastion SSH script output</h3>
 <div class="code-card">
@@ -935,12 +1005,12 @@ Cluster private key restored: /home/&lt;cloud_shell_user&gt;/keys/vmcluster-01_r
 When the bastion prompt appears, run: exit
 Reusable script: /home/EFRAIN_SAN/workbook/bin/connect-bastion-vm.sh
 
-Opening bastion SSH session to oracle@132.145.169.254
+Opening bastion SSH session to oracle@&lt;bastion_public_ip&gt;
 When finished, run: exit
 Last login: Fri Jul 10 16:19:42 2026 from 129.146.198.242
 [oracle@bastion-01 ~]$ exit
 logout
-Connection to 132.145.169.254 closed.
+Connection to &lt;bastion_public_ip&gt; closed.
 
 wb17_card05
 $</code></pre>
@@ -959,9 +1029,9 @@ $</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Discover the first and second Exadata VM cluster node hostnames, copy the cluster SSH key and second-hop helper to the bastion VM, and create <code>~/workbook/bin/connect-cluster-node.sh</code> for reusable node access through the bastion.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb17_card06() {
-
+  <pre class="code-scroll"><code>wb17_card07() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 KEY_DIR="$HOME/keys"
 BIN_DIR="$WORKBOOK_DIR/bin"
 REPORT_DIR="$WORKBOOK_DIR/reports"
@@ -1063,7 +1133,6 @@ scp -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$CLUSTER_KEY_PAT
 scp -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$SECOND_HOP_SCRIPT" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP:$REMOTE_SECOND_HOP_SCRIPT"
 ssh -i "$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" "chmod 700 ~/keys ~/keys/$CLUSTER_KEY_NAME $REMOTE_SECOND_HOP_SCRIPT"
 
-clear
 printf '%-34s | %s\n' \
   "FIELD" "VALUE" \
   "----------------------------------" "-----" \
@@ -1072,10 +1141,23 @@ printf '%-34s | %s\n' \
   "NODE_2" "$(sed -n '2p' "$CLUSTER_HOSTS_FILE")" \
   "CONNECT_NODE_1" "connect-cluster-node.sh 1 oracle" \
   "CONNECT_NODE_2" "connect-cluster-node.sh 2 oracle"
-printf '\n%s\n' "wb17_card06"
+  printf '\n%s\n' "wb17_card07"
 }
 
-wb17_card06</code></pre>
+wb17_card07</code></pre>
+</div>
+<h3>OUTPUT 07 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb17_card07</code></pre>
 </div>
 <h3>OUTPUT 06 - Expected cluster node SSH script output</h3>
 <div class="code-card">
@@ -1099,14 +1181,14 @@ Opening cluster node 1 through bastion: exasc011-fxafi.client.poc.oraclevcn.com 
 [oracle@exasc011-fxafi ~]$ exit
 logout
 Connection to exasc011-fxafi.client.poc.oraclevcn.com closed.
-Connection to 132.145.169.254 closed.
+Connection to &lt;bastion_public_ip&gt; closed.
 $ 
 $ connect-cluster-node.sh 2 oracle
 Opening cluster node 2 through bastion: exasc012-ahuip.client.poc.oraclevcn.com as oracle
 [oracle@exasc012-ahuip ~]$ exit
 logout
 Connection to exasc012-ahuip.client.poc.oraclevcn.com closed.
-Connection to 132.145.169.254 closed.</code></pre>
+Connection to &lt;bastion_public_ip&gt; closed.</code></pre>
 </div>
       </section><section id="bash-07-mount-file-storage-on-exadata-vm-cluster-nodes" class="article-section">
         <h2>BASH 07 - Mount File Storage on Exadata VM cluster nodes</h2>
@@ -1121,9 +1203,9 @@ Connection to 132.145.169.254 closed.</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Reuse the Chapter 15 BASH 05 mount pattern from recovered variables, derive the standard File Storage defaults when needed, create <code>~/workbook/bin/mount-filesystem-cluster.sh</code>, copy the all-node mount helper to the bastion VM, and mount the File Storage export on every discovered Exadata VM cluster node.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb17_card07() {
-
+  <pre class="code-scroll"><code>wb17_card08() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 KEY_DIR="$HOME/keys"
 BIN_DIR="$WORKBOOK_DIR/bin"
 REPORT_DIR="$WORKBOOK_DIR/reports"
@@ -1240,14 +1322,26 @@ ssh -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "opc@\$BASTION_P
 SCRIPT
 chmod 700 "$LOCAL_MOUNT_SCRIPT"
 
-clear
 printf 'Cluster File Storage mount script: %s\n' "$LOCAL_MOUNT_SCRIPT"
 printf 'Remote bastion script: %s\n' "$REMOTE_MOUNT_SCRIPT"
 "$LOCAL_MOUNT_SCRIPT"
-printf '\n%s\n' "wb17_card07"
+  printf '\n%s\n' "wb17_card08"
 }
 
-wb17_card07</code></pre>
+wb17_card08</code></pre>
+</div>
+<h3>OUTPUT 08 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb17_card08</code></pre>
 </div>
 <h3>OUTPUT 07 - Expected cluster File Storage mount output</h3>
 <div class="code-card">
@@ -1297,9 +1391,9 @@ wb17_card07</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Summarize recovered artifacts, count recovered and missing variables from <code>~/workbook/reports/recovery-status.tsv</code>, and write the report to <code>~/workbook/reports/recovery-executive-report.txt</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb17_card08() {
-
+  <pre class="code-scroll"><code>wb17_card09() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 REPORT_DIR="$WORKBOOK_DIR/reports"
 REPORT_FILE="$REPORT_DIR/recovery-executive-report.txt"
 STATUS_FILE="$REPORT_DIR/recovery-status.tsv"
@@ -1386,12 +1480,24 @@ fi
   fi
 } &gt; "$REPORT_FILE"
 
-clear
 cat "$REPORT_FILE"
-printf '\n%s\n' "wb17_card08"
+  printf '\n%s\n' "wb17_card09"
 }
 
-wb17_card08</code></pre>
+wb17_card09</code></pre>
+</div>
+<h3>OUTPUT 09 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb17_card09</code></pre>
 </div>
 <h3>OUTPUT 08 - Expected executive report summary</h3>
 <div class="code-card">
@@ -1448,7 +1554,27 @@ wb17_card08</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for Reuse notes.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>~/workbook/bin/recover-poc-variables.sh</code></pre>
+  <pre class="code-scroll"><code>wb17_card10() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+~/workbook/bin/recover-poc-variables.sh
+  printf '\n%s\n' "wb17_card10"
+}
+
+wb17_card10</code></pre>
+</div>
+<h3>OUTPUT 10 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb17_card10</code></pre>
 </div>
 <p>The script always asks for the parent compartment, assigned child compartment, and confirmation before writing recovered values into <code>~/workbook/cli.env</code>.</p>
       </section>

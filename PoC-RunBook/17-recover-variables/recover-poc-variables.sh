@@ -4,9 +4,10 @@
 SCRIPT_CREATED_AT="2026-07-14 10:01:34 CST"
 printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
 
-. "$HOME/workbook/helpers.sh" || exit 1
-load_cli_env || exit 1
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+LIB_DIR="${LIB_DIR:-$WORKBOOK_DIR/lib}"
+. "$LIB_DIR/helpers.sh" || exit 1
+load_cli_env || exit 1
 BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
 JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
@@ -102,7 +103,7 @@ VCN_CIDR="$(ociq oci network vcn get --region "$REGION" --vcn-id "$VCN_OCID" --q
 note "VCN CIDR: ${VCN_CIDR:-<not_found>}"
 DEFAULT_SECURITY_LIST_OCID="$(ociq oci network vcn get --region "$REGION" --vcn-id "$VCN_OCID" --query 'data."default-security-list-id"')"
 note "Default security list: ${DEFAULT_SECURITY_LIST_OCID:-<not_found>}"
-for item in 'SUBNET_ADMIN_OCID subnet-admin' 'SUBNET_DBCLIENT_OCID subnet-dbclient' 'SUBNET_DB_BACKUP_OCID subnet-db-backup' 'SUBNET_DBTOOLS_OCID subnet-dbtools' 'SUBNET_PUBLIC_LB_OCID subnet-public-lb' 'SUBNET_APPS_OCID subnet-applications'; do
+for item in 'SUBNET_ADMIN_OCID subnet-admin' 'SUBNET_DBCLIENT_OCID subnet-dbclient' 'SUBNET_DB_BACKUP_OCID subnet-dbbackup' 'SUBNET_DBTOOLS_OCID subnet-dbtools' 'SUBNET_PUBLIC_LB_OCID subnet-public-lb' 'SUBNET_APPS_OCID subnet-applications'; do
   set -- $item
   eval "$1=\$(lookup_subnet $2)"
   eval "resolved=\${$1:-}"

@@ -33,7 +33,7 @@
         <h1>OCI File Storage</h1>
         <p class="subtitle">This workbook creates and configures OCI File Storage for the PoC environment. It creates <code>FileSystem-01</code> in the assigned <code>LAD-01</code> compartment and exports it through mount targets in <code>subnet-admin</code>, <code>subnet-dbclient</code>, and <code>subnet-applications</code>. The bastion VM uses the admin mount target, while Exadata VM cluster nodes use the db-client mount target.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -69,9 +69,9 @@
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Validate required networking, SSH, and database discovery variables, set the File Storage defaults, derive the mount target DNS name, and save new values in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb15_card01() {
+  <pre class="code-scroll"><code>wb15_card01() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
 JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
@@ -153,7 +153,6 @@ upsert_cli_env FSS_CLUSTER_MOUNT_HOST "$FSS_CLUSTER_MOUNT_HOST" &gt;/dev/null
 upsert_cli_env FSS_REMOTE_SCRIPT_NAME "$FSS_REMOTE_SCRIPT_NAME" &gt;/dev/null
 upsert_cli_env FSS_AVAILABILITY_DOMAIN "$FSS_AVAILABILITY_DOMAIN" &gt;/dev/null
 
-clear
 printf '%-32s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------------------" "-----" \
@@ -175,7 +174,7 @@ printf '%-32s | %s\n' \
   "SUBNET_ADMIN_OCID" "$SUBNET_ADMIN_OCID" \
   "SUBNET_DBCLIENT_OCID" "$SUBNET_DBCLIENT_OCID" \
   "SUBNET_APPS_OCID" "$SUBNET_APPS_OCID"
-printf '\n%s\n' "wb15_card01"
+  printf '\n%s\n' "wb15_card01"
 }
 
 wb15_card01</code></pre>
@@ -221,9 +220,9 @@ wb15_card01</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create or reuse the File Storage NSG, add NFS ingress rules, create or reuse <code>FileSystem-01</code>, create or reuse mount targets and exports in <code>subnet-admin</code>, <code>subnet-dbclient</code>, and <code>subnet-applications</code>, and save the resolved OCIDs.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb15_card02() {
+  <pre class="code-scroll"><code>wb15_card02() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 FSS_NAME="${FSS_NAME:-FileSystem-01}"
 FSS_EXPORT_PATH="${FSS_EXPORT_PATH:-/FileSystem-01}"
 FSS_ADMIN_MOUNT_TARGET_NAME="${FSS_ADMIN_MOUNT_TARGET_NAME:-mt-FileSystem-01-admin}"
@@ -627,7 +626,6 @@ upsert_cli_env FSS_MOUNT_TARGET_OCID "$FSS_MOUNT_TARGET_OCID" &gt;/dev/null
 upsert_cli_env FSS_EXPORT_SET_OCID "$FSS_EXPORT_SET_OCID" &gt;/dev/null
 upsert_cli_env FSS_EXPORT_OCID "$FSS_EXPORT_OCID" &gt;/dev/null
 
-clear
 printf '%-34s | %s\n' \
   "RESOURCE" "OCID" \
   "----------------------------------" "-----" \
@@ -647,7 +645,7 @@ if [ -s "$FSS_PROBLEM_FILE" ]; then
   printf '%s\n' "----------------"
   cat "$FSS_PROBLEM_FILE"
 fi
-printf '\n%s\n' "wb15_card02"
+  printf '\n%s\n' "wb15_card02"
 }
 
 wb15_card02</code></pre>
@@ -687,9 +685,9 @@ wb15_card02</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Display the lifecycle state of the file system, all mount targets, and all exports before mounting the file system on compute hosts.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb15_card03() {
+  <pre class="code-scroll"><code>wb15_card03() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
 mkdir -p "$REPORT_DIR"
 chmod 700 "$REPORT_DIR"
@@ -775,7 +773,6 @@ for check_name in FILE_SYSTEM_STATE ADMIN_MOUNT_TARGET_STATE DBCLIENT_MOUNT_TARG
   fi
 done
 
-clear
 printf '%-34s | %s\n' \
   "CHECK" "VALUE" \
   "----------------------------------" "-----" \
@@ -793,7 +790,7 @@ if [ -s "$FSS_PROBLEM_FILE" ]; then
   printf '%s\n' "----------------"
   cat "$FSS_PROBLEM_FILE"
 fi
-printf '\n%s\n' "wb15_card03"
+  printf '\n%s\n' "wb15_card03"
 }
 
 wb15_card03</code></pre>
@@ -832,9 +829,9 @@ wb15_card03</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Connect from Cloud Shell to the bastion VM as <code>opc</code>, create or normalize the <code>oracle</code> user and <code>oinstall</code> group, mount <code>FileSystem-01</code>, add a boot-safe systemd automount entry that does not unmount an idle share, set ownership, and validate with <code>ls -la</code>, <code>df -h</code>, and <code>du -hs</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb15_card04() {
+  <pre class="code-scroll"><code>wb15_card04() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
 mkdir -p "$BIN_DIR"
 chmod 700 "$BIN_DIR"
@@ -931,18 +928,17 @@ chmod 700 "$BASTION_SETUP_SCRIPT"
 cat &gt; "$BASTION_RUN_SCRIPT" &lt;&lt;RUNSCRIPT
 #!/bin/bash
 set -e
-ssh -i '$BASTION_PRIVATE_KEY_PATH' \\
+ssh -i '$BASTION_PRIVATE_KEY_PATH' -o StrictHostKeyChecking=accept-new \\
   -o StrictHostKeyChecking=accept-new \\
   'opc@$BASTION_PUBLIC_IP' \\
   'bash -s' &lt; '$BASTION_SETUP_SCRIPT'
 RUNSCRIPT
 chmod 700 "$BASTION_RUN_SCRIPT"
 
-clear
 printf 'Configuring File Storage mount on bastion VM as opc ...\n'
 "$BASTION_RUN_SCRIPT"
 printf '\nReusable script: %s\n' "$BASTION_RUN_SCRIPT"
-printf '\n%s\n' "wb15_card04"
+  printf '\n%s\n' "wb15_card04"
 }
 
 wb15_card04</code></pre>
@@ -990,9 +986,9 @@ wb15_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Discover all VM cluster node hostnames, copy a reusable all-node mount script to <code>~/admin</code> on the bastion VM, and execute it from the bastion as <code>opc</code> without adding cluster node boot-time mounts.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb15_card05() {
+  <pre class="code-scroll"><code>wb15_card05() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
 JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
@@ -1121,13 +1117,11 @@ scp -i "$BASTION_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=accept-new \
 ssh -i "$BASTION_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=accept-new "opc@$BASTION_PUBLIC_IP" \
   "chmod 700 ~/admin ~/keys ~/keys/$CLUSTER_KEY_NAME $REMOTE_CLUSTER_MOUNT_SCRIPT &amp;&amp; chmod 600 $REMOTE_CLUSTER_HOSTS_FILE"
 
-clear
 printf 'Cluster node mount script copied to bastion: %s\n' "$REMOTE_CLUSTER_MOUNT_SCRIPT"
 printf 'Cluster host list copied to bastion: %s\n' "$REMOTE_CLUSTER_HOSTS_FILE"
 ssh -i "$BASTION_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=accept-new "opc@$BASTION_PUBLIC_IP" \
   "$REMOTE_CLUSTER_MOUNT_SCRIPT"
-
-printf '\n%s\n' "wb15_card05"
+  printf '\n%s\n' "wb15_card05"
 }
 
 wb15_card05</code></pre>

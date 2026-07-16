@@ -33,7 +33,7 @@
         <h1>Create Exadata Cluster</h1>
         <p class="subtitle">This section creates the Exadata Database Service on Exascale Infrastructure cluster in the assigned PoC compartment through DATABASE_COMPARTMENT_OCID. It keeps resource creation explicit: Storage Vault first, VMCluster-01 second, maintenance prechecks before patch application, dbhome_01 creation, dbhome patch checks, then ECPU scaling for memory.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -197,9 +197,9 @@
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create or verify the VMCluster-01 RSA SSH key pair, reuse or create the compartment-named SSH key bucket, and upload the Exadata key files.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card02() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>wb08_card01() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 EXADATA_SSH_PRIVATE_KEY_FILE="${EXADATA_SSH_PRIVATE_KEY_FILE:-${WORKBOOK_DIR}/vmcluster-01_rsa}"
 EXADATA_SSH_PUBLIC_KEY_FILE="${EXADATA_SSH_PUBLIC_KEY_FILE:-${EXADATA_SSH_PRIVATE_KEY_FILE}.pub}"
@@ -268,10 +268,23 @@ printf '%-28s | %s\n' \
   "EXADATA_SSH_PRIVATE_KEY_FILE" "$EXADATA_SSH_PRIVATE_KEY_FILE" \
   "EXADATA_SSH_PUBLIC_KEY_FILE" "$EXADATA_SSH_PUBLIC_KEY_FILE" \
   "STATUS" "uploaded"
-printf '\n%s\n' "wb08_card02"
+  printf '\n%s\n' "wb08_card01"
 }
 
-wb08_card02</code></pre>
+wb08_card01</code></pre>
+</div>
+<h3>OUTPUT 01 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card01</code></pre>
 </div>
 <h3>OUTPUT 02 - Expected VMCluster SSH key upload summary</h3>
 <div class="code-card">
@@ -305,9 +318,9 @@ wb08_card02</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Select the Exascale availability domain, set the VM cluster version and shape inputs, and save the values in <code>cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card03() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>wb08_card02() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 EXADATA_AD_NUMBER="${EXADATA_AD_NUMBER:-1}"
 EXADB_SHAPE="${EXADB_SHAPE:-EXADBXS}"
 EXADB_SHAPE_ATTRIBUTE="${EXADB_SHAPE_ATTRIBUTE:-SMART_STORAGE}"
@@ -320,24 +333,23 @@ GI_VERSION_LIST_JSON="$JSON_DIR/gi-version-list.json"
 GRID_IMAGE_VALIDATE_STATUS="skipped-tenancy-feature-not-enabled"
 
 if [ -z "${REGION:-}" ]; then
-  clear
+
   printf 'STOP: REGION is not set.\n' &gt;&amp;2
   return 1 2&gt;/dev/null || exit 1
 fi
 
 if [ -z "${TENANCY_ID:-}" ]; then
-  clear
+
   printf 'STOP: TENANCY_ID is not set.\n' &gt;&amp;2
   return 1 2&gt;/dev/null || exit 1
 fi
 
 if [ -z "${DATABASE_COMPARTMENT_OCID:-}" ]; then
-  clear
+
   printf 'STOP: DATABASE_COMPARTMENT_OCID is not set.\n' &gt;&amp;2
   return 1 2&gt;/dev/null || exit 1
 fi
 
-clear
 printf 'Select Exadata availability domain number [1, 2, 3] (default %s): ' "$EXADATA_AD_NUMBER"
 read -r SELECTED_EXADATA_AD_NUMBER
 EXADATA_AD_NUMBER="${SELECTED_EXADATA_AD_NUMBER:-$EXADATA_AD_NUMBER}"
@@ -345,7 +357,7 @@ EXADATA_AD_NUMBER="${SELECTED_EXADATA_AD_NUMBER:-$EXADATA_AD_NUMBER}"
 case "$EXADATA_AD_NUMBER" in
   1|2|3) ;;
   *)
-    clear
+
     printf 'STOP: Invalid Exadata availability domain number: %s. Enter 1, 2, or 3.\n' "$EXADATA_AD_NUMBER" &gt;&amp;2
     return 1 2&gt;/dev/null || exit 1
     ;;
@@ -360,7 +372,7 @@ EXADATA_AVAILABILITY_DOMAIN="$(
 )"
 
 if [ -z "$EXADATA_AVAILABILITY_DOMAIN" ] || [ "$EXADATA_AVAILABILITY_DOMAIN" = "null" ]; then
-  clear
+
   printf 'STOP: Unable to resolve EXADATA_AVAILABILITY_DOMAIN for AD-%s in %s.\n' "$EXADATA_AD_NUMBER" "$REGION" &gt;&amp;2
   return 1 2&gt;/dev/null || exit 1
 fi
@@ -373,7 +385,7 @@ oci db gi-version list \
   --sort-order DESC \
   --limit 1 \
   &gt; "$GI_VERSION_LIST_JSON" || {
-    clear
+
     printf 'STOP: Failed to retrieve GI version list.\n' &gt;&amp;2
     return 1 2&gt;/dev/null || exit 1
   }
@@ -383,7 +395,7 @@ GI_MAJOR_VERSION="$(
 )"
 
 if [ -z "$GI_MAJOR_VERSION" ] || [ "$GI_MAJOR_VERSION" = "null" ]; then
-  clear
+
   printf 'STOP: Unable to resolve GI_MAJOR_VERSION for shape %s and shape attribute %s in %s.\n' \
     "$EXADB_SHAPE" "$EXADB_SHAPE_ATTRIBUTE" "$REGION" &gt;&amp;2
   return 1 2&gt;/dev/null || exit 1
@@ -396,7 +408,7 @@ case "$EXADATA_AD_NUMBER" in
 esac
 
 if [ -z "$GRID_IMAGE_ID" ] || [ "$GRID_IMAGE_ID" = "null" ]; then
-  clear
+
   printf 'STOP: GRID_IMAGE_ID is not set for AD-%s. Review GRID_IMAGE_ID_AD%s in this card before continuing.\n' "$EXADATA_AD_NUMBER" "$EXADATA_AD_NUMBER" &gt;&amp;2
   return 1 2&gt;/dev/null || exit 1
 fi
@@ -410,7 +422,6 @@ upsert_cli_env GI_MAJOR_VERSION "$GI_MAJOR_VERSION" &gt;/dev/null
 upsert_cli_env GRID_IMAGE_ID "$GRID_IMAGE_ID" &gt;/dev/null
 upsert_cli_env EXADATA_SYSTEM_VERSION "$EXADATA_SYSTEM_VERSION" &gt;/dev/null
 
-clear
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
@@ -424,9 +435,23 @@ printf '%-28s | %s\n' \
   "GRID_IMAGE_VALIDATE_STATUS" "$GRID_IMAGE_VALIDATE_STATUS" \
   "GI_VERSION_JSON" "$GI_VERSION_LIST_JSON" \
   "SYSTEM_VERSION" "$EXADATA_SYSTEM_VERSION"
+  printf '\n%s\n' "wb08_card02"
 }
 
-wb08_card03</code></pre>
+wb08_card02</code></pre>
+</div>
+<h3>OUTPUT 02 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card02</code></pre>
 </div>
 <h3>OUTPUT 03 - Expected Exascale VM cluster input summary</h3>
 <div class="code-card">
@@ -462,13 +487,13 @@ SYSTEM_VERSION              | 25.2.3.0.0.251020</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create Exadata Database Storage Vault Vault-01 in the assigned PoC compartment through DATABASE_COMPARTMENT_OCID and the EXADATA_AVAILABILITY_DOMAIN selected in BASH 03.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card04() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>wb08_card03() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 EXADATA_STORAGE_GB="${EXADATA_STORAGE_GB:-512}"
 
 if [ -z "${EXADATA_AVAILABILITY_DOMAIN:-}" ] || [ "$EXADATA_AVAILABILITY_DOMAIN" = "null" ]; then
-  clear
+
   printf 'STOP: EXADATA_AVAILABILITY_DOMAIN is not set. Run BASH 03 first, then rerun this card.\n' &gt;&amp;2
   return 1
 fi
@@ -487,7 +512,6 @@ VAULT_OCID="$(
 upsert_cli_env VAULT_OCID "$VAULT_OCID" &gt;/dev/null
 upsert_cli_env EXADATA_STORAGE_GB "$EXADATA_STORAGE_GB" &gt;/dev/null
 
-clear
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
@@ -495,9 +519,23 @@ printf '%-28s | %s\n' \
   "VAULT_OCID" "$VAULT_OCID" \
   "EXADATA_AVAILABILITY_DOMAIN" "$EXADATA_AVAILABILITY_DOMAIN" \
   "EXADATA_STORAGE_GB" "$EXADATA_STORAGE_GB"
+  printf '\n%s\n' "wb08_card03"
 }
 
-wb08_card04</code></pre>
+wb08_card03</code></pre>
+</div>
+<h3>OUTPUT 03 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card03</code></pre>
 </div>
       </section><section id="create-one-node-vmcluster-01" class="article-section">
         <h2>Create one-node VMCluster-01</h2>
@@ -512,9 +550,9 @@ wb08_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create VMCluster-01 as a one-node Exascale VM cluster with 8 enabled ECPUs.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card05() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>wb08_card04() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 LICENSE_MODEL="${LICENSE_MODEL:-BRING_YOUR_OWN_LICENSE}"
 EXADB_SHAPE="${EXADB_SHAPE:-EXADBXS}"
 EXADB_SHAPE_ATTRIBUTE="${EXADB_SHAPE_ATTRIBUTE:-SMART_STORAGE}"
@@ -543,14 +581,14 @@ for required_value in \
   EXADATA_SSH_PUBLIC_KEY_FILE; do
   resolved_value="${!required_value:-}"
   if [ -z "$resolved_value" ] || [ "$resolved_value" = "null" ]; then
-    clear
+
     printf 'STOP: %s is not set. Run the earlier Chapter 08 setup cards, then rerun this card.\n' "$required_value" &gt;&amp;2
     return 1
   fi
 done
 
 if [ ! -s "$EXADATA_SSH_PUBLIC_KEY_FILE" ]; then
-  clear
+
   printf 'STOP: SSH public key file was not found or is empty: %s\n' "$EXADATA_SSH_PUBLIC_KEY_FILE" &gt;&amp;2
   return 1
 fi
@@ -564,7 +602,7 @@ EXADATA_DOMAIN="$(
 )"
 
 if [ -z "$EXADATA_DOMAIN" ] || [ "$EXADATA_DOMAIN" = "null" ]; then
-  clear
+
   printf 'STOP: Unable to resolve EXADATA_DOMAIN from subnet %s.\n' "$SUBNET_DBCLIENT_OCID" &gt;&amp;2
   return 1
 fi
@@ -627,7 +665,7 @@ oci db exadb-vm-cluster create \
 
 create_status=$?
 if [ "$create_status" -ne 0 ]; then
-  clear
+
   printf '%s\n%s\n%s\n%s\n' \
     "STOP: Unable to submit the VMCluster-01 create request." \
     "OCI CLI status: $create_status" \
@@ -667,7 +705,6 @@ if [ -n "$VM_CLUSTER_STATUS" ] &amp;&amp; [ "$VM_CLUSTER_STATUS" != "null" ]; th
   upsert_cli_env VM_CLUSTER_STATUS "$VM_CLUSTER_STATUS" &gt;/dev/null
 fi
 
-clear
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
@@ -685,9 +722,23 @@ printf '%-28s | %s\n' \
   "VM_CLUSTER_STATUS" "${VM_CLUSTER_STATUS:-&lt;pending-response-state&gt;}" \
   "CREATE_RESPONSE_JSON" "$EXADATA_CREATE_RESPONSE_JSON" \
   "CREATE_ERROR_TXT" "$EXADATA_CREATE_ERROR_TXT"
+  printf '\n%s\n' "wb08_card04"
 }
 
-wb08_card05</code></pre>
+wb08_card04</code></pre>
+</div>
+<h3>OUTPUT 04 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card04</code></pre>
 </div>
 <h3>OUTPUT 05 - Expected VMCluster-01 create request summary</h3>
 <div class="code-card">
@@ -724,9 +775,9 @@ CREATE_ERROR_TXT             | /home/&lt;cloud-shell-user&gt;/workbook/reports/c
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Capture the VMCluster-01 OCID and lifecycle state after the create request has started, then save the values for the remaining steps.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card06() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>wb08_card05() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 VM_CLUSTER_JSON="$JSON_DIR/vmcluster-01-list.json"
 EXADATA_CREATE_RESPONSE_JSON="$JSON_DIR/create-exadb-vm-cluster-response.json"
 
@@ -763,7 +814,7 @@ else
 fi
 
 if [ -z "$VM_CLUSTER_OCID" ] || [ "$VM_CLUSTER_OCID" = "null" ]; then
-  clear
+
   printf 'STOP: VMCluster-01 was not found. Review %s before continuing.\n' "$VM_CLUSTER_JSON" &gt;&amp;2
   return 1
 fi
@@ -781,7 +832,6 @@ fi
 upsert_cli_env VM_CLUSTER_OCID "$VM_CLUSTER_OCID" &gt;/dev/null
 upsert_cli_env VM_CLUSTER_STATUS "$VM_CLUSTER_STATUS" &gt;/dev/null
 
-clear
 printf '%-20s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------" "-----" \
@@ -789,9 +839,23 @@ printf '%-20s | %s\n' \
   "VM_CLUSTER_STATUS" "$VM_CLUSTER_STATUS" \
   "CREATE_RESPONSE_ID" "${CREATE_RESPONSE_VM_CLUSTER_OCID:-&lt;not-found&gt;}" \
   "VM_CLUSTER_JSON" "$VM_CLUSTER_JSON"
+  printf '\n%s\n' "wb08_card05"
 }
 
-wb08_card06</code></pre>
+wb08_card05</code></pre>
+</div>
+<h3>OUTPUT 05 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card05</code></pre>
 </div>
 <h3>OUTPUT 06 - Expected VMCluster-01 OCID and status</h3>
 <div class="code-card">
@@ -820,9 +884,9 @@ VM_CLUSTER_JSON      | /home/&lt;cloud-shell-user&gt;/workbook/json/vmcluster-01
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run the Exadata VM OS image precheck for the most recent available VM OS update.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card07() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>wb08_card06() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 EXADATA_OS_UPDATES_JSON="${EXADATA_OS_UPDATES_JSON:-$JSON_DIR/exadata-vm-os-updates.json}"
 EXADATA_PRECHECK_RESPONSE_JSON="$JSON_DIR/exadata-vm-os-precheck-response.json"
 EXADATA_TARGET_SYSTEM_VERSION_SOURCE="existing cli.env value"
@@ -838,7 +902,7 @@ if [ -z "${EXADATA_TARGET_SYSTEM_VERSION:-}" ] || [ "$EXADATA_TARGET_SYSTEM_VERS
   )"
 
   if [ -z "$EXADATA_TARGET_SYSTEM_VERSION" ] || [ "$EXADATA_TARGET_SYSTEM_VERSION" = "null" ]; then
-    clear
+
     printf '%s\n%s\n' \
       "STOP: EXADATA_TARGET_SYSTEM_VERSION could not be resolved." \
       "Review available updates in $EXADATA_OS_UPDATES_JSON before rerunning this card." &gt;&amp;2
@@ -849,7 +913,6 @@ if [ -z "${EXADATA_TARGET_SYSTEM_VERSION:-}" ] || [ "$EXADATA_TARGET_SYSTEM_VERS
   EXADATA_TARGET_SYSTEM_VERSION_SOURCE="$EXADATA_OS_UPDATES_JSON"
 fi
 
-clear
 oci db exadb-vm-cluster update \
   --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
   --system-version "$EXADATA_TARGET_SYSTEM_VERSION" \
@@ -888,9 +951,23 @@ jq -r '
   ]
   | @tsv
 ' "$EXADATA_PRECHECK_RESPONSE_JSON" | column -t -s "$(printf '\t')"
+  printf '\n%s\n' "wb08_card06"
 }
 
-wb08_card07</code></pre>
+wb08_card06</code></pre>
+</div>
+<h3>OUTPUT 06 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card06</code></pre>
 </div>
 <h3>OUTPUT 07 - Expected VM OS precheck summary</h3>
 <div class="code-card">
@@ -922,10 +999,9 @@ VMCluster-01  8             23.26.2.0.0   1          AVAILABLE  25.2.6.0.0.26011
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review VM OS update precheck status and confirm the target system version selected for the apply step.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card08() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
-
+  <pre class="code-scroll"><code>wb08_card07() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 EXADATA_OS_UPDATES_JSON="$JSON_DIR/exadata-vm-os-updates.json"
 EXADATA_OS_UPDATES_SCRIPT="$BIN_DIR/review-precheck-execution.sh"
 
@@ -941,7 +1017,6 @@ EXADATA_TARGET_SYSTEM_VERSION="$(
 
 upsert_cli_env EXADATA_TARGET_SYSTEM_VERSION "$EXADATA_TARGET_SYSTEM_VERSION" &gt;/dev/null
 
-clear
 printf '%-3s | %-22s | %-13s | %-11s | %s\n' \
   "NO" "VERSION" "LAST_ACTION" "STATE" "TIME_RELEASED" \
   "---" "----------------------" "-------------" "-----------" "--------------------------"
@@ -971,11 +1046,24 @@ printf '%-32s | %s\n' \
   "EXADATA_OS_UPDATES_JSON" "$EXADATA_OS_UPDATES_JSON"
 SH
 
-clear
 . "$EXADATA_OS_UPDATES_SCRIPT"
+  printf '\n%s\n' "wb08_card07"
 }
 
-wb08_card08</code></pre>
+wb08_card07</code></pre>
+</div>
+<h3>OUTPUT 07 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card07</code></pre>
 </div>
 <h3>OUTPUT 08 - Expected precheck review summary</h3>
 <div class="code-card">
@@ -1008,10 +1096,9 @@ EXADATA_OS_UPDATES_JSON          | /home/&lt;cloud-shell-user&gt;/workbook/json/
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Submit the most recent Exadata VM OS image patch apply request after the precheck and change approval pass without waiting for completion in Cloud Shell.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card09() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
-
+  <pre class="code-scroll"><code>wb08_card08() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 oci db exadb-vm-cluster update \
   --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
   --system-version "$EXADATA_TARGET_SYSTEM_VERSION" \
@@ -1020,9 +1107,23 @@ oci db exadb-vm-cluster update \
   --output table
 
 printf '\nPatch apply request submitted. Do not wait in this Cloud Shell session; use BASH 10 to review progress.\n'
+  printf '\n%s\n' "wb08_card08"
 }
 
-wb08_card09</code></pre>
+wb08_card08</code></pre>
+</div>
+<h3>OUTPUT 08 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card08</code></pre>
 </div>
 <h3>BASH 10 - Review VM OS update status after apply</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
@@ -1034,10 +1135,9 @@ wb08_card09</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Reuse the VM OS update script to monitor progress and confirm the latest update eventually shows <code>ROLLING_APPLY</code> and <code>SUCCESS</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card10() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
-
+  <pre class="code-scroll"><code>wb08_card09() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 POST_APPLY_STATUS_SCRIPT="$BIN_DIR/review-vm-os-apply-status.sh"
 
 cat &gt; "$POST_APPLY_STATUS_SCRIPT" &lt;&lt;'SH'
@@ -1119,7 +1219,6 @@ else
   UPDATE_TIME_RELEASED="-"
 fi
 
-clear
 printf '%-32s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------------------" "-----" \
@@ -1141,11 +1240,24 @@ SH
 
 chmod +x "$POST_APPLY_STATUS_SCRIPT"
 
-clear
 "$POST_APPLY_STATUS_SCRIPT"
+  printf '\n%s\n' "wb08_card09"
 }
 
-wb08_card10</code></pre>
+wb08_card09</code></pre>
+</div>
+<h3>OUTPUT 09 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card09</code></pre>
 </div>
 <h3>OUTPUT 10 - Expected VM OS update status after apply</h3>
 <div class="code-card">
@@ -1184,9 +1296,9 @@ VM_CLUSTER_STATUS_JSON           | /home/&lt;cloud-shell-user&gt;/workbook/json/
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create dbhome_01 on VMCluster-01 using Oracle Database version 23.26.2.0.0.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card11() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>wb08_card10() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 DB_VERSION="23.26.2.0.0"
 CREATE_DBHOME_JSON="$JSON_DIR/create-dbhome.json"
 CREATE_DBHOME_RESPONSE_JSON="$JSON_DIR/create-dbhome-response.json"
@@ -1216,7 +1328,6 @@ DB_HOME_OCID="$(
 upsert_cli_env DB_HOME_OCID "$DB_HOME_OCID" &gt;/dev/null
 upsert_cli_env DB_VERSION "$DB_VERSION" &gt;/dev/null
 
-clear
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
@@ -1224,9 +1335,23 @@ printf '%-28s | %s\n' \
   "DB_VERSION" "$DB_VERSION" \
   "CREATE_DBHOME_JSON" "$CREATE_DBHOME_JSON" \
   "CREATE_DBHOME_RESPONSE_JSON" "$CREATE_DBHOME_RESPONSE_JSON"
+  printf '\n%s\n' "wb08_card10"
 }
 
-wb08_card11</code></pre>
+wb08_card10</code></pre>
+</div>
+<h3>OUTPUT 10 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card10</code></pre>
 </div>
       </section><section id="upgrade-cdbs-through-a-new-oracle-home" class="article-section">
         <h2>Upgrade CDBs through a new Oracle home</h2>
@@ -1241,9 +1366,9 @@ wb08_card11</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> List the Oracle Database versions available for creating a new Oracle home.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card12() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>wb08_card11() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 DB_VERSION_LIST_JSON="$JSON_DIR/db-version-list.json"
 
 oci db version list \
@@ -1253,7 +1378,6 @@ oci db version list \
   --all \
   &gt; "$DB_VERSION_LIST_JSON"
 
-clear
 printf '%-3s | %s\n' \
   "NO" "VERSION" \
   "---" "--------------------"
@@ -1272,9 +1396,23 @@ printf '\n%-24s | %s\n' \
   "VARIABLE" "VALUE" \
   "------------------------" "-----" \
   "DB_VERSION_LIST_JSON" "$DB_VERSION_LIST_JSON"
+  printf '\n%s\n' "wb08_card11"
 }
 
-wb08_card12</code></pre>
+wb08_card11</code></pre>
+</div>
+<h3>OUTPUT 11 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card11</code></pre>
 </div>
       </section><section id="upscale-cluster-memory-through-total-ecpus" class="article-section">
         <h2>Upscale cluster memory through total ECPUs</h2>
@@ -1288,9 +1426,9 @@ wb08_card12</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Increase total ECPUs to 12 per VM while keeping only 8 ECPUs enabled for database compute.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb08_card13() {
-clear
-  . ~/workbook/env.sh --quiet || return 1
+  <pre class="code-scroll"><code>wb08_card12() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 NODE_COUNT="$(
   oci db exadb-vm-cluster get \
     --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
@@ -1312,7 +1450,6 @@ upsert_cli_env TOTAL_ECPU_PER_VM 12 &gt;/dev/null
 upsert_cli_env ENABLED_ECPU_PER_VM 8 &gt;/dev/null
 upsert_cli_env TARGET_MEMORY_GB_PER_VM 33 &gt;/dev/null
 
-clear
 printf '%-24s | %s\n' \
   "VARIABLE" "VALUE" \
   "------------------------" "-----" \
@@ -1323,9 +1460,23 @@ printf '%-24s | %s\n' \
   "ENABLED_ECPU_PER_VM" "8" \
   "TARGET_MEMORY_GB_PER_VM" "33" \
   "VM_CLUSTER_OCID" "$VM_CLUSTER_OCID"
+  printf '\n%s\n' "wb08_card12"
 }
 
-wb08_card13</code></pre>
+wb08_card12</code></pre>
+</div>
+<h3>OUTPUT 12 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb08_card12</code></pre>
 </div>
       </section>
       <section id="chapter-navigation" class="article-section">

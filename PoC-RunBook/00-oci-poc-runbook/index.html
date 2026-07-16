@@ -33,7 +33,7 @@
         <h1>OCI PoC RunBook</h1>
         <p class="subtitle">This runbook implements an end-to-end Oracle Cloud Infrastructure (OCI) proof of concept in one assigned Partner child compartment. By default, it starts with the Virtual Cloud Network (VCN) baseline in the pre-created <code>(root)/Partner/LAD-01</code> compartment. It then covers the Exadata implementation, database creation, automatic backups, credential secrets, and OCI Database Management. The assigned child compartment name can change for other deployments.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -269,20 +269,22 @@
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, store <code>helpers.sh</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, create compatibility symlinks, and persist the local workbook path variables in export-enabled <code>cli.env</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, store <code>helpers.sh</code> under <code>~/workbook/lib</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, and persist the local workbook path variables in export-enabled <code>cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb00_card01() {
-
-WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
-BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
-REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
-JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
-mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
-chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+  clear
+WORKBOOK_DIR="$HOME/workbook"
+BIN_DIR="$WORKBOOK_DIR/bin"
+LIB_DIR="$WORKBOOK_DIR/lib"
+KEY_DIR="$WORKBOOK_DIR/keys"
+JSON_DIR="$WORKBOOK_DIR/json"
+REPORT_DIR="$WORKBOOK_DIR/reports"
+mkdir -p "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 BIN_DIR="$WORKBOOK_DIR/bin"
-HELPERS_FILE="$BIN_DIR/helpers.sh"; ENV_FILE="$BIN_DIR/env.sh"
+HELPERS_FILE="$LIB_DIR/helpers.sh"; ENV_FILE="$BIN_DIR/env.sh"
 
 mkdir -p "$WORKBOOK_DIR" "$BIN_DIR"; chmod 700 "$WORKBOOK_DIR" "$BIN_DIR"
 cat &gt; "$CLI_ENV" &lt;&lt;'EOF'
@@ -292,12 +294,14 @@ EOF
 chmod 600 "$CLI_ENV"
 
 cat &gt; "$HELPERS_FILE" &lt;&lt;'HELPERS'
-WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
-BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
-REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
-JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
-mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
-chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
+WORKBOOK_DIR="$HOME/workbook"
+BIN_DIR="$WORKBOOK_DIR/bin"
+LIB_DIR="$WORKBOOK_DIR/lib"
+KEY_DIR="$WORKBOOK_DIR/keys"
+JSON_DIR="$WORKBOOK_DIR/json"
+REPORT_DIR="$WORKBOOK_DIR/reports"
+mkdir -p "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
 CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 
 load_cli_env() {
@@ -331,24 +335,25 @@ HELPERS
 chmod 700 "$HELPERS_FILE"
 
 cat &gt; "$ENV_FILE" &lt;&lt;'EOF'
-WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
+WORKBOOK_DIR="$HOME/workbook"
 cd "$WORKBOOK_DIR" || return 1
-. "$WORKBOOK_DIR/helpers.sh" || return 1
+LIB_DIR="$WORKBOOK_DIR/lib"
+. "$LIB_DIR/helpers.sh" || return 1
 load_cli_env || return 1
-PATH="$WORKBOOK_DIR/bin:$PATH"
+export PATH="$WORKBOOK_DIR/bin:$PATH"
 PS1='$ '
-BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
-REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
-JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
-mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
-chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
-export BIN_DIR REPORT_DIR JSON_DIR
+BIN_DIR="$WORKBOOK_DIR/bin"
+KEY_DIR="$WORKBOOK_DIR/keys"
+JSON_DIR="$WORKBOOK_DIR/json"
+REPORT_DIR="$WORKBOOK_DIR/reports"
+mkdir -p "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+export WORKBOOK_DIR BIN_DIR LIB_DIR KEY_DIR JSON_DIR REPORT_DIR
 
 if [ "${1:-}" = "--quiet" ]; then
   return 0
 fi
 
-clear
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
@@ -360,17 +365,22 @@ printf '%-28s | %s\n' \
   "CDB_OCID" "${CDB_OCID:-}"
 EOF
 chmod 700 "$ENV_FILE"
-ln -sfn "bin/helpers.sh" "$WORKBOOK_DIR/helpers.sh"
-ln -sfn "bin/env.sh" "$WORKBOOK_DIR/env.sh"
+
+BASH_PROFILE="$HOME/.bash_profile"
+PATH_EXPORT='export PATH="$HOME/workbook/bin:$PATH"'
+touch "$BASH_PROFILE"
+grep -Fqx "$PATH_EXPORT" "$BASH_PROFILE" || printf '%s\n' "$PATH_EXPORT" &gt;&gt; "$BASH_PROFILE"
+. "$BASH_PROFILE" || return 1
 
 . "$HELPERS_FILE"
 upsert_cli_env WORKBOOK_DIR "$WORKBOOK_DIR" &gt;/dev/null
 upsert_cli_env BIN_DIR "$BIN_DIR" &gt;/dev/null
+upsert_cli_env LIB_DIR "$LIB_DIR" &gt;/dev/null
+upsert_cli_env KEY_DIR "$KEY_DIR" &gt;/dev/null
 upsert_cli_env REPORT_DIR "$REPORT_DIR" &gt;/dev/null
 upsert_cli_env JSON_DIR "$JSON_DIR" &gt;/dev/null
 PS1='$ '
 
-clear
 printf '%-18s | %s\n' \
   "FIELD" "VALUE" \
   "------------------" "-----" \
@@ -382,14 +392,27 @@ printf '%-18s | %s\n' \
   "HELPERS_FILE" "$HELPERS_FILE" \
   "ENV_FILE" "$ENV_FILE" \
   "PROMPT" "$PS1"
-printf '\n%s\n' "wb00_card01"
+  printf '\n%s\n' "wb00_card01"
 }
+
+wb00_card01</code></pre>
+</div>
+<h3>OUTPUT 01 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb00_card01</code></pre>
 </div>
 <p>Because <code>~/workbook/cli.env</code> starts with <code>set -a</code> and ends with <code>set +a</code>, variables loaded through <code>load_cli_env</code> are exported into the current shell session.</p>
 <h3>How <code>capture_oci_id</code> works</h3>
-<p><code>capture_oci_id</code> is a workbook helper function defined in <code>~/workbook/bin/helpers.sh</code> (also available through the <code>~/workbook/helpers.sh</code> compatibility link). It is not part of OCI CLI. Use <code>capture_oci_id &lt;CLI_ENV_KEY&gt; &lt;oci command...&gt;</code> for create commands that return the new resource under <code>data.id</code>.</p>
+<p><code>capture_oci_id</code> is a workbook helper function defined in <code>~/workbook/lib/helpers.sh</code>. It is not part of OCI CLI. Use <code>capture_oci_id &lt;CLI_ENV_KEY&gt; &lt;oci command...&gt;</code> for create commands that return the new resource under <code>data.id</code>.</p>
 <p>When the helper runs, it:</p>
 <ul class="article-list">
 <li>Executes the OCI CLI command passed after the key with <code>--query 'data.id' --raw-output</code>.</li>

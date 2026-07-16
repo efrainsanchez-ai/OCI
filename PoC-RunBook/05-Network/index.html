@@ -31,9 +31,9 @@
       <div class="hero-copy">
         <p class="eyebrow">Chapter 05</p>
         <h1>Network</h1>
-        <p class="subtitle">Run this sequence only after the <a href="../00-oci-poc-runbook/index.html#initialize-the-workbook-environment">Chapter 00 workbook environment</a> is ready. Confirm that <code>~/workbook/cli.env</code> exists, <code>~/workbook/helpers.sh</code> exists, and the helper functions are sourced in the current shell.</p>
+        <p class="subtitle">Run this sequence only after the <a href="../00-oci-poc-runbook/index.html#initialize-the-workbook-environment">Chapter 00 workbook environment</a> is ready. Confirm that <code>~/workbook/cli.env</code> and <code>~/workbook/lib/helpers.sh</code> exist, and the helper functions are sourced in the current shell.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -53,7 +53,7 @@
       </nav>
       <section id="consolidated-oci-cli-artifact-creation" class="article-section">
         <h2>Consolidated OCI CLI Artifact Creation</h2>
-        <p>Run this sequence only after the <a href="../00-oci-poc-runbook/index.html#initialize-the-workbook-environment">Chapter 00 workbook environment</a> is ready. Confirm that <code>~/workbook/cli.env</code> exists, <code>~/workbook/helpers.sh</code> exists, and the helper functions are sourced in the current shell.</p>
+        <p>Run this sequence only after the <a href="../00-oci-poc-runbook/index.html#initialize-the-workbook-environment">Chapter 00 workbook environment</a> is ready. Confirm that <code>~/workbook/cli.env</code> and <code>~/workbook/lib/helpers.sh</code> exist, and the helper functions are sourced in the current shell.</p>
 <p>The Bash cards below consolidate the workbook creation steps into one ordered OCI Cloud Shell flow. They use the pre-created <code>(root)/Partner/LAD-01</code> compartment by default as the active target and create the baseline VCN, gateways, route tables, subnets, NSGs, and core database-client access rules in that single compartment. The assigned child compartment name can change for other deployments.</p>
 <h3>BASH 01 - Verify Cloud Shell runtime</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
@@ -66,16 +66,17 @@
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb05_card01() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 OCI_CLI_VERSION="$(oci --version 2&gt;/dev/null || printf '&lt;not_available&gt;')"
 CLOUD_SHELL_VERSION="$({ . /etc/os-release 2&gt;/dev/null &amp;&amp; printf '%s' "${PRETTY_NAME:-unknown}"; } || printf '&lt;not_available&gt;')"
 
-clear
 printf '%-16s | %s\n' \
   "FIELD" "VALUE" \
   "----------------" "-----" \
   "OCI CLI Version" "$OCI_CLI_VERSION" \
   "Cloud Shell" "$CLOUD_SHELL_VERSION"
-printf '\n%s\n' "wb05_card01"
+  printf '\n%s\n' "wb05_card01"
 }
 
 wb05_card01</code></pre>
@@ -106,14 +107,13 @@ wb05_card01</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb05_card02() {
-if [ ! -f ~/workbook/env.sh ]; then
-  printf 'STOP: Missing ~/workbook/env.sh. Run wb00_card01 first.\n' &gt;&amp;2
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+if [ ! -f ~/workbook/bin/env.sh ]; then
+  printf 'STOP: Missing ~/workbook/bin/env.sh. Run wb00_card01 first.\n' &gt;&amp;2
   return 1
 fi
 
-. ~/workbook/env.sh --quiet || return 1
-
-clear
 read_profile() {
   cfg="${OCI_CLI_CONFIG_FILE:-$HOME/.oci/config}"
   profile="${OCI_CLI_PROFILE:-DEFAULT}"
@@ -209,7 +209,6 @@ printf ' - No existing VCN found; BASH 04 can create %s.\n' "$VCN_NAME"
 upsert_cli_env VCN_NAME "$VCN_NAME" &gt;/dev/null
 upsert_cli_env VCN_CIDR "$VCN_CIDR" &gt;/dev/null
 
-clear
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
@@ -219,8 +218,21 @@ printf '%-28s | %s\n' \
   "VCN_NAME" "$VCN_NAME" \
   "VCN_CIDR" "$VCN_CIDR" \
   "STATUS" "ready for BASH 03 and BASH 04"
-printf '\n%s\n' "wb05_card02"
+  printf '\n%s\n' "wb05_card02"
 }
+
+wb05_card02</code></pre>
+</div>
+<h3>OUTPUT 02 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb05_card02</code></pre>
 </div>
@@ -234,9 +246,9 @@ wb05_card02</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step after BASH 02 to validate the selected compartment, the role-specific variables assigned to its OCID, and the VCN values prepared by BASH 02.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card03() {
-
+  <pre class="code-scroll"><code>wb05_card03() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 missing=0
 for item in \
   "TENANCY_ID|$TENANCY_ID" \
@@ -261,7 +273,7 @@ for item in \
   fi
 done
 [ "$missing" -eq 0 ] || {
-  printf 'Run wb17_card02, then reload ~/workbook/env.sh before continuing.\n' &gt;&amp;2
+  printf 'Run wb17_card02, then reload ~/workbook/bin/env.sh before continuing.\n' &gt;&amp;2
   return 1
 }
 
@@ -274,7 +286,6 @@ for alias in \
   fi
 done
 
-clear
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
@@ -293,7 +304,7 @@ printf '%-28s | %s\n' \
   "ADMIN_COMPARTMENT_OCID" "$ADMIN_COMPARTMENT_OCID" \
   "APPLICATION_COMPARTMENT_OCID" "$APPLICATION_COMPARTMENT_OCID" \
   "LOG_COMPARTMENT_OCID" "$LOG_COMPARTMENT_OCID"
-printf '\n%s\n' "wb05_card03"
+  printf '\n%s\n' "wb05_card03"
 }
 
 wb05_card03</code></pre>
@@ -336,9 +347,9 @@ wb05_card03</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create the VCN in the assigned <code>POC_COMPARTMENT_NAME</code> compartment through <code>NETWORK_COMPARTMENT_OCID</code>, using <code>VCN_NAME</code> with <code>VCN-&lt;compartment-name&gt;</code> as the default, using <code>VCN_CIDR</code> with <code>10.0.0.0/16</code> as the default, and save <code>VCN_OCID</code> in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card04() {
-
+  <pre class="code-scroll"><code>wb05_card04() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 VCN_OCID="$(
   oci network vcn create \
     --compartment-id "$NETWORK_COMPARTMENT_OCID" \
@@ -350,12 +361,11 @@ VCN_OCID="$(
 )"
 upsert_cli_env VCN_OCID "$VCN_OCID" &gt;/dev/null
 
-clear
 printf '%-18s | %s\n' \
   "VARIABLE" "VALUE" \
   "------------------" "-----" \
   "VCN_OCID" "$VCN_OCID"
-printf '\n%s\n' "wb05_card04"
+  printf '\n%s\n' "wb05_card04"
 }
 
 wb05_card04</code></pre>
@@ -384,9 +394,9 @@ wb05_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to preserve required ICMP destination-unreachable ingress, allow default egress to <code>All &lt;region&gt; Services in Oracle Services Network</code>, save <code>DEFAULT_SECURITY_LIST_OCID</code>, and display the updated security list.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card05() {
-
+  <pre class="code-scroll"><code>wb05_card05() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 DEFAULT_SECURITY_LIST_OCID="$(
   oci network vcn get \
     --vcn-id "$VCN_OCID" \
@@ -448,13 +458,12 @@ oci network security-list update \
   --query 'data.id' \
   --raw-output &gt;/dev/null
 
-clear
 printf '%-26s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------------" "-----" \
   "DEFAULT_SECURITY_LIST_OCID" "$DEFAULT_SECURITY_LIST_OCID" \
   "SERVICE_CIDR_BLOCK_LABEL" "$SERVICE_CIDR_BLOCK_LABEL"
-printf '\n%s\n' "wb05_card05"
+  printf '\n%s\n' "wb05_card05"
 }
 
 wb05_card05</code></pre>
@@ -484,9 +493,9 @@ wb05_card05</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to resolve the regional Service Gateway target with OCI CLI query output and save the service values in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card06() {
-
+  <pre class="code-scroll"><code>wb05_card06() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 ALL_REGION_SERVICES_SERVICE_OCID="$(
   oci network service list \
     --query "data[?contains(name, 'All') &amp;&amp; contains(name, 'Oracle Services Network')].id | [0]" \
@@ -502,13 +511,12 @@ SERVICE_CIDR_BLOCK_LABEL="$(
 upsert_cli_env ALL_REGION_SERVICES_SERVICE_OCID "$ALL_REGION_SERVICES_SERVICE_OCID" &gt;/dev/null
 upsert_cli_env SERVICE_CIDR_BLOCK_LABEL "$SERVICE_CIDR_BLOCK_LABEL" &gt;/dev/null
 
-clear
 printf '%-32s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------------------" "-----" \
   "ALL_REGION_SERVICES_SERVICE_OCID" "$ALL_REGION_SERVICES_SERVICE_OCID" \
   "SERVICE_CIDR_BLOCK_LABEL" "$SERVICE_CIDR_BLOCK_LABEL"
-printf '\n%s\n' "wb05_card06"
+  printf '\n%s\n' "wb05_card06"
 }
 
 wb05_card06</code></pre>
@@ -539,9 +547,9 @@ wb05_card06</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create <code>gw-internet</code> as the Internet Gateway, <code>gw-service</code> as the Service Gateway, <code>gw-nat</code> as the NAT Gateway, and optional DRG resources.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card07() {
-
+  <pre class="code-scroll"><code>wb05_card07() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 load_cli_env
 CREATE_DRG="${CREATE_DRG:-false}"
 
@@ -607,7 +615,6 @@ if [ "$CREATE_DRG" = "true" ] &amp;&amp; [ -z "${DRG_ATTACHMENT_OCID:-}" ]; then
   upsert_cli_env DRG_ATTACHMENT_OCID "$DRG_ATTACHMENT_OCID" &gt;/dev/null
 fi
 
-clear
 if [ -z "${IGW_OCID:-}" ] || [ -z "${SGW_OCID:-}" ] || [ -z "${NAT_OCID:-}" ]; then
   printf 'STOP: One or more gateway OCIDs were not created or loaded. Review the OCI error above, then rerun BASH 07.\n'
   return 1
@@ -625,7 +632,7 @@ if [ "$CREATE_DRG" = "true" ]; then
     "DRG_OCID" "$DRG_OCID" \
     "DRG_ATTACHMENT_OCID" "$DRG_ATTACHMENT_OCID"
 fi
-printf '\n%s\n' "wb05_card07"
+  printf '\n%s\n' "wb05_card07"
 }
 
 wb05_card07</code></pre>
@@ -662,9 +669,9 @@ wb05_card07</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to write route-rule JSON artifacts under <code>~/workbook</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card08() {
-
+  <pre class="code-scroll"><code>wb05_card08() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 cat &gt; "$JSON_DIR/rt-public-rules.json" &lt;&lt;EOF
 [
   {
@@ -690,13 +697,12 @@ cat &gt; "$JSON_DIR/rt-private-rules.json" &lt;&lt;EOF
 ]
 EOF
 
-clear
 printf '%-21s | %s\n' \
   "VARIABLE" "VALUE" \
   "---------------------" "-----" \
   "RT_PUBLIC_RULES_FILE" "$JSON_DIR/rt-public-rules.json" \
   "RT_PRIVATE_RULES_FILE" "$JSON_DIR/rt-private-rules.json"
-printf '\n%s\n' "wb05_card08"
+  printf '\n%s\n' "wb05_card08"
 }
 
 wb05_card08</code></pre>
@@ -726,9 +732,9 @@ wb05_card08</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create route tables and save their OCIDs in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card09() {
-
+  <pre class="code-scroll"><code>wb05_card09() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 RT_PUBLIC_OCID="$(
   oci network route-table create \
     --compartment-id "$NETWORK_COMPARTMENT_OCID" \
@@ -751,13 +757,12 @@ RT_PRIVATE_OCID="$(
 )"
 upsert_cli_env RT_PRIVATE_OCID "$RT_PRIVATE_OCID" &gt;/dev/null
 
-clear
 printf '%-15s | %s\n' \
   "VARIABLE" "VALUE" \
   "---------------" "-----" \
   "RT_PUBLIC_OCID" "$RT_PUBLIC_OCID" \
   "RT_PRIVATE_OCID" "$RT_PRIVATE_OCID"
-printf '\n%s\n' "wb05_card09"
+  printf '\n%s\n' "wb05_card09"
 }
 
 wb05_card09</code></pre>
@@ -777,19 +782,19 @@ RT_PRIVATE_OCID | ocid1.routetable.oc1.iad.&lt;generated_private_route_table_oci
 
 wb05_card09</code></pre>
 </div>
-<h3>BASH 10 - Create backup security list</h3>
+<h3>BASH 10 - Create backup and Database Tools security lists</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to write the reviewed backup security-list JSON artifacts under <code>~/workbook</code>, create the backup security list, and save its OCID in <code>~/workbook/cli.env</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to write the reviewed security-list JSON artifacts under <code>~/workbook</code>, create the backup and Database Tools security lists, and save their OCIDs in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card10() {
-
+  <pre class="code-scroll"><code>wb05_card10() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 cat &gt; "$JSON_DIR/sl-backup-ingress.json" &lt;&lt;EOF
 [
   {
@@ -845,12 +850,42 @@ SECURITY_LIST_BACKUP_OCID="$(
 )"
 upsert_cli_env SECURITY_LIST_BACKUP_OCID "$SECURITY_LIST_BACKUP_OCID" &gt;/dev/null
 
-clear
+cat &gt; "$JSON_DIR/sl-dbtools-egress.json" &lt;&lt;EOF
+[
+  {
+    "description": "Allow Connections to Database Subnet",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "10.0.1.0/24",
+    "destinationType": "CIDR_BLOCK",
+    "tcpOptions": {
+      "destinationPortRange": {
+        "min": 1521,
+        "max": 1521
+      }
+    }
+  }
+]
+EOF
+
+SECURITY_LIST_DBTOOLS_OCID="$(
+  oci network security-list create \
+    --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+    --vcn-id "$VCN_OCID" \
+    --display-name "sl-dbtools" \
+    --ingress-security-rules '[]' \
+    --egress-security-rules "file://$JSON_DIR/sl-dbtools-egress.json" \
+    --query 'data.id' \
+    --raw-output
+)"
+upsert_cli_env SECURITY_LIST_DBTOOLS_OCID "$SECURITY_LIST_DBTOOLS_OCID" &gt;/dev/null
+
 printf '%-26s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------------" "-----" \
-  "SECURITY_LIST_BACKUP_OCID" "$SECURITY_LIST_BACKUP_OCID"
-printf '\n%s\n' "wb05_card10"
+  "SECURITY_LIST_BACKUP_OCID" "$SECURITY_LIST_BACKUP_OCID" \
+  "SECURITY_LIST_DBTOOLS_OCID" "$SECURITY_LIST_DBTOOLS_OCID"
+  printf '\n%s\n' "wb05_card10"
 }
 
 wb05_card10</code></pre>
@@ -861,11 +896,12 @@ wb05_card10</code></pre>
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured backup security-list OCID before creating subnets.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured security-list OCIDs before creating subnets.</span>
   </div>
   <pre class="code-scroll"><code>VARIABLE                   | VALUE
 -------------------------- | -----
 SECURITY_LIST_BACKUP_OCID  | ocid1.securitylist.oc1.iad.&lt;generated_sl_backup_ocid&gt;
+SECURITY_LIST_DBTOOLS_OCID | ocid1.securitylist.oc1.iad.&lt;generated_sl_dbtools_ocid&gt;
 
 wb05_card10</code></pre>
 </div>
@@ -879,9 +915,9 @@ wb05_card10</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step after BASH 10 to create the workbook subnets and save their OCIDs in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card11() {
-
+  <pre class="code-scroll"><code>wb05_card11() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 cat &gt; "$JSON_DIR/subnet-backup-security-list-ids.json" &lt;&lt;EOF
 [
   "$DEFAULT_SECURITY_LIST_OCID",
@@ -889,6 +925,14 @@ cat &gt; "$JSON_DIR/subnet-backup-security-list-ids.json" &lt;&lt;EOF
 ]
 EOF
 
+cat &gt; "$JSON_DIR/subnet-dbtools-security-list-ids.json" &lt;&lt;EOF
+[
+  "$DEFAULT_SECURITY_LIST_OCID",
+  "$SECURITY_LIST_DBTOOLS_OCID"
+]
+EOF
+
+printf 'Creating subnet-admin...\n'
 SUBNET_ADMIN_OCID="$(
   oci network subnet create \
     --compartment-id "$NETWORK_COMPARTMENT_OCID" \
@@ -903,6 +947,7 @@ SUBNET_ADMIN_OCID="$(
 )"
 upsert_cli_env SUBNET_ADMIN_OCID "$SUBNET_ADMIN_OCID" &gt;/dev/null
 
+printf 'Creating subnet-dbclient...\n'
 SUBNET_DBCLIENT_OCID="$(
   oci network subnet create \
     --compartment-id "$NETWORK_COMPARTMENT_OCID" \
@@ -917,11 +962,12 @@ SUBNET_DBCLIENT_OCID="$(
 )"
 upsert_cli_env SUBNET_DBCLIENT_OCID "$SUBNET_DBCLIENT_OCID" &gt;/dev/null
 
+printf 'Creating subnet-dbbackup...\n'
 SUBNET_DB_BACKUP_OCID="$(
   oci network subnet create \
     --compartment-id "$NETWORK_COMPARTMENT_OCID" \
     --vcn-id "$VCN_OCID" \
-    --display-name "subnet-db-backup" \
+    --display-name "subnet-dbbackup" \
     --cidr-block "10.0.2.0/24" \
     --dns-label "backup" \
     --route-table-id "$RT_PRIVATE_OCID" \
@@ -932,6 +978,7 @@ SUBNET_DB_BACKUP_OCID="$(
 )"
 upsert_cli_env SUBNET_DB_BACKUP_OCID "$SUBNET_DB_BACKUP_OCID" &gt;/dev/null
 
+printf 'Creating subnet-dbtools...\n'
 SUBNET_DBTOOLS_OCID="$(
   oci network subnet create \
     --compartment-id "$NETWORK_COMPARTMENT_OCID" \
@@ -940,12 +987,14 @@ SUBNET_DBTOOLS_OCID="$(
     --cidr-block "10.0.3.0/28" \
     --dns-label "dbtools" \
     --route-table-id "$RT_PRIVATE_OCID" \
+    --security-list-ids "file://$JSON_DIR/subnet-dbtools-security-list-ids.json" \
     --prohibit-public-ip-on-vnic true \
     --query 'data.id' \
     --raw-output
 )"
 upsert_cli_env SUBNET_DBTOOLS_OCID "$SUBNET_DBTOOLS_OCID" &gt;/dev/null
 
+printf 'Creating subnet-public-lb...\n'
 SUBNET_PUBLIC_LB_OCID="$(
   oci network subnet create \
     --compartment-id "$NETWORK_COMPARTMENT_OCID" \
@@ -960,6 +1009,7 @@ SUBNET_PUBLIC_LB_OCID="$(
 )"
 upsert_cli_env SUBNET_PUBLIC_LB_OCID "$SUBNET_PUBLIC_LB_OCID" &gt;/dev/null
 
+printf 'Creating subnet-applications...\n'
 SUBNET_APPS_OCID="$(
   oci network subnet create \
     --compartment-id "$NETWORK_COMPARTMENT_OCID" \
@@ -974,18 +1024,18 @@ SUBNET_APPS_OCID="$(
 )"
 upsert_cli_env SUBNET_APPS_OCID "$SUBNET_APPS_OCID" &gt;/dev/null
 
-clear
 printf '%-26s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------------" "-----" \
   "SECURITY_LIST_BACKUP_OCID" "$SECURITY_LIST_BACKUP_OCID" \
+  "SECURITY_LIST_DBTOOLS_OCID" "$SECURITY_LIST_DBTOOLS_OCID" \
   "SUBNET_ADMIN_OCID" "$SUBNET_ADMIN_OCID" \
   "SUBNET_DBCLIENT_OCID" "$SUBNET_DBCLIENT_OCID" \
   "SUBNET_DB_BACKUP_OCID" "$SUBNET_DB_BACKUP_OCID" \
   "SUBNET_DBTOOLS_OCID" "$SUBNET_DBTOOLS_OCID" \
   "SUBNET_PUBLIC_LB_OCID" "$SUBNET_PUBLIC_LB_OCID" \
   "SUBNET_APPS_OCID" "$SUBNET_APPS_OCID"
-printf '\n%s\n' "wb05_card11"
+  printf '\n%s\n' "wb05_card11"
 }
 
 wb05_card11</code></pre>
@@ -996,11 +1046,12 @@ wb05_card11</code></pre>
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured backup security-list and subnet OCIDs before creating network security groups.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the captured security-list and subnet OCIDs before creating network security groups.</span>
   </div>
   <pre class="code-scroll"><code>VARIABLE                   | VALUE
 -------------------------- | -----
 SECURITY_LIST_BACKUP_OCID  | ocid1.securitylist.oc1.iad.&lt;generated_sl_backup_ocid&gt;
+SECURITY_LIST_DBTOOLS_OCID | ocid1.securitylist.oc1.iad.&lt;generated_sl_dbtools_ocid&gt;
 SUBNET_ADMIN_OCID          | ocid1.subnet.oc1.iad.&lt;generated_admin_subnet_ocid&gt;
 SUBNET_DBCLIENT_OCID       | ocid1.subnet.oc1.iad.&lt;generated_dbclient_subnet_ocid&gt;
 SUBNET_DB_BACKUP_OCID      | ocid1.subnet.oc1.iad.&lt;generated_db_backup_subnet_ocid&gt;
@@ -1020,9 +1071,9 @@ wb05_card11</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create the consolidated <code>nsg-database-client</code> rule JSON template, create the <code>nsg-database-client</code> NSG, and save its OCID in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card12() {
-
+  <pre class="code-scroll"><code>wb05_card12() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 cat &gt; "$JSON_DIR/nsg-database-client-rules.template.json" &lt;&lt;'EOF'
 [
   {
@@ -1143,13 +1194,25 @@ NSG_DATABASE_CLIENT_OCID="$(
 )"
 upsert_cli_env NSG_DATABASE_CLIENT_OCID "$NSG_DATABASE_CLIENT_OCID" &gt;/dev/null
 
-clear
 printf '%-23s | %s\n' \
   "VARIABLE" "VALUE" \
   "-----------------------" "-----" \
   "NSG_DATABASE_CLIENT_OCID" "$NSG_DATABASE_CLIENT_OCID"
-printf '\n%s\n' "wb05_card12"
+  printf '\n%s\n' "wb05_card12"
 }
+
+wb05_card12</code></pre>
+</div>
+<h3>OUTPUT 12 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb05_card12</code></pre>
 </div>
@@ -1163,9 +1226,9 @@ wb05_card12</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the applications NSG template with SSH ingress from <code>nsg-bastion-admin</code>, public load balancer ingress from <code>nsg-public-lb</code>, database egress to <code>nsg-database-client</code>, then create the NSG and save its OCID in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card13() {
-
+  <pre class="code-scroll"><code>wb05_card13() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 cat &gt; "$JSON_DIR/nsg-applications-rules.template.json" &lt;&lt;'EOF'
 [
   {
@@ -1235,13 +1298,25 @@ NSG_APPLICATIONS_OCID="$(
 )"
 upsert_cli_env NSG_APPLICATIONS_OCID "$NSG_APPLICATIONS_OCID" &gt;/dev/null
 
-clear
 printf '%-20s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------" "-----" \
   "NSG_APPLICATIONS_OCID" "$NSG_APPLICATIONS_OCID"
-printf '\n%s\n' "wb05_card13"
+  printf '\n%s\n' "wb05_card13"
 }
+
+wb05_card13</code></pre>
+</div>
+<h3>OUTPUT 13 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb05_card13</code></pre>
 </div>
@@ -1255,9 +1330,9 @@ wb05_card13</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the Database Tools endpoint NSG with egress rules to the database-client NSG on TCP 1521 and TCP 6200, then save its OCID in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card14() {
-
+  <pre class="code-scroll"><code>wb05_card14() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 cat &gt; "$JSON_DIR/nsg-dbtools-endpoint-rules.template.json" &lt;&lt;'EOF'
 [
   {
@@ -1291,13 +1366,25 @@ NSG_DBTOOLS_OCID="$(
 )"
 upsert_cli_env NSG_DBTOOLS_OCID "$NSG_DBTOOLS_OCID" &gt;/dev/null
 
-clear
 printf '%-17s | %s\n' \
   "VARIABLE" "VALUE" \
   "-----------------" "-----" \
   "NSG_DBTOOLS_OCID" "$NSG_DBTOOLS_OCID"
-printf '\n%s\n' "wb05_card14"
+  printf '\n%s\n' "wb05_card14"
 }
+
+wb05_card14</code></pre>
+</div>
+<h3>OUTPUT 14 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb05_card14</code></pre>
 </div>
@@ -1311,9 +1398,9 @@ wb05_card14</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create the bastion/admin consolidated NSG rule JSON template, create the bastion/admin NSG, and save its OCID in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card15() {
-
+  <pre class="code-scroll"><code>wb05_card15() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 cat &gt; "$JSON_DIR/nsg-bastion-admin-rules.template.json" &lt;&lt;'EOF'
 [
   {
@@ -1382,13 +1469,25 @@ NSG_BASTION_OCID="$(
 )"
 upsert_cli_env NSG_BASTION_OCID "$NSG_BASTION_OCID" &gt;/dev/null
 
-clear
 printf '%-16s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------" "-----" \
   "NSG_BASTION_OCID" "$NSG_BASTION_OCID"
-printf '\n%s\n' "wb05_card15"
+  printf '\n%s\n' "wb05_card15"
 }
+
+wb05_card15</code></pre>
+</div>
+<h3>OUTPUT 15 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb05_card15</code></pre>
 </div>
@@ -1402,9 +1501,9 @@ wb05_card15</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the public load balancer NSG without SSH access, allow internet listener ingress and egress on TCP 80, 443, and 8080, and save its OCID in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card16() {
-
+  <pre class="code-scroll"><code>wb05_card16() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 cat &gt; "$JSON_DIR/nsg-public-lb-rules.template.json" &lt;&lt;'EOF'
 [
   {
@@ -1474,7 +1573,6 @@ NSG_PUBLIC_LB_OCID="$(
 )"
 upsert_cli_env NSG_PUBLIC_LB_OCID "$NSG_PUBLIC_LB_OCID" &gt;/dev/null
 
-clear
 printf '%-23s | %s\n' \
   "VARIABLE" "VALUE" \
   "-----------------------" "-----" \
@@ -1483,7 +1581,7 @@ printf '%-23s | %s\n' \
   "NSG_DBTOOLS_OCID" "$NSG_DBTOOLS_OCID" \
   "NSG_BASTION_OCID" "$NSG_BASTION_OCID" \
   "NSG_PUBLIC_LB_OCID" "$NSG_PUBLIC_LB_OCID"
-printf '\n%s\n' "wb05_card16"
+  printf '\n%s\n' "wb05_card16"
 }
 
 wb05_card16</code></pre>
@@ -1516,9 +1614,9 @@ wb05_card16</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step after BASH 12 through BASH 16 to render each NSG's reviewed JSON template with captured NSG OCIDs, then apply the rendered rule file to its matching NSG.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card17() {
-
+  <pre class="code-scroll"><code>wb05_card17() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 load_cli_env
 
 render_nsg_rules() {
@@ -1574,7 +1672,6 @@ if ! apply_nsg_rules "$NSG_PUBLIC_LB_OCID" "nsg-public-lb-rules.template.json"; 
   nsg_apply_failed=1
 fi
 
-clear
 printf '%-24s | %s\n' \
   "VARIABLE" "VALUE" \
   "------------------------" "-----" \
@@ -1583,7 +1680,7 @@ printf '%-24s | %s\n' \
   "NSG_DBTOOLS_RULES" "$NSG_DBTOOLS_RULES_STATUS" \
   "NSG_BASTION_RULES" "$NSG_BASTION_RULES_STATUS" \
   "NSG_PUBLIC_LB_RULES" "$NSG_PUBLIC_LB_RULES_STATUS"
-printf '\n%s\n' "wb05_card17"
+  printf '\n%s\n' "wb05_card17"
 }
 
 wb05_card17</code></pre>
@@ -1616,36 +1713,36 @@ wb05_card17</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create and execute a report script that summarizes current artifact names, states, and NSG ingress and egress access. Run <code>~/workbook/bin/executive-report.sh nsg</code> to show only the NSG sections.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb05_card18() {
-
+  <pre class="code-scroll"><code>wb05_card18() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 REPORT_SCRIPT="$BIN_DIR/executive-report.sh"
 REPORT_URL="https://efrainsanchez-ai.github.io/OCI/PoC-RunBook/05-Network/networking-executive-report.sh"
 
 cd "$WORKBOOK_DIR" || return 1
-. ./helpers.sh || return 1
+. "$LIB_DIR/helpers.sh" || return 1
 load_cli_env || return 1
 
 printf 'Downloading executive report script ...\n'
 printf 'Source: %s\n' "$REPORT_URL"
 if ! curl -fsSL "$REPORT_URL" -o "$REPORT_SCRIPT"; then
-  clear
+
   printf 'STOP: Unable to download executive report script.\n' &gt;&amp;2
   printf 'Confirm the published file exists, then rerun wb05_card18.\n' &gt;&amp;2
   return 1
 fi
 
 if [ ! -s "$REPORT_SCRIPT" ]; then
-  clear
+
   printf 'STOP: Downloaded executive report script is empty: %s\n' "$REPORT_SCRIPT" &gt;&amp;2
   return 1
 fi
 
 chmod 700 "$REPORT_SCRIPT"
-clear
+
 "$REPORT_SCRIPT" all
-printf '\n%s\n' "wb05_card18"
+  printf '\n%s\n' "wb05_card18"
 }
 
 wb05_card18</code></pre>
@@ -1685,7 +1782,7 @@ Admin artifacts compartment    | (root)/&lt;parent-compartment&gt;/&lt;poc-compa
 VCN                            | VCN-&lt;poc-compartment&gt;
 Gateways                       | gw-internet, gw-service, gw-nat, optional dynamic-routing-gateway
 Route tables                   | rt-public, rt-private
-Subnets                        | subnet-admin, subnet-dbclient, subnet-db-backup, subnet-dbtools, subnet-public-lb, subnet-applications
+Subnets                        | subnet-admin, subnet-dbclient, subnet-dbbackup, subnet-dbtools, subnet-public-lb, subnet-applications
 Security lists                 | default security list, sl-backup
 NSGs                           | nsg-database-client, nsg-applications, nsg-dbtools-endpoint, nsg-bastion-admin, nsg-public-lb
 Service access                 | Route tables provide NAT, Service Gateway, and Internet Gateway paths; security-list baseline uses the default list plus sl-backup
@@ -1735,7 +1832,7 @@ NAME                  | CIDR          | DNS     | PRIVATE | SECURITY LISTS      
 subnet-applications   | &lt;apps-cidr&gt;   | apps    | true    | default                | AVAILABLE
 subnet-public-lb      | &lt;public-lb-cidr&gt; | publb | false   | default                | AVAILABLE
 subnet-dbtools        | &lt;dbtools-cidr&gt; | dbtools | true    | default                | AVAILABLE
-subnet-db-backup      | &lt;backup-cidr&gt; | backup  | true    | default,sl-backup      | AVAILABLE
+subnet-dbbackup       | &lt;backup-cidr&gt; | backup  | true    | default,sl-backup      | AVAILABLE
 subnet-dbclient       | &lt;client-cidr&gt; | client  | true    | default                | AVAILABLE
 subnet-admin          | &lt;admin-cidr&gt;  | admin   | false   | default                | AVAILABLE
 

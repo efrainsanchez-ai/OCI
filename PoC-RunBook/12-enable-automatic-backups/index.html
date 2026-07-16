@@ -31,9 +31,9 @@
       <div class="hero-copy">
         <p class="eyebrow">Chapter 12</p>
         <h1>Enable Automatic Backups</h1>
-        <p class="subtitle">This section enables automatic backups for the existing container database <code>CDB01</code>, which was created with the default pluggable database <code>PDB01</code> in Chapter 10. The backup destination is Oracle Database Autonomous Recovery Service in the assigned PoC compartment through <code>DATABASE_COMPARTMENT_OCID</code>. The workflow uses the existing VCN baseline from the networking runbook: <code>subnet-db-backup</code>, the private service route through the service gateway, and the backup subnet security list rules that permit Autonomous Recovery Service backup traffic. The <code>nsg-exadata-backup</code> network security group is no longer required for this workbook series.</p>
+        <p class="subtitle">This section enables automatic backups for the existing container database <code>CDB01</code>, which was created with the default pluggable database <code>PDB01</code> in Chapter 10. The backup destination is Oracle Database Autonomous Recovery Service in the assigned PoC compartment through <code>DATABASE_COMPARTMENT_OCID</code>. The workflow uses the existing VCN baseline from the networking runbook: <code>subnet-dbbackup</code>, the private service route through the service gateway, and the backup subnet security list rules that permit Autonomous Recovery Service backup traffic. The <code>nsg-exadata-backup</code> network security group is no longer required for this workbook series.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -53,7 +53,7 @@
       </nav>
       <section id="section-purpose" class="article-section">
         <h2>Section purpose</h2>
-        <div class="note-box">This section enables automatic backups for the existing container database <code>CDB01</code>, which was created with the default pluggable database <code>PDB01</code> in Chapter 10. The backup destination is Oracle Database Autonomous Recovery Service in the assigned PoC compartment through <code>DATABASE_COMPARTMENT_OCID</code>. The workflow uses the existing VCN baseline from the networking runbook: <code>subnet-db-backup</code>, the private service route through the service gateway, and the backup subnet security list rules that permit Autonomous Recovery Service backup traffic. The <code>nsg-exadata-backup</code> network security group is no longer required for this workbook series.</div>
+        <div class="note-box">This section enables automatic backups for the existing container database <code>CDB01</code>, which was created with the default pluggable database <code>PDB01</code> in Chapter 10. The backup destination is Oracle Database Autonomous Recovery Service in the assigned PoC compartment through <code>DATABASE_COMPARTMENT_OCID</code>. The workflow uses the existing VCN baseline from the networking runbook: <code>subnet-dbbackup</code>, the private service route through the service gateway, and the backup subnet security list rules that permit Autonomous Recovery Service backup traffic. The <code>nsg-exadata-backup</code> network security group is no longer required for this workbook series.</div>
 <div class="note-box">OCI CLI 3.73.1 is the target command-line version for this workbook. The commands use documented <code>oci recovery recovery-service-subnet create</code>, <code>oci recovery protection-policy-collection list-protection-policies</code>, <code>oci db database update</code>, <code>oci db database get</code>, and <code>oci db backup create</code> surfaces. The database update command enables automatic backups and passes the Autonomous Recovery Service destination as a backup destination payload.</div>
       </section><section id="required-backup-inputs" class="article-section">
         <h2>Required backup inputs</h2>
@@ -66,7 +66,7 @@
 <tbody>
 <tr>
 <td><code>REGION</code></td>
-<td>OCI region loaded by <code>~/workbook/helpers.sh</code> plus <code>load_cli_env</code> and passed explicitly to OCI CLI commands.</td>
+<td>OCI region loaded by <code>~/workbook/lib/helpers.sh</code> plus <code>load_cli_env</code> and passed explicitly to OCI CLI commands.</td>
 </tr>
 <tr>
 <td><code>DATABASE_COMPARTMENT_OCID</code></td>
@@ -78,7 +78,7 @@
 </tr>
 <tr>
 <td><code>SUBNET_DB_BACKUP_OCID</code></td>
-<td>Backup subnet OCID mapped to <code>subnet-db-backup</code>; this is the subnet associated with the Recovery Service subnet.</td>
+<td>Backup subnet OCID mapped to <code>subnet-dbbackup</code>; this is the subnet associated with the Recovery Service subnet.</td>
 </tr>
 <tr>
 <td><code>CDB_OCID</code></td>
@@ -114,7 +114,7 @@
 </tr>
 <tr>
 <td>Recovery Service network placement</td>
-<td><code>subnet-db-backup</code></td>
+<td><code>subnet-dbbackup</code></td>
 <td>Reuses the VCN component created for backup traffic and keeps backup connectivity separate from client and admin subnet flows.</td>
 </tr>
 <tr>
@@ -160,9 +160,9 @@
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Display the Cloud Shell, CDB01, VCN, and backup subnet variables before enabling automatic backups.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card01() {
-
+  <pre class="code-scroll"><code>wb12_card01() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 EXPECTED_OCI_CLI_VERSION="3.73.1"
 ACTUAL_OCI_CLI_VERSION="$(oci --version 2&gt;/dev/null || true)"
 
@@ -184,7 +184,6 @@ if [ "$missing" -ne 0 ]; then
   return 1
 fi
 
-clear
 printf '%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n\n' \
   "VARIABLE" "VALUE" \
   "----------------------------------" "-----" \
@@ -197,10 +196,10 @@ printf '%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n%-34s | %s\n
   "CDB_OCID" "$CDB_OCID" \
   "CDB_NAME" "$CDB_NAME" \
   "PDB_NAME" "$PDB_NAME"
-printf '%s\n' "wb11_card01"
+  printf '\n%s\n' "wb12_card01"
 }
 
-wb11_card01</code></pre>
+wb12_card01</code></pre>
 </div>
 <h3>OUTPUT 01 - Expected backup prerequisite table</h3>
 <div class="code-card">
@@ -236,9 +235,9 @@ wb11_card01</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Persist only the new chapter 05 automatic backup variables while reusing CDB01 and PDB01 variables from prior workbooks.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card02() {
-
+  <pre class="code-scroll"><code>wb12_card02() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 PROTECTION_POLICY_NAME="${PROTECTION_POLICY_NAME:-Bronze}"
 BACKUP_DESTINATION_TYPE="${BACKUP_DESTINATION_TYPE:-DBRS}"
 BACKUP_RETENTION_POLICY_ON_TERMINATE="${BACKUP_RETENTION_POLICY_ON_TERMINATE:-RETAIN_FOR_72_HOURS}"
@@ -249,7 +248,6 @@ upsert_cli_env BACKUP_DESTINATION_TYPE "$BACKUP_DESTINATION_TYPE" &gt;/dev/null
 upsert_cli_env BACKUP_RETENTION_POLICY_ON_TERMINATE "$BACKUP_RETENTION_POLICY_ON_TERMINATE" &gt;/dev/null
 upsert_cli_env REAL_TIME_DATA_PROTECTION_ENABLED "$REAL_TIME_DATA_PROTECTION_ENABLED" &gt;/dev/null
 
-clear
 printf '%-38s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------------------------" "-----" \
@@ -257,10 +255,10 @@ printf '%-38s | %s\n' \
   "BACKUP_DESTINATION_TYPE" "$BACKUP_DESTINATION_TYPE" \
   "BACKUP_RETENTION_POLICY_ON_TERMINATE" "$BACKUP_RETENTION_POLICY_ON_TERMINATE" \
   "REAL_TIME_DATA_PROTECTION_ENABLED" "$REAL_TIME_DATA_PROTECTION_ENABLED"
-printf '\n%s\n' "wb11_card02"
+  printf '\n%s\n' "wb12_card02"
 }
 
-wb11_card02</code></pre>
+wb12_card02</code></pre>
 </div>
 <h3>OUTPUT 02 - Expected backup configuration values</h3>
 <div class="code-card">
@@ -291,9 +289,9 @@ wb11_card02</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create or reuse the Recovery Service subnet in the assigned PoC compartment through DATABASE_COMPARTMENT_OCID by using the existing VCN backup subnet. Backup subnet ingress and egress are managed by security lists.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card03() {
-
+  <pre class="code-scroll"><code>wb12_card03() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 RSS_SUBNETS_JSON="$JSON_DIR/recovery-service-subnets.json"
 RSS_RESPONSE_JSON="$JSON_DIR/recovery-service-subnet-create-response.json"
 
@@ -339,12 +337,12 @@ if [ -z "$RECOVERY_SERVICE_SUBNET_OCID" ] || [ "$RECOVERY_SERVICE_SUBNET_OCID" =
 fi
 
 upsert_cli_env RECOVERY_SERVICE_SUBNET_OCID "$RECOVERY_SERVICE_SUBNET_OCID" &gt;/dev/null
-clear
+
 printf 'RECOVERY_SERVICE_SUBNET_OCID=%s\n' "$RECOVERY_SERVICE_SUBNET_OCID"
-printf '\n%s\n' "wb11_card03"
+  printf '\n%s\n' "wb12_card03"
 }
 
-wb11_card03</code></pre>
+wb12_card03</code></pre>
 </div>
 <p>Oracle allows a single Recovery Service subnet per VCN. This card first looks for the requested active subnet by display name and VCN, creates it only when it is missing, then lists it again to capture the stable resource OCID.</p>
 <h3>OUTPUT 03 - Expected Recovery Service subnet capture</h3>
@@ -371,9 +369,9 @@ wb11_card03</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Find the Autonomous Recovery Service Bronze protection policy OCID in the assigned PoC compartment through DATABASE_COMPARTMENT_OCID.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card04() {
-
+  <pre class="code-scroll"><code>wb12_card04() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 PROTECTION_POLICY_OCID="$(
   oci recovery protection-policy-collection list-protection-policies \
     --region "$REGION" \
@@ -391,12 +389,12 @@ if [ -z "$PROTECTION_POLICY_OCID" ] || [ "$PROTECTION_POLICY_OCID" = "null" ]; t
 fi
 
 upsert_cli_env PROTECTION_POLICY_OCID "$PROTECTION_POLICY_OCID" &gt;/dev/null
-clear
+
 printf 'PROTECTION_POLICY_OCID=%s\n' "$PROTECTION_POLICY_OCID"
-printf '\n%s\n' "wb11_card04"
+  printf '\n%s\n' "wb12_card04"
 }
 
-wb11_card04</code></pre>
+wb12_card04</code></pre>
 </div>
 <h3>OUTPUT 04 - Expected Bronze policy capture</h3>
 <div class="code-card">
@@ -422,9 +420,9 @@ wb11_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the JSON payload that enables CDB01 automatic backups to Autonomous Recovery Service.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card05() {
-
+  <pre class="code-scroll"><code>wb12_card05() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 BACKUP_DESTINATION_JSON="$JSON_DIR/cdb01-backup-destination.json"
 DATABASE_UPDATE_JSON="$JSON_DIR/cdb01-enable-automatic-backups.json"
 
@@ -450,12 +448,11 @@ cat &gt; "$DATABASE_UPDATE_JSON" &lt;&lt;JSON
 }
 JSON
 
-clear
 printf 'BACKUP_DESTINATION_JSON=%s\nDATABASE_UPDATE_JSON=%s\n' "$BACKUP_DESTINATION_JSON" "$DATABASE_UPDATE_JSON"
-printf '\n%s\n' "wb11_card05"
+  printf '\n%s\n' "wb12_card05"
 }
 
-wb11_card05</code></pre>
+wb12_card05</code></pre>
 </div>
 <p>The <code>BACKUP_DESTINATION_JSON</code> file is used with the flattened <code>oci db database update</code> command options. The <code>DATABASE_UPDATE_JSON</code> file supplies the compatible <code>force</code> option for the update call; OCI CLI 3.73.1 did not apply deletion-policy or immediate-backup fields from this JSON in validation output, so this workbook captures those outcomes in BASH 07 and starts the first backup explicitly in BASH 08.</p>
 <h3>OUTPUT 05 - Expected automatic backup payload files</h3>
@@ -483,9 +480,9 @@ wb11_card05</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Enable CDB01 automatic backups to Autonomous Recovery Service with the Bronze policy and real-time data protection left at the service default.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card06() {
-
+  <pre class="code-scroll"><code>wb12_card06() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 BACKUP_DESTINATION_JSON="$JSON_DIR/cdb01-backup-destination.json"
 DATABASE_UPDATE_JSON="$JSON_DIR/cdb01-enable-automatic-backups.json"
 ENABLE_BACKUPS_RESPONSE_JSON="$JSON_DIR/cdb01-enable-automatic-backups-response.json"
@@ -503,12 +500,11 @@ oci db database update \
   --from-json "file://$DATABASE_UPDATE_JSON" \
   &gt; "$ENABLE_BACKUPS_RESPONSE_JSON"
 
-clear
 printf 'ENABLE_BACKUPS_RESPONSE_JSON=%s\n' "$ENABLE_BACKUPS_RESPONSE_JSON"
-printf '\n%s\n' "wb11_card06"
+  printf '\n%s\n' "wb12_card06"
 }
 
-wb11_card06</code></pre>
+wb12_card06</code></pre>
 </div>
 <p>The response should show <code>auto-backup-enabled</code> as <code>true</code> and DBRS as the backup destination. In OCI CLI 3.73.1 validation, <code>backup-deletion-policy</code>, <code>backup-retention-policy-on-terminate</code>, and <code>run-immediate-full-backup</code> remained unset in the returned database resource, so BASH 08 starts the immediate backup explicitly.</p>
 <h3>OUTPUT 06 - Expected automatic backup update response file</h3>
@@ -535,10 +531,9 @@ wb11_card06</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that CDB01 shows automatic backups enabled with the DBRS destination and Bronze policy.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card07() {
-
-clear
+  <pre class="code-scroll"><code>wb12_card07() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 oci db database get \
   --region "$REGION" \
   --database-id "$CDB_OCID" \
@@ -554,10 +549,10 @@ oci db database get \
     {"field":`runImmediateFullBackup`,"value":data."db-backup-config"."run-immediate-full-backup"}
   ]' \
   --output table
-printf '\n%s\n' "wb11_card07"
+  printf '\n%s\n' "wb12_card07"
 }
 
-wb11_card07</code></pre>
+wb12_card07</code></pre>
 </div>
 <h3>OUTPUT 07 - Expected backup configuration table</h3>
 <div class="code-card">
@@ -595,9 +590,9 @@ wb11_card07</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Trigger the requested immediate named full backup for CDB01 after automatic backups are enabled.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card08() {
-
+  <pre class="code-scroll"><code>wb12_card08() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 MANUAL_BACKUP_DISPLAY_NAME="${CDB_NAME}-initial-full-$(date +%Y%m%d%H%M%S)"
 INITIAL_BACKUP_OCID_FILE="$REPORT_DIR/cdb01-initial-full-backup-ocid.txt"
 
@@ -617,13 +612,13 @@ fi
 
 printf '%s\n' "$BACKUP_OCID" &gt; "$INITIAL_BACKUP_OCID_FILE"
 upsert_cli_env INITIAL_BACKUP_OCID "$BACKUP_OCID" &gt;/dev/null
-clear
+
 printf 'INITIAL_BACKUP_OCID_FILE=%s\n' "$INITIAL_BACKUP_OCID_FILE"
 printf 'INITIAL_BACKUP_OCID=%s\n' "$BACKUP_OCID"
-printf '\n%s\n' "wb11_card08"
+  printf '\n%s\n' "wb12_card08"
 }
 
-wb11_card08</code></pre>
+wb12_card08</code></pre>
 </div>
 <p>BASH 06 enables the automatic backup configuration. BASH 08 satisfies the workbook requirement to take the first backup immediately with a named full backup artifact, but does not wait for <code>ACTIVE</code> because Cloud Shell browser sessions can expire during long-running waits.</p>
 <h3>OUTPUT 08 - Expected initial backup capture</h3>
@@ -651,10 +646,9 @@ wb11_card08</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that CDB01 has an active or creating backup record after automatic backup enablement.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card09() {
-
-clear
+  <pre class="code-scroll"><code>wb12_card09() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 BACKUP_LIST_JSON="$(
   oci db backup list \
     --region "$REGION" \
@@ -696,10 +690,10 @@ printf '%s' "$BACKUP_LIST_JSON" \
     printf '%-40s | %-10s | %-11s | %s\n' \
       "$display_name" "$state" "$backup_type" "$duration_value"
   done
-printf '\n%s\n' "wb11_card09"
+  printf '\n%s\n' "wb12_card09"
 }
 
-wb11_card09</code></pre>
+wb12_card09</code></pre>
 </div>
 <h3>OUTPUT 09 - Expected backup inventory</h3>
 <div class="code-card">
@@ -727,9 +721,9 @@ wb11_card09</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Write a local report with the automatic backup settings needed by later workbooks.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card10() {
-
+  <pre class="code-scroll"><code>wb12_card10() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 BACKUP_REPORT="$REPORT_DIR/cdb01-backup-configuration.txt"
 BACKUP_REPORT_SCRIPT="$BIN_DIR/show-cdb01-backup-configuration.sh"
 
@@ -777,12 +771,11 @@ chmod +x "$BACKUP_REPORT_SCRIPT"
   printf 'INITIAL_BACKUP_OCID=%s\n' "${INITIAL_BACKUP_OCID:-}"
 } &gt; "$BACKUP_REPORT"
 
-clear
 "$BACKUP_REPORT_SCRIPT" "$BACKUP_REPORT"
-printf '\n%s\n' "wb11_card10"
+  printf '\n%s\n' "wb12_card10"
 }
 
-wb11_card10</code></pre>
+wb12_card10</code></pre>
 </div>
 <h3>OUTPUT 10 - Expected CDB01 backup report</h3>
 <div class="code-card">

@@ -33,7 +33,7 @@
         <h1>OCI Database Management</h1>
         <p class="subtitle">This section enables and validates OCI Database Management Diagnostics &amp; Management for the existing Exadata Database Service on Exascale Infrastructure container database <code>CDB01</code> and its pluggable databases, including default pluggable database <code>PDB01</code>. The workflow uses OCI Cloud Shell, OCI CLI target version <code>3.73.1</code>, the existing <code>subnet-dbtools</code> subnet for the Database Management private endpoint, and the <code>SYSTEM</code> password secret created in Chapter 13.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -196,9 +196,9 @@
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Display reused CDB01, PDB01, VCN, subnet, NSG, and OCI CLI inputs before enabling Database Management.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card01() {
+  <pre class="code-scroll"><code>wb14_card01() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 EXPECTED_OCI_CLI_VERSION="3.73.1"
 ACTUAL_OCI_CLI_VERSION="$(oci --version 2&gt;/dev/null || true)"
 
@@ -216,7 +216,6 @@ else
   DBMGMT_SYSTEM_SECRET_SOURCE="not loaded"
 fi
 
-clear
 printf '%-34s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------------" "-----" \
@@ -233,10 +232,10 @@ printf '%-34s | %s\n' \
   "CDB_SYSTEM_SECRET_OCID" "${CDB_SYSTEM_SECRET_OCID:-not loaded}" \
   "DBMGMT_SYSTEM_SECRET_OCID" "${DBMGMT_SYSTEM_SECRET_OCID_EFFECTIVE:-not loaded}" \
   "DBMGMT_SYSTEM_SECRET_SOURCE" "$DBMGMT_SYSTEM_SECRET_SOURCE"
-printf '\n%s\n' "wb13_card01"
+  printf '\n%s\n' "wb14_card01"
 }
 
-wb13_card01</code></pre>
+wb14_card01</code></pre>
 </div>
 <h3>OUTPUT 01 - Expected Database Management prerequisite table</h3>
 <div class="code-card">
@@ -276,9 +275,9 @@ wb13_card01</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Persist only new Database Management values and require the Vault password secret OCID for the monitoring user.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card02() {
+  <pre class="code-scroll"><code>wb14_card02() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 DBMGMT_PRIVATE_ENDPOINT_NAME="${DBMGMT_PRIVATE_ENDPOINT_NAME:-dbmgmt_pe_exadata}"
 DBMGMT_MANAGEMENT_TYPE="${DBMGMT_MANAGEMENT_TYPE:-ADVANCED}"
 DBMGMT_CREDENTIAL_USERNAME="${DBMGMT_CREDENTIAL_USERNAME:-SYSTEM}"
@@ -354,7 +353,6 @@ upsert_cli_env DBMGMT_SECRET_POLICY_NAME "$DBMGMT_SECRET_POLICY_NAME" &gt;/dev/n
 upsert_cli_env DBMGMT_SYSTEM_SECRET_OCID "$DBMGMT_SYSTEM_SECRET_OCID" &gt;/dev/null
 upsert_cli_env DBMGMT_PASSWORD_SECRET_OCID "$DBMGMT_PASSWORD_SECRET_OCID" &gt;/dev/null
 
-clear
 printf '%-38s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------------------------" "-----" \
@@ -371,10 +369,10 @@ printf '%-38s | %s\n' \
   "DBMGMT_SECRET_POLICY_NAME" "$DBMGMT_SECRET_POLICY_NAME" \
   "DBMGMT_SYSTEM_SECRET_OCID" "$DBMGMT_SYSTEM_SECRET_OCID" \
   "DBMGMT_PASSWORD_SECRET_OCID" "$DBMGMT_PASSWORD_SECRET_OCID"
-printf '\n%s\n' "wb13_card02"
+  printf '\n%s\n' "wb14_card02"
 }
 
-wb13_card02</code></pre>
+wb14_card02</code></pre>
 </div>
 <h3>OUTPUT 02 - Expected Database Management chapter values</h3>
 <div class="code-card">
@@ -415,16 +413,16 @@ wb13_card02</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create or reuse a DNS-resolution-enabled Database Management private endpoint in subnet-dbtools.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card03() {
+  <pre class="code-scroll"><code>wb14_card03() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 DBMGMT_NSGS_JSON="$JSON_DIR/dbmgmt-private-endpoint-nsgs.json"
 DBMGMT_PRIVATE_ENDPOINT_RESPONSE_JSON="$JSON_DIR/dbmgmt-private-endpoint-create-response.json"
 DBMGMT_PRIVATE_ENDPOINT_ERROR_TXT="$REPORT_DIR/dbmgmt-private-endpoint-create-error.txt"
 
 case "$DBMGMT_PRIVATE_ENDPOINT_NAME" in
   [!A-Za-z]* | *[!A-Za-z0-9_]*)
-    clear
+
     printf '\n%s\n%s\n%s\n%s\n\n' \
       "STOP: Invalid Database Management private endpoint name." \
       "Current value: $DBMGMT_PRIVATE_ENDPOINT_NAME" \
@@ -510,7 +508,7 @@ if [ -z "$DBMGMT_PRIVATE_ENDPOINT_OCID" ] || [ "$DBMGMT_PRIVATE_ENDPOINT_OCID" =
 
   create_status=$?
   if [ "$create_status" -ne 0 ]; then
-    clear
+
     printf '\n%s\n%s\n%s\n%s\n%s\n\n' \
       "STOP: Unable to submit the Database Management private endpoint create request." \
       "Private endpoint name: $DBMGMT_PRIVATE_ENDPOINT_NAME" \
@@ -539,7 +537,7 @@ if [ -z "$DBMGMT_PRIVATE_ENDPOINT_OCID" ] || [ "$DBMGMT_PRIVATE_ENDPOINT_OCID" =
 fi
 
 if [ -z "$DBMGMT_PRIVATE_ENDPOINT_OCID" ] || [ "$DBMGMT_PRIVATE_ENDPOINT_OCID" = "null" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to create or locate the Database Management private endpoint." \
     "Private endpoint name: $DBMGMT_PRIVATE_ENDPOINT_NAME" \
@@ -549,17 +547,17 @@ if [ -z "$DBMGMT_PRIVATE_ENDPOINT_OCID" ] || [ "$DBMGMT_PRIVATE_ENDPOINT_OCID" =
 fi
 
 upsert_cli_env DBMGMT_PRIVATE_ENDPOINT_OCID "$DBMGMT_PRIVATE_ENDPOINT_OCID" &gt;/dev/null
-clear
+
 printf '%-43s | %s\n' \
   "VARIABLE" "VALUE" \
   "-------------------------------------------" "-----" \
   "DBMGMT_PRIVATE_ENDPOINT_ACTION" "$DBMGMT_PRIVATE_ENDPOINT_ACTION" \
   "DBMGMT_PRIVATE_ENDPOINT_OCID" "$DBMGMT_PRIVATE_ENDPOINT_OCID" \
   "DBMGMT_PRIVATE_ENDPOINT_RESPONSE_JSON" "$DBMGMT_PRIVATE_ENDPOINT_RESPONSE_JSON"
-printf '\n%s\n' "wb13_card03"
+  printf '\n%s\n' "wb14_card03"
 }
 
-wb13_card03</code></pre>
+wb14_card03</code></pre>
 </div>
 <h3>OUTPUT 03 - Expected private endpoint capture</h3>
 <div class="code-card">
@@ -573,7 +571,7 @@ wb13_card03</code></pre>
 ------------------------------------------- | -----
 DBMGMT_PRIVATE_ENDPOINT_ACTION              | REUSED_EXISTING_SUBNET
 DBMGMT_PRIVATE_ENDPOINT_OCID                | &lt;dbmgmt_private_endpoint_ocid&gt;
-DBMGMT_PRIVATE_ENDPOINT_RESPONSE_JSON        | /home/oci/workbook/json/dbmgmt-private-endpoint-create-response.json
+DBMGMT_PRIVATE_ENDPOINT_RESPONSE_JSON        | /home/&lt;cloud_shell_user&gt;/workbook/json/dbmgmt-private-endpoint-create-response.json
 
 wb13_card03</code></pre>
 </div>
@@ -589,10 +587,9 @@ wb13_card03</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the captured Database Management private endpoint name, lifecycle state, subnet, and OCID.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card04() {
-clear
+  <pre class="code-scroll"><code>wb14_card04() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 oci database-management private-endpoint list \
   --region "$REGION" \
   --compartment-id "$DATABASE_COMPARTMENT_OCID" \
@@ -605,10 +602,10 @@ oci database-management private-endpoint list \
     {\"field\":\`privateEndpointId\`,\"value\":id}
   ]" \
   --output table
-printf '\n%s\n' "wb13_card04"
+  printf '\n%s\n' "wb14_card04"
 }
 
-wb13_card04</code></pre>
+wb14_card04</code></pre>
 </div>
 <h3>OUTPUT 04 - Expected private endpoint table</h3>
 <div class="code-card">
@@ -644,9 +641,9 @@ wb13_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Grant Database Management managed database resources read access to the CDB01 password secret.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card05() {
+  <pre class="code-scroll"><code>wb14_card05() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 DBMGMT_IAM_HOME_REGION="${DBMGMT_IAM_HOME_REGION:-${IAM_HOME_REGION:-${HOME_REGION:-us-phoenix-1}}}"
 DBMGMT_SECRET_GET_JSON="$JSON_DIR/dbmgmt-password-secret-get.json"
 DBMGMT_SECRET_GET_ERROR_TXT="$REPORT_DIR/dbmgmt-password-secret-get-error.txt"
@@ -664,7 +661,7 @@ oci vault secret get \
 
 secret_get_status=$?
 if [ "$secret_get_status" -ne 0 ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to read the Database Management password secret metadata." \
     "Secret OCID: $DBMGMT_PASSWORD_SECRET_OCID" \
@@ -682,7 +679,7 @@ DBMGMT_SECRET_COMPARTMENT_OCID="$(
 )"
 
 if [ "$DBMGMT_SECRET_STATE" != "ACTIVE" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Database Management password secret is not ACTIVE." \
     "Secret OCID: $DBMGMT_PASSWORD_SECRET_OCID" \
@@ -701,7 +698,7 @@ if [ -z "$DBMGMT_SECRET_POLICY_COMPARTMENT_NAME" ]; then
 
   compartment_get_status=$?
   if [ "$compartment_get_status" -ne 0 ]; then
-    clear
+
     printf '\n%s\n%s\n%s\n%s\n%s\n\n' \
       "STOP: Unable to resolve the assigned PoC compartment name for the IAM policy statement." \
       "SECURITY_COMPARTMENT_OCID: $SECURITY_COMPARTMENT_OCID" \
@@ -717,7 +714,7 @@ if [ -z "$DBMGMT_SECRET_POLICY_COMPARTMENT_NAME" ]; then
 fi
 
 if [ -z "$DBMGMT_SECRET_POLICY_COMPARTMENT_NAME" ]; then
-  clear
+
   printf '\n%s\n%s\n\n' \
     "STOP: Unable to determine the assigned PoC compartment name for the IAM policy statement." \
     "Set POC_COMPARTMENT_NAME in ~/workbook/cli.env or rerun Chapter 05 BASH 04." &gt;&amp;2
@@ -726,7 +723,7 @@ fi
 
 case "$DBMGMT_SECRET_POLICY_COMPARTMENT_NAME" in
   *"'"*)
-    clear
+
     printf '\n%s\n%s\n\n' \
       "STOP: Compartment name contains a single quote, which this workbook does not place into IAM policy text automatically." \
       "Compartment name: $DBMGMT_SECRET_POLICY_COMPARTMENT_NAME" &gt;&amp;2
@@ -778,7 +775,7 @@ else
 fi
 
 if [ "$policy_status" -ne 0 ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to create or update the Database Management secret access policy." \
     "Policy name: $DBMGMT_SECRET_POLICY_NAME" \
@@ -797,7 +794,6 @@ fi
 
 upsert_cli_env DBMGMT_SECRET_POLICY_OCID "$DBMGMT_SECRET_POLICY_OCID" &gt;/dev/null
 
-clear
 printf '%-40s | %s\n' \
   "FIELD" "VALUE" \
   "----------------------------------------" "-----" \
@@ -810,10 +806,10 @@ printf '%-40s | %s\n' \
   "DBMGMT_SECRET_POLICY_ACTION" "$DBMGMT_SECRET_POLICY_ACTION" \
   "DBMGMT_SECRET_POLICY_OCID" "$DBMGMT_SECRET_POLICY_OCID" \
   "DBMGMT_SECRET_POLICY_STATEMENTS_JSON" "$DBMGMT_SECRET_POLICY_STATEMENTS_JSON"
-printf '\n%s\n' "wb13_card05"
+  printf '\n%s\n' "wb14_card05"
 }
 
-wb13_card05</code></pre>
+wb14_card05</code></pre>
 </div>
 <h3>OUTPUT 05 - Expected secret access policy capture</h3>
 <div class="code-card">
@@ -833,7 +829,7 @@ DBMGMT_SECRET_COMPARTMENT_OCID           | &lt;poc_compartment_ocid&gt;
 DBMGMT_SECRET_POLICY_COMPARTMENT_NAME    | &lt;poc_compartment_name&gt;
 DBMGMT_SECRET_POLICY_ACTION              | CREATE
 DBMGMT_SECRET_POLICY_OCID                | &lt;policy_ocid&gt;
-DBMGMT_SECRET_POLICY_STATEMENTS_JSON     | /home/oci/workbook/json/dbmgmt-secret-policy-statements.json
+DBMGMT_SECRET_POLICY_STATEMENTS_JSON     | /home/&lt;cloud_shell_user&gt;/workbook/json/dbmgmt-secret-policy-statements.json
 
 wb13_card05</code></pre>
 </div>
@@ -850,9 +846,9 @@ wb13_card05</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the Database API payload used to enable Database Management for CDB01.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card06() {
+  <pre class="code-scroll"><code>wb14_card06() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 DBMGMT_CDB_ENABLE_PAYLOAD_JSON="$JSON_DIR/cdb-enable-dbmgmt.json"
 DBMGMT_CDB_CONNECT_STRING="$(
   oci db database get \
@@ -884,7 +880,7 @@ if [ -n "$DBMGMT_CDB_SERVICE_NAME_DERIVED" ] &amp;&amp; [ "$DBMGMT_CDB_SERVICE_N
 fi
 
 if [ -z "${DBMGMT_CDB_SERVICE_NAME:-}" ] || [ "$DBMGMT_CDB_SERVICE_NAME" = "null" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n\n' \
     "STOP: Unable to derive DBMGMT_CDB_SERVICE_NAME from the CDB connection strings." \
     "Database OCID: $CDB_OCID" \
@@ -907,7 +903,6 @@ cat &gt; "$DBMGMT_CDB_ENABLE_PAYLOAD_JSON" &lt;&lt;JSON
 }
 JSON
 
-clear
 printf '%-37s | %s\n' \
   "FIELD" "VALUE" \
   "-------------------------------------" "-----" \
@@ -915,10 +910,10 @@ printf '%-37s | %s\n' \
   "DBMGMT_CDB_SERVICE_NAME" "$DBMGMT_CDB_SERVICE_NAME" \
   "DBMGMT_CDB_CONNECT_STRING" "$DBMGMT_CDB_CONNECT_STRING" \
   "DBMGMT_CDB_ENABLE_PAYLOAD_JSON" "$DBMGMT_CDB_ENABLE_PAYLOAD_JSON"
-printf '\n%s\n' "wb13_card06"
+  printf '\n%s\n' "wb14_card06"
 }
 
-wb13_card06</code></pre>
+wb14_card06</code></pre>
 </div>
 <h3>OUTPUT 06 - Expected payload file capture</h3>
 <div class="code-card">
@@ -933,7 +928,7 @@ wb13_card06</code></pre>
 DBMGMT_SECRET_POLICY_OCID             | &lt;policy_ocid&gt;
 DBMGMT_CDB_SERVICE_NAME               | &lt;cdb_service_name&gt;
 DBMGMT_CDB_CONNECT_STRING             | &lt;cdb_easy_connect_string&gt;
-DBMGMT_CDB_ENABLE_PAYLOAD_JSON        | /home/oci/workbook/json/cdb-enable-dbmgmt.json
+DBMGMT_CDB_ENABLE_PAYLOAD_JSON        | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb-enable-dbmgmt.json
 
 wb13_card06</code></pre>
 </div>
@@ -950,9 +945,9 @@ wb13_card06</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Enable Database Management for CDB01 with the Database API raw-request payload.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card07() {
+  <pre class="code-scroll"><code>wb14_card07() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 CDB_ENABLE_PAYLOAD_JSON="$JSON_DIR/cdb-enable-dbmgmt.json"
 CDB_ENABLE_RESPONSE_JSON="$JSON_DIR/cdb01-dbmgmt-enable-response.json"
 CDB_ENABLE_ERROR_TXT="$REPORT_DIR/cdb01-dbmgmt-enable-error.txt"
@@ -961,7 +956,7 @@ CDB_ENABLE_STATUS_TXT="$REPORT_DIR/cdb01-dbmgmt-enable-status.txt"
 if ! grep -q '"credentialDetails"[[:space:]]*:' "$CDB_ENABLE_PAYLOAD_JSON" \
   || ! grep -q '"privateEndPointId"[[:space:]]*:' "$CDB_ENABLE_PAYLOAD_JSON" \
   || ! grep -q '"serviceName"[[:space:]]*:' "$CDB_ENABLE_PAYLOAD_JSON"; then
-  clear
+
   printf '\n%s\n%s\n%s\n\n' \
     "STOP: Database Management raw-request payload is stale or invalid." \
     "Payload file: $CDB_ENABLE_PAYLOAD_JSON" \
@@ -980,7 +975,7 @@ enable_status=$?
 printf '%s\n' "$enable_status" &gt; "$CDB_ENABLE_STATUS_TXT"
 
 if [ "$enable_status" -ne 0 ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to submit Database Management enablement for CDB01." \
     "Database OCID: $CDB_OCID" \
@@ -1005,7 +1000,6 @@ CDB_ENABLE_WORK_REQUEST_OCID="$(
   sed -n 's/^[[:space:]]*"opc-work-request-id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$CDB_ENABLE_RESPONSE_JSON" | sed -n '1p'
 )"
 
-clear
 printf '%-29s | %s\n' \
   "VARIABLE" "VALUE" \
   "-----------------------------" "-----" \
@@ -1018,10 +1012,10 @@ printf '%-29s | %s\n' \
   "CDB_ENABLE_RESPONSE_JSON" "$CDB_ENABLE_RESPONSE_JSON" \
   "CDB_ENABLE_ERROR_TXT" "$CDB_ENABLE_ERROR_TXT" \
   "CDB_ENABLE_STATUS_TXT" "$CDB_ENABLE_STATUS_TXT"
-printf '\n%s\n' "wb13_card07"
+  printf '\n%s\n' "wb14_card07"
 }
 
-wb13_card07</code></pre>
+wb14_card07</code></pre>
 </div>
 <h3>OUTPUT 07 - Expected CDB enablement submission</h3>
 <div class="code-card">
@@ -1038,10 +1032,10 @@ CDB_ENABLE_HTTP_STATUS        | 200 OK
 CDB_DBMGMT_STATUS             | ENABLING
 CDB_LIFECYCLE_STATE           | UPDATING
 CDB_ENABLE_WORK_REQUEST_OCID  | &lt;work_request_ocid&gt;
-CDB_ENABLE_PAYLOAD_JSON       | /home/oci/workbook/json/cdb-enable-dbmgmt.json
-CDB_ENABLE_RESPONSE_JSON      | /home/oci/workbook/json/cdb01-dbmgmt-enable-response.json
-CDB_ENABLE_ERROR_TXT          | /home/oci/workbook/reports/cdb01-dbmgmt-enable-error.txt
-CDB_ENABLE_STATUS_TXT         | /home/oci/workbook/reports/cdb01-dbmgmt-enable-status.txt
+CDB_ENABLE_PAYLOAD_JSON       | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb-enable-dbmgmt.json
+CDB_ENABLE_RESPONSE_JSON      | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb01-dbmgmt-enable-response.json
+CDB_ENABLE_ERROR_TXT          | /home/&lt;cloud_shell_user&gt;/workbook/reports/cdb01-dbmgmt-enable-error.txt
+CDB_ENABLE_STATUS_TXT         | /home/&lt;cloud_shell_user&gt;/workbook/reports/cdb01-dbmgmt-enable-status.txt
 
 wb13_card07</code></pre>
 </div>
@@ -1059,9 +1053,9 @@ wb13_card07</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> List every PDB under CDB01 and show whether each PDB already has a Database Management managed database record.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card08() {
+  <pre class="code-scroll"><code>wb14_card08() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 PDB_LIST_JSON="$JSON_DIR/cdb01-pdb-list.json"
 PDB_LIST_ERROR_TXT="$REPORT_DIR/cdb01-pdb-list-error.txt"
 PDB_STATUS_SUMMARY_TXT="$REPORT_DIR/all-pdbs-dbmgmt-status-summary.txt"
@@ -1076,7 +1070,7 @@ oci db pluggable-database list \
 
 pdb_list_status=$?
 if [ "$pdb_list_status" -ne 0 ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to list PDBs under CDB01." \
     "CDB OCID: $CDB_OCID" \
@@ -1147,7 +1141,7 @@ fi
 IFS='|' read -r pdb_count managed_count unmanaged_count &lt; "$REPORT_DIR/all-pdbs-dbmgmt-status-counts.txt"
 
 summary_output="$(sed -n '1,200p' "$PDB_STATUS_SUMMARY_TXT")"
-clear
+
 printf '%s\n\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n' \
   "$summary_output" \
   "PDB_COUNT" "$pdb_count" \
@@ -1155,10 +1149,10 @@ printf '%s\n\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n' \
   "PDB_NOT_ENABLED_COUNT" "$unmanaged_count" \
   "PDB_LIST_JSON" "$PDB_LIST_JSON" \
   "PDB_STATUS_SUMMARY_TXT" "$PDB_STATUS_SUMMARY_TXT"
-printf '\n%s\n' "wb13_card08"
+  printf '\n%s\n' "wb14_card08"
 }
 
-wb13_card08</code></pre>
+wb14_card08</code></pre>
 </div>
 <h3>OUTPUT 08 - Expected PDB Database Management status</h3>
 <div class="code-card">
@@ -1175,8 +1169,8 @@ PDB01                          | AVAILABLE      | NOT_ENABLED    | -
 PDB_COUNT                      | 1
 PDB_ENABLED_COUNT              | 0
 PDB_NOT_ENABLED_COUNT          | 1
-PDB_LIST_JSON                  | /home/oci/workbook/json/cdb01-pdb-list.json
-PDB_STATUS_SUMMARY_TXT         | /home/oci/workbook/reports/all-pdbs-dbmgmt-status-summary.txt
+PDB_LIST_JSON                  | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb01-pdb-list.json
+PDB_STATUS_SUMMARY_TXT         | /home/&lt;cloud_shell_user&gt;/workbook/reports/all-pdbs-dbmgmt-status-summary.txt
 
 wb13_card08</code></pre>
 </div>
@@ -1193,14 +1187,14 @@ wb13_card08</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Enable Diagnostics &amp; Management for PDBs that are available but not currently listed as managed databases.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card09() {
+  <pre class="code-scroll"><code>wb14_card09() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 PDB_LIST_JSON="$JSON_DIR/cdb01-pdb-list.json"
 PDB_ENABLE_SUMMARY_TXT="$REPORT_DIR/all-pdbs-dbmgmt-enable-summary.txt"
 
 if [ ! -s "$PDB_LIST_JSON" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n\n' \
     "STOP: Missing PDB inventory file." \
     "Missing file: $PDB_LIST_JSON" \
@@ -1344,7 +1338,7 @@ fi
 IFS='|' read -r pdb_count submitted_count skipped_count failed_count &lt; "$REPORT_DIR/all-pdbs-dbmgmt-enable-counts.txt"
 
 summary_output="$(sed -n '1,200p' "$PDB_ENABLE_SUMMARY_TXT")"
-clear
+
 printf '%s\n\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n' \
   "$summary_output" \
   "PDB_COUNT" "$pdb_count" \
@@ -1352,10 +1346,10 @@ printf '%s\n\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n' \
   "PDB_SKIPPED_COUNT" "$skipped_count" \
   "PDB_ENABLE_FAILED_COUNT" "$failed_count" \
   "PDB_ENABLE_SUMMARY_TXT" "$PDB_ENABLE_SUMMARY_TXT"
-printf '\n%s\n' "wb13_card09"
+  printf '\n%s\n' "wb14_card09"
 }
 
-wb13_card09</code></pre>
+wb14_card09</code></pre>
 </div>
 <h3>OUTPUT 09 - Expected PDB enablement summary</h3>
 <div class="code-card">
@@ -1373,7 +1367,7 @@ PDB_COUNT                      | 1
 PDB_ENABLE_SUBMITTED_COUNT     | 1
 PDB_SKIPPED_COUNT              | 0
 PDB_ENABLE_FAILED_COUNT        | 0
-PDB_ENABLE_SUMMARY_TXT         | /home/oci/workbook/reports/all-pdbs-dbmgmt-enable-summary.txt
+PDB_ENABLE_SUMMARY_TXT         | /home/&lt;cloud_shell_user&gt;/workbook/reports/all-pdbs-dbmgmt-enable-summary.txt
 
 wb13_card09</code></pre>
 </div>
@@ -1391,9 +1385,9 @@ wb13_card09</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Display current Database Management records in the assigned PoC compartment through DATABASE_COMPARTMENT_OCID without persisting managed database OCIDs.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card10() {
+  <pre class="code-scroll"><code>wb14_card10() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 DBMGMT_MANAGED_DATABASE_LIST_JSON="$JSON_DIR/dbmgmt-managed-database-list.json"
 DBMGMT_MANAGED_DATABASE_LIST_ERROR_TXT="$REPORT_DIR/dbmgmt-managed-database-list-error.txt"
 PDB_LIST_JSON="$JSON_DIR/cdb01-pdb-list.json"
@@ -1408,7 +1402,7 @@ oci database-management managed-database list \
 
 list_status=$?
 if [ "$list_status" -ne 0 ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to list Database Management managed database records." \
     "Compartment OCID: $DATABASE_COMPARTMENT_OCID" \
@@ -1418,7 +1412,6 @@ if [ "$list_status" -ne 0 ]; then
   return 1
 fi
 
-clear
 oci database-management managed-database list \
   --region "$REGION" \
   --compartment-id "$DATABASE_COMPARTMENT_OCID" \
@@ -1431,10 +1424,10 @@ printf '%-35s | %s\n' \
   "-----------------------------------" "-----" \
   "DBMGMT_MANAGED_DATABASE_LIST_JSON" "$DBMGMT_MANAGED_DATABASE_LIST_JSON" \
   "PDB_LIST_JSON" "$PDB_LIST_JSON"
-printf '\n%s\n' "wb13_card10"
+  printf '\n%s\n' "wb14_card10"
 }
 
-wb13_card10</code></pre>
+wb14_card10</code></pre>
 </div>
 <h3>OUTPUT 10 - Expected managed database listing</h3>
 <div class="code-card">
@@ -1453,8 +1446,8 @@ wb13_card10</code></pre>
 
 VARIABLE                            | VALUE
 ----------------------------------- | -----
-DBMGMT_MANAGED_DATABASE_LIST_JSON   | /home/oci/workbook/json/dbmgmt-managed-database-list.json
-PDB_LIST_JSON                       | /home/oci/workbook/json/cdb01-pdb-list.json
+DBMGMT_MANAGED_DATABASE_LIST_JSON   | /home/&lt;cloud_shell_user&gt;/workbook/json/dbmgmt-managed-database-list.json
+PDB_LIST_JSON                       | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb01-pdb-list.json
 
 wb13_card10</code></pre>
 </div>
@@ -1471,9 +1464,9 @@ wb13_card10</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Resolve the bastion public IP and open an SSH session to the administration host that has VCN access.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card11() {
+  <pre class="code-scroll"><code>wb14_card11() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 CDB_CONNECTION_STRINGS_JSON="$JSON_DIR/cdb01-connection-strings.json"
 CDB_EASY_CONNECT_TXT="$REPORT_DIR/cdb01-easy-connect-string.txt"
 CDB_CONNECTION_STRINGS_ERROR_TXT="$REPORT_DIR/cdb01-connection-strings-error.txt"
@@ -1488,7 +1481,7 @@ oci db database get \
 
 connection_status=$?
 if [ "$connection_status" -ne 0 ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to read the CDB01 connection strings from OCI." \
     "Database OCID: $CDB_OCID" \
@@ -1547,7 +1540,6 @@ fi
 
 BASTION_SSH_COMMAND="ssh -i \"$SSH_PRIVATE_KEY_FILE\" opc@$BASTION_PUBLIC_IP"
 
-clear
 printf '%-34s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------------" "-----" \
@@ -1560,7 +1552,7 @@ printf '%-34s | %s\n' \
   "SSH_PRIVATE_KEY_FILE" "$SSH_PRIVATE_KEY_FILE" \
   "BASTION_SSH_COMMAND" "$BASTION_SSH_COMMAND" \
   "SQLPLUS_COMMAND_FILE" "$CDB_SQLPLUS_COMMAND_TXT" \
-  "NEXT_ACTION" "After SSH opens, run the SYSDBA SQL*Plus template from os prompt [opc@bastion-01 ~]$."
+  "NEXT_ACTION" "After SSH opens, run the SYSDBA SQL*Plus template from os prompt [opc@&lt;bastion_host&gt; ~]$."
 
 printf '\n%s\n' "SQLPLUS_COMMAND"
 cat "$CDB_SQLPLUS_COMMAND_TXT"
@@ -1574,11 +1566,11 @@ printf '\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
   "exit" \
   "exit"
 
-ssh -i "$SSH_PRIVATE_KEY_FILE" opc@"$BASTION_PUBLIC_IP"
-printf '\n%s\n' "wb13_card11"
+ssh -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new opc@"$BASTION_PUBLIC_IP"
+  printf '\n%s\n' "wb14_card11"
 }
 
-wb13_card11</code></pre>
+wb14_card11</code></pre>
 </div>
 <h3>OUTPUT 11 - Expected bastion SSH connection</h3>
 <div class="code-card">
@@ -1594,12 +1586,12 @@ CDB_EASY_CONNECT_STRING            | cdb01...
 CDB_SQLPLUS_USERNAME               | SYS
 DBMGMT_CREDENTIAL_USERNAME         | SYSTEM
 DBMGMT_PASSWORD_SECRET_OCID        | &lt;vault_secret_ocid&gt;
-CDB_SQLPLUS_COMMAND_TXT            | /home/oci/workbook/reports/cdb01-performance-hub-sqlplus-command.txt
-BASTION_PUBLIC_IP                  | 203.0.113.10
-SSH_PRIVATE_KEY_FILE               | /home/oci/workbook/bastion-01_rsa
-BASTION_SSH_COMMAND                | ssh -i "/home/oci/workbook/bastion-01_rsa" opc@203.0.113.10
-SQLPLUS_COMMAND_FILE               | /home/oci/workbook/reports/cdb01-performance-hub-sqlplus-command.txt
-NEXT_ACTION                        | After SSH opens, run the SYSDBA SQL*Plus template from os prompt [opc@bastion-01 ~]$.
+CDB_SQLPLUS_COMMAND_TXT            | /home/&lt;cloud_shell_user&gt;/workbook/reports/cdb01-performance-hub-sqlplus-command.txt
+BASTION_PUBLIC_IP                  | &lt;bastion_public_ip&gt;
+SSH_PRIVATE_KEY_FILE               | /home/&lt;cloud_shell_user&gt;/workbook/bastion-01_rsa
+BASTION_SSH_COMMAND                | ssh -i "/home/&lt;cloud_shell_user&gt;/workbook/bastion-01_rsa" opc@&lt;bastion_public_ip&gt;
+SQLPLUS_COMMAND_FILE               | /home/&lt;cloud_shell_user&gt;/workbook/reports/cdb01-performance-hub-sqlplus-command.txt
+NEXT_ACTION                        | After SSH opens, run the SYSDBA SQL*Plus template from os prompt [opc@&lt;bastion_host&gt; ~]$.
 
 SQLPLUS_COMMAND
 sqlplus -L "sys@cdb01... as sysdba"
@@ -1628,9 +1620,9 @@ wb13_card11</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Resolve the PDB01 SQL*Plus command and open an SSH session to the bastion host where the command can be executed.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card11a() {
+  <pre class="code-scroll"><code>wb14_card12() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 CDB_EASY_CONNECT_TXT="$REPORT_DIR/cdb01-easy-connect-string.txt"
 CDB_CONNECTION_STRINGS_ERROR_TXT="$REPORT_DIR/cdb01-connection-strings-error.txt"
 PDB_SQLPLUS_GRANT_SQL="$HOME/workbook/pdb01-performance-hub-grants.sql"
@@ -1657,7 +1649,7 @@ if [ -z "$CDB_EASY_CONNECT_STRING" ] || [ "$CDB_EASY_CONNECT_STRING" = "null" ];
 fi
 
 if [ -z "$CDB_EASY_CONNECT_STRING" ] || [ "$CDB_EASY_CONNECT_STRING" = "null" ]; then
-  clear
+
   printf '\n%s\n%s\n%s\n\n' \
     "STOP: Unable to resolve the CDB01 easy connect string." \
     "Database OCID: $CDB_OCID" \
@@ -1704,7 +1696,6 @@ fi
 
 BASTION_SSH_COMMAND="ssh -i \"$SSH_PRIVATE_KEY_FILE\" opc@$BASTION_PUBLIC_IP"
 
-clear
 printf '%s\n%s\n' "PDB_SERVICE_NAME" "$PDB_SERVICE_NAME"
 printf '\n%s\n%s\n' "PDB_EASY_CONNECT_STRING" "$PDB_EASY_CONNECT_STRING"
 printf '\n%s\n%s\n' "BASTION_SSH_COMMAND" "$BASTION_SSH_COMMAND"
@@ -1713,13 +1704,26 @@ cat "$PDB_SQLPLUS_COMMAND_TXT"
 printf '\n%s\n%s\n' "SQL_SCRIPT_FILE" "$PDB_SQLPLUS_GRANT_SQL"
 printf '\n%s\n' "SQL_SCRIPT"
 cat "$PDB_SQLPLUS_GRANT_SQL"
-printf '\n%s\n' "After SSH opens, run the SQL*Plus command from os prompt [opc@bastion-01 ~]$."
+printf '\n%s\n' "After SSH opens, run the SQL*Plus command from os prompt [opc@&lt;bastion_host&gt; ~]$."
 
-ssh -i "$SSH_PRIVATE_KEY_FILE" opc@"$BASTION_PUBLIC_IP"
-printf '\n%s\n' "wb13_card11a"
+ssh -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new opc@"$BASTION_PUBLIC_IP"
+  printf '\n%s\n' "wb14_card12"
 }
 
-wb13_card11a</code></pre>
+wb14_card12</code></pre>
+</div>
+<h3>OUTPUT 12 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb14_card12</code></pre>
 </div>
 <h3>OUTPUT 11A - Expected PDB01 SQL grant execution</h3>
 <div class="code-card">
@@ -1736,13 +1740,13 @@ PDB_EASY_CONNECT_STRING
 cdb01.../cdb01_pdb01.paas.oracle.com
 
 BASTION_SSH_COMMAND
-ssh -i "/home/oci/workbook/bastion-01_rsa" opc@203.0.113.10
+ssh -i "/home/&lt;cloud_shell_user&gt;/workbook/bastion-01_rsa" opc@&lt;bastion_public_ip&gt;
 
 SQLPLUS_COMMAND
 sqlplus -L "sys@cdb01.../cdb01_pdb01.paas.oracle.com as sysdba"
 
 SQL_SCRIPT_FILE
-/home/oci/workbook/pdb01-performance-hub-grants.sql
+/home/&lt;cloud_shell_user&gt;/workbook/pdb01-performance-hub-grants.sql
 
 SQL_SCRIPT
 GRANT CREATE PROCEDURE to SYSTEM;
@@ -1753,7 +1757,7 @@ GRANT EXECUTE ON DBMS_WORKLOAD_REPOSITORY to SYSTEM;
 exit
 exit
 
-After SSH opens, run the SQL*Plus command from os prompt [opc@bastion-01 ~]$.
+After SSH opens, run the SQL*Plus command from os prompt [opc@&lt;bastion_host&gt; ~]$.
 
 wb13_card11a</code></pre>
 </div>
@@ -1769,9 +1773,9 @@ wb13_card11a</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Write a local Database Management report with private endpoint, credential, and managed database list file locations.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-
-wb13_card12() {
+  <pre class="code-scroll"><code>wb14_card13() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 DBMGMT_REPORT="$REPORT_DIR/cdb01-database-management.txt"
 DBMGMT_REPORT_SCRIPT="$BIN_DIR/show-cdb01-database-management.sh"
 DBMGMT_MANAGED_DATABASE_LIST_JSON="$JSON_DIR/dbmgmt-managed-database-list.json"
@@ -1807,12 +1811,24 @@ chmod +x "$DBMGMT_REPORT_SCRIPT"
   printf '%s=%s\n' "DBMGMT_MANAGED_DATABASE_LIST_JSON" "$DBMGMT_MANAGED_DATABASE_LIST_JSON"
 } &gt; "$DBMGMT_REPORT"
 
-clear
 "$DBMGMT_REPORT_SCRIPT" "$DBMGMT_REPORT"
-printf '\n%s\n' "wb13_card12"
+  printf '\n%s\n' "wb14_card13"
 }
 
-wb13_card12</code></pre>
+wb14_card13</code></pre>
+</div>
+<h3>OUTPUT 13 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb14_card13</code></pre>
 </div>
 <h3>OUTPUT 12 - Expected Database Management report</h3>
 <div class="code-card">
@@ -1836,8 +1852,8 @@ DBMGMT_ROLE                            | NORMAL
 DBMGMT_MANAGEMENT_TYPE                 | ADVANCED
 DBMGMT_CREDENTIAL_USERNAME             | SYSTEM
 DBMGMT_PASSWORD_SECRET_OCID            | &lt;vault_secret_ocid&gt;
-PDB_LIST_JSON                          | /home/oci/workbook/json/cdb01-pdb-list.json
-DBMGMT_MANAGED_DATABASE_LIST_JSON      | /home/oci/workbook/json/dbmgmt-managed-database-list.json
+PDB_LIST_JSON                          | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb01-pdb-list.json
+DBMGMT_MANAGED_DATABASE_LIST_JSON      | /home/&lt;cloud_shell_user&gt;/workbook/json/dbmgmt-managed-database-list.json
 
 wb13_card12</code></pre>
 </div>

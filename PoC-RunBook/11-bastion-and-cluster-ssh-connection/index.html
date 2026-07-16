@@ -33,7 +33,7 @@
         <h1>Bastion and Cluster SSH Connection</h1>
         <p class="subtitle">This section moves the SSH operational workflow out of the CDB creation workbook. It downloads the bastion and first cluster-node private keys from Object Storage, creates reusable connection scripts, opens the bastion and cluster sessions, validates CDB01 from SQL*Plus on the first cluster node, and adds an approved <code>/32</code> SSH source rule to the bastion network security group.</p>
         <div class="hero-meta">
-          <span>Last updated July 15, 2026</span>
+          <span>Last updated July 16, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -102,9 +102,9 @@
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create <code>~/keys</code>, download the bastion VM key and cluster first-node key from the existing <code>ADMIN_BUCKET_NAME</code> Object Storage bucket, and set permission <code>700</code> on the directory and every downloaded file.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card01() {
-
+  <pre class="code-scroll"><code>wb11_card01() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 KEY_DIR="$HOME/keys"
 BASTION_KEY_SOURCE_FILE="${SSH_PRIVATE_KEY_FILE:-}"
 CLUSTER_KEY_SOURCE_FILE="${EXADATA_SSH_PRIVATE_KEY_FILE:-}"
@@ -160,7 +160,6 @@ chmod 700 "$KEY_DIR" "$KEY_DIR"/*
 
 upsert_cli_env OBJECT_STORAGE_NAMESPACE "$OBJECT_STORAGE_NAMESPACE" &gt;/dev/null
 
-clear
 printf '%-34s | %s\n' \
   "FIELD" "VALUE" \
   "----------------------------------" "-----" \
@@ -170,7 +169,7 @@ printf '%-34s | %s\n' \
   "CLUSTER_KEY_FILE" "$CLUSTER_KEY_FILE" \
   "DIRECTORY_PERMISSION" "700" \
   "FILE_PERMISSION" "700"
-printf '\n%s\n' "wb11_card01"
+  printf '\n%s\n' "wb11_card01"
 }
 
 wb11_card01</code></pre>
@@ -207,14 +206,15 @@ wb11_card01</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb11_card02() {
-
-if [ ! -f "$HOME/workbook/env.sh" ]; then
   clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+if [ ! -f "$HOME/workbook/env.sh" ]; then
+
   printf '%s\n' "BASH 02 runs from Cloud Shell, not from inside the bastion VM."
-  printf '%s\n' "You appear to be on a host that does not have ~/workbook/env.sh."
+  printf '%s\n' "You appear to be on a host that does not have ~/workbook/bin/env.sh."
   printf '%s\n' "If the prompt is on bastion-01, run: exit"
   printf '%s\n' "Then run BASH 02 again from Cloud Shell if you need to recreate ~/keys/connect-bastion-vm.sh."
-  printf '\n%s\n' "wb11_card02"
+
   return 1
 fi
 
@@ -270,20 +270,19 @@ connect_bastion_vm() {
   chmod 700 "\$HOME/keys" "\$BASTION_KEY_PATH"
   printf 'Opening bastion SSH session to %s@%s\n' "\$BASTION_USER" "\$BASTION_HOST"
   printf 'When finished, run: exit\n'
-  ssh -i "\$BASTION_KEY_PATH" "\$BASTION_USER@\$BASTION_HOST"
+  ssh -i " -o StrictHostKeyChecking=accept-new\$BASTION_KEY_PATH" "\$BASTION_USER@\$BASTION_HOST"
 }
 
 connect_bastion_vm
 SCRIPT
 chmod 700 "$BASTION_CONNECT_SCRIPT"
 
-clear
 printf '%s\n' "Opening bastion SSH session."
 printf '%s\n' "When the bastion prompt appears, run: exit"
 printf 'Reusable script: %s\n' "$BASTION_CONNECT_SCRIPT"
 printf '%s\n\n' "After the session closes, continue with BASH 03."
 "$BASTION_CONNECT_SCRIPT"
-printf '\n%s\n' "wb11_card02"
+  printf '\n%s\n' "wb11_card02"
 }
 
 wb11_card02</code></pre>
@@ -317,12 +316,13 @@ wb11_card02</code></pre>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb11_card03() {
-
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 if [ ! -f "$HOME/workbook/env.sh" ]; then
   BASTION_SECOND_HOP_SCRIPT="$HOME/keys/connect-cluster-first-node.sh"
-  clear
+
   printf '%s\n' "BASH 03 setup runs from Cloud Shell, not from inside the bastion VM."
-  printf '%s\n' "You appear to be on a host that does not have ~/workbook/env.sh."
+  printf '%s\n' "You appear to be on a host that does not have ~/workbook/bin/env.sh."
   if [ -x "$BASTION_SECOND_HOP_SCRIPT" ]; then
     printf 'Found reusable cluster script: %s\n' "$BASTION_SECOND_HOP_SCRIPT"
     printf '%s\n' "Executing the bastion-side cluster connection script now."
@@ -332,7 +332,7 @@ if [ ! -f "$HOME/workbook/env.sh" ]; then
     printf '%s\n' "If the prompt is on bastion-01, run: exit"
     printf '%s\n' "Then run BASH 03 again from Cloud Shell to recreate and transfer the script."
   fi
-  printf '\n%s\n' "wb11_card03"
+
   return 1
 fi
 
@@ -488,37 +488,36 @@ connect_cluster_node() {
 
   if [ -z "\$remote_command" ]; then
     printf 'Opening cluster SSH session from bastion to %s as %s.\n' "\$CLUSTER_HOST" "\$target_os_user"
-    ssh -tt -i "\$cluster_key_path" "\$CLUSTER_LOGIN_USER@\$CLUSTER_HOST"
+    ssh -tt -o StrictHostKeyChecking=accept-new -i "\$cluster_key_path" "\$CLUSTER_LOGIN_USER@\$CLUSTER_HOST"
     return \$?
   fi
 
   printf 'Opening cluster SSH session from bastion to %s as %s through %s.\n' "\$CLUSTER_HOST" "\$target_os_user" "\$CLUSTER_LOGIN_USER"
-  ssh -tt -i "\$cluster_key_path" "\$CLUSTER_LOGIN_USER@\$CLUSTER_HOST" "\$remote_command"
+  ssh -tt -o StrictHostKeyChecking=accept-new -i "\$cluster_key_path" "\$CLUSTER_LOGIN_USER@\$CLUSTER_HOST" "\$remote_command"
 }
 
 connect_cluster_node "\$@"
 SCRIPT
 chmod 700 "$SECOND_HOP_SCRIPT"
 
-ssh -i "$BASTION_PRIVATE_KEY_PATH" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" \
+ssh -i "$BASTION_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=accept-new "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" \
   "mkdir -p ~/keys &amp;&amp; chmod 700 ~/keys"
 
-scp -i "$BASTION_PRIVATE_KEY_PATH" \
+scp -i "$BASTION_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=accept-new \
   "$CLUSTER_PRIVATE_KEY_PATH" \
   "$BASTION_SSH_USER@$BASTION_PUBLIC_IP:~/keys/$CLUSTER_KEY_OBJECT_NAME"
 
 printf 'Copying second-hop SSH script to bastion: %s\n' "$REMOTE_SECOND_HOP_SCRIPT"
-scp -i "$BASTION_PRIVATE_KEY_PATH" \
+scp -i "$BASTION_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=accept-new \
   "$SECOND_HOP_SCRIPT" \
   "$BASTION_SSH_USER@$BASTION_PUBLIC_IP:~/keys/connect-cluster-first-node.sh"
 
-ssh -i "$BASTION_PRIVATE_KEY_PATH" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" \
+ssh -i "$BASTION_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=accept-new "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" \
   "chmod 700 ~/keys ~/keys/*"
 
-ssh -i "$BASTION_PRIVATE_KEY_PATH" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" \
+ssh -i "$BASTION_PRIVATE_KEY_PATH" -o StrictHostKeyChecking=accept-new "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" \
   "getent hosts $CLUSTER_FIRST_NODE_HOSTNAME &gt;/dev/null"
 
-clear
 printf '%-32s | %s\n' \
   "FIELD" "VALUE" \
   "--------------------------------" "-----" \
@@ -530,9 +529,9 @@ printf '%-32s | %s\n' \
   "DB_NODE_HOSTNAME" "$DB_NODE_HOSTNAME" \
   "CLUSTER_FIRST_NODE_HOSTNAME" "$CLUSTER_FIRST_NODE_HOSTNAME"
 printf '%s\n' "Opening cluster SSH session through the bastion script as oracle."
-ssh -tt -i "$BASTION_PRIVATE_KEY_PATH" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" \
+ssh -tt -o StrictHostKeyChecking=accept-new -i "$BASTION_PRIVATE_KEY_PATH" "$BASTION_SSH_USER@$BASTION_PUBLIC_IP" \
   "$REMOTE_SECOND_HOP_SCRIPT"
-printf '\n%s\n' "wb11_card03"
+  printf '\n%s\n' "wb11_card03"
 }
 
 wb11_card03</code></pre>
@@ -571,10 +570,17 @@ wb11_card03</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Copy and paste each line manually to load <code>CDB01.env</code>, open SQL*Plus as SYSDBA with <code>exec</code>, and confirm PDB01 is open.</span>
   </div>
-  <pre class="code-scroll"><code>ls
+  <pre class="code-scroll"><code>wb11_card04() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+ls
 . ./CDB01.env
 exec sqlplus / as sysdba
-show pdbs</code></pre>
+show pdbs
+  printf '\n%s\n' "wb11_card04"
+}
+
+wb11_card04</code></pre>
 </div>
 <h3>OUTPUT 04 - Expected SQL*Plus SYSDBA connection</h3>
 <div class="code-card">
@@ -618,7 +624,14 @@ SQL&gt;</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run one SQL*Plus exit command to close the full nested SSH chain and return to Cloud Shell.</span>
   </div>
-  <pre class="code-scroll"><code>exit</code></pre>
+  <pre class="code-scroll"><code>wb11_card05() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+exit
+  printf '\n%s\n' "wb11_card05"
+}
+
+wb11_card05</code></pre>
 </div>
 <h3>OUTPUT 05 - Expected return to Cloud Shell</h3>
 <div class="code-card">
@@ -645,53 +658,149 @@ Connection to &lt;bastion_public_ip&gt; closed.</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for Reusable connection commands.</span>
   </div>
-  <pre class="code-scroll"><code>~/keys/connect-bastion-vm.sh</code></pre>
+  <pre class="code-scroll"><code>wb11_card06() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+~/keys/connect-bastion-vm.sh
+  printf '\n%s\n' "wb11_card06"
+}
+
+wb11_card06</code></pre>
+</div>
+<h3>OUTPUT 06 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb11_card06</code></pre>
 </div>
 <p>From the bastion VM, connect to the first cluster node as <code>oracle</code> by default:</p>
 <div class="code-card">
   <div class="code-toolbar">
-    <span class="code-type">Bash</span>
-    <button class="copy-btn" type="button">Copy</button>
+    <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for Reusable connection commands.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for OUTPUT 06 - Expected command completion.</span>
   </div>
-  <pre class="code-scroll"><code>~/keys/connect-cluster-first-node.sh</code></pre>
+  <pre class="code-scroll"><code>wb11_card07() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+~/keys/connect-cluster-first-node.sh
+  printf '\n%s\n' "wb11_card07"
+}
+
+wb11_card07</code></pre>
+</div>
+<h3>OUTPUT 07 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb11_card07</code></pre>
 </div>
 <p>Or connect to the first cluster node as <code>opc</code>:</p>
 <div class="code-card">
   <div class="code-toolbar">
-    <span class="code-type">Bash</span>
-    <button class="copy-btn" type="button">Copy</button>
+    <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for Reusable connection commands.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for OUTPUT 07 - Expected command completion.</span>
   </div>
-  <pre class="code-scroll"><code>~/keys/connect-cluster-first-node.sh opc</code></pre>
+  <pre class="code-scroll"><code>wb11_card08() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+~/keys/connect-cluster-first-node.sh opc
+  printf '\n%s\n' "wb11_card08"
+}
+
+wb11_card08</code></pre>
+</div>
+<h3>OUTPUT 08 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb11_card08</code></pre>
 </div>
 <p>From Cloud Shell, connect directly to the first cluster node through the bastion as <code>oracle</code> by default:</p>
 <div class="code-card">
   <div class="code-toolbar">
-    <span class="code-type">Bash</span>
-    <button class="copy-btn" type="button">Copy</button>
+    <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for Reusable connection commands.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for OUTPUT 08 - Expected command completion.</span>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet
-ssh -tt -i "$HOME/keys/$(basename "$SSH_PRIVATE_KEY_FILE")" "${BASTION_SSH_USER:-opc}@${BASTION_PUBLIC_IP}" "~/keys/connect-cluster-first-node.sh"</code></pre>
+  <pre class="code-scroll"><code>wb11_card09() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+
+ssh -tt -o StrictHostKeyChecking=accept-new -i "$HOME/keys/$(basename "$SSH_PRIVATE_KEY_FILE")" "${BASTION_SSH_USER:-opc}@${BASTION_PUBLIC_IP}" "~/keys/connect-cluster-first-node.sh"
+  printf '\n%s\n' "wb11_card09"
+}
+
+wb11_card09</code></pre>
+</div>
+<h3>OUTPUT 09 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb11_card09</code></pre>
 </div>
 <p>From Cloud Shell, connect directly to the first cluster node through the bastion as <code>opc</code>:</p>
 <div class="code-card">
   <div class="code-toolbar">
-    <span class="code-type">Bash</span>
-    <button class="copy-btn" type="button">Copy</button>
+    <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for Reusable connection commands.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for OUTPUT 09 - Expected command completion.</span>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet
-ssh -tt -i "$HOME/keys/$(basename "$SSH_PRIVATE_KEY_FILE")" "${BASTION_SSH_USER:-opc}@${BASTION_PUBLIC_IP}" "~/keys/connect-cluster-first-node.sh opc"</code></pre>
+  <pre class="code-scroll"><code>wb11_card10() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+
+ssh -tt -o StrictHostKeyChecking=accept-new -i "$HOME/keys/$(basename "$SSH_PRIVATE_KEY_FILE")" "${BASTION_SSH_USER:-opc}@${BASTION_PUBLIC_IP}" "~/keys/connect-cluster-first-node.sh opc"
+  printf '\n%s\n' "wb11_card10"
+}
+
+wb11_card10</code></pre>
+</div>
+<h3>OUTPUT 10 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb11_card10</code></pre>
 </div>
       </section><section id="bash-06-allow-ssh-to-the-bastion-nsg" class="article-section">
         <h2>BASH 06 - Allow SSH to the bastion NSG</h2>
@@ -706,9 +815,9 @@ ssh -tt -i "$HOME/keys/$(basename "$SSH_PRIVATE_KEY_FILE")" "${BASTION_SSH_USER:
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a reusable script that adds an SSH ingress rule for <code>&lt;source_ip&gt;/32</code> to <code>NSG_BASTION_OCID</code>, then execute it with the resolved Cloud Shell public IP by default or with a provided IP address.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>. ~/workbook/env.sh --quiet || return 1
-wb11_card06() {
-
+  <pre class="code-scroll"><code>wb11_card11() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
 SCRIPT_FILE="$BIN_DIR/allow-bastion-ssh-source.sh"
 SOURCE_IP="${1:-}"
 SOURCE_IP_MODE="provided"
@@ -845,7 +954,6 @@ EOF
     NSG_RULE_ID="$EXISTING_RULE_ID"
   fi
 
-  clear
   printf '%-28s | %s\n' \
     "FIELD" "VALUE" \
     "----------------------------" "-----" \
@@ -865,30 +973,41 @@ SCRIPT
 
 chmod 700 "$SCRIPT_FILE"
 "$SCRIPT_FILE" "$SOURCE_IP" "$SOURCE_IP_MODE"
-printf '\n%s\n' "wb11_card06"
+  printf '\n%s\n' "wb11_card11"
 }
 
-wb11_card06</code></pre>
+wb11_card11</code></pre>
+</div>
+<h3>OUTPUT 11 - Expected command completion</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+  </div>
+  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
+STATUS | &lt;completed_or_already_at_target_state&gt;
+
+wb11_card11</code></pre>
 </div>
 <p>To add a different source IP instead of the current Cloud Shell public IP, run the function with the IP address after pasting the card:</p>
 <div class="code-card">
   <div class="code-toolbar">
-    <span class="code-type">Text</span>
-    <button class="copy-btn" type="button">Copy</button>
+    <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for BASH 06 - Allow SSH to the bastion NSG.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for OUTPUT 11 - Expected command completion.</span>
   </div>
   <pre class="code-scroll"><code>wb11_card06 &lt;approved_source_ip&gt;</code></pre>
 </div>
 <p>After the card creates the reusable script, you can also run it directly with any approved source IP:</p>
 <div class="code-card">
   <div class="code-toolbar">
-    <span class="code-type">Text</span>
-    <button class="copy-btn" type="button">Copy</button>
+    <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for BASH 06 - Allow SSH to the bastion NSG.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review this text pattern for OUTPUT 11 - Expected command completion.</span>
   </div>
   <pre class="code-scroll"><code>~/workbook/bin/allow-bastion-ssh-source.sh &lt;approved_source_ip&gt;</code></pre>
 </div>
