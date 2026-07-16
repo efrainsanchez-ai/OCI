@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-REPORT_SCRIPT_UPDATED_DATE="2026-07-16 13:02:51 CST"
+REPORT_SCRIPT_UPDATED_DATE="2026-07-16 13:19:13 CST"
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 LIB_DIR="${LIB_DIR:-$WORKBOOK_DIR/lib}"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
@@ -455,6 +455,16 @@ show_nsg_sections() {
   show_nsg_rule_details
 }
 
+show_security_list_sections() {
+  run_table "Security Lists" \
+    oci network security-list list \
+      --compartment-id "$NETWORK_COMPARTMENT_OCID" \
+      --vcn-id "$VCN_OCID" \
+      --query 'data[].{Name:"display-name",State:"lifecycle-state"}' \
+      --output table
+  show_security_list_rule_details
+}
+
 show_full_report() {
   COMPARTMENT_PATH="${POC_PARENT_COMPARTMENT_NAME:-Partner}/${POC_COMPARTMENT_NAME:-LAD-01}"
 
@@ -532,8 +542,11 @@ main() {
     nsg|nsg-only|--nsg|--nsg-only)
       show_nsg_sections
       ;;
+    security-lists|security-list|sl|--security-lists|--security-list)
+      show_security_list_sections
+      ;;
     *)
-      printf 'Usage: %s [all|nsg]\n' "$0" >&2
+      printf 'Usage: %s [all|nsg|security-lists]\n' "$0" >&2
       exit 2
       ;;
   esac
