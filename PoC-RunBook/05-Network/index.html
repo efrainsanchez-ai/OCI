@@ -1223,7 +1223,7 @@ wb05_card12</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the applications NSG template with SSH ingress from <code>nsg-bastion-admin</code>, public load balancer ingress from <code>nsg-public-lb</code>, database egress to <code>nsg-database-client</code>, then create the NSG and save its OCID in <code>~/workbook/cli.env</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create the applications NSG template with SSH and RDP ingress from <code>nsg-bastion-admin</code>, public load balancer ingress from <code>nsg-public-lb</code>, database egress to <code>nsg-database-client</code>, RDP egress to the bastion/admin NSG, and TCP egress for OS updates, then create the NSG and save its OCID in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb05_card13() {
@@ -1239,6 +1239,15 @@ cat &gt; "$JSON_DIR/nsg-applications-rules.template.json" &lt;&lt;'EOF'
     "source": "__NSG_BASTION_OCID__",
     "sourceType": "NETWORK_SECURITY_GROUP",
     "tcpOptions": {"destinationPortRange": {"min": 22, "max": 22}}
+  },
+  {
+    "description": "Allow admin RDP from bastion/admin NSG",
+    "direction": "INGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "source": "__NSG_BASTION_OCID__",
+    "sourceType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 3389, "max": 3389}}
   },
   {
     "description": "Allow public load balancer HTTP to applications",
@@ -1284,6 +1293,23 @@ cat &gt; "$JSON_DIR/nsg-applications-rules.template.json" &lt;&lt;'EOF'
     "destination": "__NSG_DATABASE_CLIENT_OCID__",
     "destinationType": "NETWORK_SECURITY_GROUP",
     "tcpOptions": {"destinationPortRange": {"min": 6200, "max": 6200}}
+  },
+  {
+    "description": "OS Updates",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "0.0.0.0/0",
+    "destinationType": "CIDR_BLOCK"
+  },
+  {
+    "description": "Allow application RDP egress to bastion/admin NSG",
+    "direction": "EGRESS",
+    "isStateless": false,
+    "protocol": "6",
+    "destination": "__NSG_BASTION_OCID__",
+    "destinationType": "NETWORK_SECURITY_GROUP",
+    "tcpOptions": {"destinationPortRange": {"min": 3389, "max": 3389}}
   }
 ]
 EOF
@@ -1710,7 +1736,7 @@ wb05_card17</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create and execute a report script that summarizes current artifact names, states, and NSG ingress and egress access. Run <code>~/workbook/bin/executive-report.sh nsg</code> to show only the NSG sections.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run this Bash script step to create and execute a report script that summarizes current artifact names, states, and NSG ingress and egress access.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb05_card18() {
@@ -1753,14 +1779,14 @@ wb05_card18</code></pre>
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the executive report reflects one PoC compartment, the selected VCN name and CIDR, default security lists on every subnet, sl-backup only on the backup subnet, and the expected NSG rule model.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the executive report reflects one PoC compartment, the selected VCN name and CIDR, default security lists on every subnet, sl-backup on the backup subnet, sl-dbtools on the Database Tools subnet, and the expected NSG rule model.</span>
   </div>
   <pre class="code-scroll"><code>OCI PoC RunBook Executive Report
 ------------------------------------------------------------------------------------------------
 ITEM                           | VALUE
 ------------------------------ | -----
 Generated UTC                  | &lt;generated UTC timestamp&gt;
-Report script updated          | 2026-07-14 14:44:28 CDT
+Report script updated          | 2026-07-16 13:27:10 CST
 Region                         | &lt;region&gt;
 Workbook directory             | /home/&lt;user&gt;/workbook
 Report file                    | $REPORT_DIR/networking-executive-report.txt
@@ -1783,16 +1809,16 @@ VCN                            | VCN-&lt;poc-compartment&gt;
 Gateways                       | gw-internet, gw-service, gw-nat, optional dynamic-routing-gateway
 Route tables                   | rt-public, rt-private
 Subnets                        | subnet-admin, subnet-dbclient, subnet-dbbackup, subnet-dbtools, subnet-public-lb, subnet-applications
-Security lists                 | default security list, sl-backup
+Security lists                 | default security list, sl-backup, sl-dbtools
 NSGs                           | nsg-database-client, nsg-applications, nsg-dbtools-endpoint, nsg-bastion-admin, nsg-public-lb
-Service access                 | Route tables provide NAT, Service Gateway, and Internet Gateway paths; security-list baseline uses the default list plus sl-backup
+Service access                 | Route tables provide NAT, Service Gateway, and Internet Gateway paths; security-list baseline uses the default list plus sl-backup and sl-dbtools
 
 NSG Access Model
 ------------------------------------------------------------------------------------------------
 NSG                    | INGRESS ACCESS                              | EGRESS ACCESS
 ---------------------- | ------------------------------------------- | -------------------------------------------
 nsg-database-client    | Client TCP/ICMP; app/admin/dbtools SQL/O... | Backup 8005/2484; VCN TCP
-nsg-applications       | Public LB 80/8080/443; admin SSH            | Database client TCP 1521 and 6200
+nsg-applications       | Public LB 80/8080/443; admin SSH/RDP         | Database TCP 1521/6200; bastion RDP; OS...
 nsg-dbtools-endpoint   | None                                        | Database client TCP 1521 and 6200
 nsg-bastion-admin      | Internet SSH                                | SSH to client/app; SQL/ONS to client; in...
 nsg-public-lb          | Internet 80/443/8080                        | Internet TCP 80, 443, and 8080
@@ -1831,7 +1857,7 @@ NAME                  | CIDR          | DNS     | PRIVATE | SECURITY LISTS      
 --------------------- | ------------- | ------- | ------- | ---------------------- | ---------------
 subnet-applications   | &lt;apps-cidr&gt;   | apps    | true    | default                | AVAILABLE
 subnet-public-lb      | &lt;public-lb-cidr&gt; | publb | false   | default                | AVAILABLE
-subnet-dbtools        | &lt;dbtools-cidr&gt; | dbtools | true    | default                | AVAILABLE
+subnet-dbtools        | &lt;dbtools-cidr&gt; | dbtools | true    | default,sl-dbtools     | AVAILABLE
 subnet-dbbackup       | &lt;backup-cidr&gt; | backup  | true    | default,sl-backup      | AVAILABLE
 subnet-dbclient       | &lt;client-cidr&gt; | client  | true    | default                | AVAILABLE
 subnet-admin          | &lt;admin-cidr&gt;  | admin   | false   | default                | AVAILABLE
@@ -1842,6 +1868,7 @@ Security Lists
 | Name                                 | State     |
 +--------------------------------------+-----------+
 | sl-backup                            | AVAILABLE |
+| sl-dbtools                           | AVAILABLE |
 | Default Security List for VCN-&lt;poc-compartment&gt; | AVAILABLE |
 +--------------------------------------+-----------+
 
@@ -1866,6 +1893,12 @@ SECURITY LIST        | DIR     | PROTO | PORTS      | CIDR / SERVICE           |
 sl-backup            | INGRESS | TCP   | 8005       | &lt;vcn-cidr&gt;               | Allow VCN TCP 8005 to Exada...
 sl-backup            | INGRESS | TCP   | 2484       | &lt;vcn-cidr&gt;               | Allow VCN TCP 2484 to Exada...
 sl-backup            | EGRESS  | TCP   | All        | &lt;vcn-cidr&gt;               | Allow backup subnet TCP egr...
+
+sl-dbtools ingress and egress
+------------------------------------------------------------------------------------------------
+SECURITY LIST        | DIR     | PROTO | PORTS      | CIDR / SERVICE           | DESCRIPTION
+-------------------- | ------- | ----- | ---------- | ------------------------ | ------------------------------
+sl-dbtools           | EGRESS  | TCP   | 1521       | 10.0.1.0/24              | Allow Connections to Database Subnet
 
 NSGs
 ------------------------------------------------------------------------------------------------
@@ -1968,7 +2001,28 @@ wb05_card18</code></pre>
 <td>Captures current artifact names, states, gateway inventory, subnet inventory, security lists, NSGs, NSG access model, and current NSG rule details for security review and Chapter 14 readiness sign-off.</td>
 </tr>
 </tbody></table></div>
-<p>The helper script <code>~/workbook/bin/executive-report.sh</code> can regenerate the same report file. Run <code>~/workbook/bin/executive-report.sh all</code> for the full report or <code>~/workbook/bin/executive-report.sh nsg</code> to focus on NSG access and rule details.</p>
+<p>Use <code>~/workbook/bin/executive-report.sh</code> to refresh the report after BASH 18.</p>
+<div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Parameter</th>
+<th scope="col">Output</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>all</code></td>
+<td>Complete report</td>
+</tr>
+<tr>
+<td><code>nsgs</code></td>
+<td>NSG inventory, access, and rule details only</td>
+</tr>
+<tr>
+<td><code>security-lists</code></td>
+<td>Security-list inventory and rule details only</td>
+</tr>
+</tbody></table></div>
+<p>Each command updates <code>~/workbook/reports/networking-executive-report.txt</code> with the selected output.</p>
       </section>
       <section id="chapter-navigation" class="article-section">
         <h2>Chapter navigation</h2>

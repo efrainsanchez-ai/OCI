@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-REPORT_SCRIPT_UPDATED_DATE="2026-07-16 13:19:13 CST"
+REPORT_SCRIPT_UPDATED_DATE="2026-07-16 13:27:10 CST"
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
 LIB_DIR="${LIB_DIR:-$WORKBOOK_DIR/lib}"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
@@ -539,14 +539,14 @@ main() {
     all|full)
       show_full_report
       ;;
-    nsg|nsg-only|--nsg|--nsg-only)
+    nsgs|nsgs-only|--nsgs|--nsgs-only)
       show_nsg_sections
       ;;
     security-lists|security-list|sl|--security-lists|--security-list)
       show_security_list_sections
       ;;
     *)
-      printf 'Usage: %s [all|nsg|security-lists]\n' "$0" >&2
+      printf 'Usage: executive-report.sh [all|nsgs|security-lists]\n' >&2
       exit 2
       ;;
   esac
