@@ -33,7 +33,7 @@
         <h1>Bastion VM Creation</h1>
         <p class="subtitle">This section creates a bastion VM in the assigned PoC compartment through ADMIN_COMPARTMENT_OCID using the approved admin subnet and bastion NSG. The VM is the controlled administration host for SSH, SQL*Plus, SQL Loader, RMAN client utilities, JDBC testing, and Java-based database tools.</p>
         <div class="hero-meta">
-          <span>Last updated July 16, 2026</span>
+          <span>Last updated July 17, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -143,8 +143,11 @@
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
-SSH_PRIVATE_KEY_FILE="${WORKBOOK_DIR}/bastion-01_rsa"
-SSH_PUBLIC_KEY_FILE="${SSH_PRIVATE_KEY_FILE}.pub"
+KEY_DIR="${KEY_DIR:-$WORKBOOK_DIR/keys}"
+mkdir -p "$KEY_DIR"
+chmod 700 "$KEY_DIR"
+SSH_PRIVATE_KEY_FILE="$KEY_DIR/bastion-01_rsa"
+SSH_PUBLIC_KEY_FILE="$KEY_DIR/bastion-01_rsa.pub"
 BASTION_SHAPE="${BASTION_SHAPE:-VM.Standard.E5.Flex}"
 
 if [ ! -s "$SSH_PRIVATE_KEY_FILE" ]; then
@@ -445,7 +448,6 @@ Warning: Permanently added '&lt;bastion_public_ip&gt;' (ECDSA) to the list of kn
   </div>
   <pre class="code-scroll"><code>wb07_card05() {
   clear
-  . ~/workbook/bin/env.sh --quiet || return 1
 sudo dnf install -y oracle-instantclient-release-26ai-el9
 sudo dnf install -y libaio nmap nfs-utils
 
@@ -512,7 +514,6 @@ Version 26.&lt;version&gt;</code></pre>
   </div>
   <pre class="code-scroll"><code>wb07_card06() {
   clear
-  . ~/workbook/bin/env.sh --quiet || return 1
 sudo dnf install -y jdk
 java -version
 javac -version
@@ -548,7 +549,6 @@ wb07_card06</code></pre>
   </div>
   <pre class="code-scroll"><code>wb07_card07() {
   clear
-  . ~/workbook/bin/env.sh --quiet || return 1
 sudo dnf update-minimal --security -y
 sudo dnf needs-restarting -r || true
   printf '\n%s\n' "wb07_card07"
@@ -585,7 +585,6 @@ More information: man needs-restarting</code></pre>
   </div>
   <pre class="code-scroll"><code>wb07_card08() {
   clear
-  . ~/workbook/bin/env.sh --quiet || return 1
 sudo reboot
   printf '\n%s\n' "wb07_card08"
 }

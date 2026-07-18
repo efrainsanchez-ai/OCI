@@ -33,7 +33,7 @@
         <h1>Stop and Start Services</h1>
         <p class="subtitle">This section stops and starts the compute-heavy parts of a non-production PoC environment when the environment does not need 24/7 operation. The stop path downscales <code>VMCluster-01</code> enabled ECPUs to <code>0</code>, stops the bastion VM with a graceful <code>SOFTSTOP</code>, and validates both resources after the change. The start path restores Exadata Exascale enabled ECPUs and starts the bastion VM when the service window reopens.</p>
         <div class="hero-meta">
-          <span>Last updated July 16, 2026</span>
+          <span>Last updated July 17, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -216,6 +216,7 @@ CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 
 load_cli_env() {
   [ -f "$CLI_ENV" ] || { printf '%s does not exist. Create ~/admin/cli.env before continuing.\n' "$CLI_ENV" &gt;&amp;2; return 1; }
+  bash -n "$CLI_ENV" || { printf 'STOP: %s has invalid shell syntax. Repair the reported line before continuing.\n' "$CLI_ENV" &gt;&amp;2; return 1; }
   . "$CLI_ENV"
 }
 

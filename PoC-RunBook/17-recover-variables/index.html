@@ -31,9 +31,9 @@
       <div class="hero-copy">
         <p class="eyebrow">Chapter 17</p>
         <h1>Recover Variables</h1>
-        <p class="subtitle">This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, another OCI user takes over, or the original <code>~/workbook/cli.env</code> file is unavailable. It does not recreate OCI resources. Instead, it discovers existing resources by using the names, compartment assumptions, and discovery approach established in earlier workbooks, especially Chapter 16.</p>
+        <p class="subtitle">Whenever this workbook is edited, update the visible <code>Last updated &lt;Month Day, Year&gt;</code> label in <code>index.html</code> to the current publication date.</p>
         <div class="hero-meta">
-          <span>Last updated July 16, 2026</span>
+          <span>Last updated July 17, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -45,13 +45,16 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#introduction">Introduction</a></li><li><a href="#what-gets-recovered">What gets recovered</a></li><li><a href="#recovery-defaults">Recovery defaults</a></li><li><a href="#bash-01-recreate-workbook-helpers">BASH 01 - Recreate workbook helpers</a></li><li><a href="#bash-01a-confirm-recovery-variables">BASH 01A - Confirm recovery variables</a></li><li><a href="#bash-02-download-and-run-recovery-discovery-tools">BASH 02 - Download and run recovery discovery tools</a></li><li><a href="#bash-03-validate-recovered-variables">BASH 03 - Validate recovered variables</a></li><li><a href="#bash-04-allow-cloud-shell-ssh-access-to-the-bastion">BASH 04 - Allow Cloud Shell SSH access to the bastion</a></li><li><a href="#bash-05-create-reusable-bastion-ssh-script">BASH 05 - Create reusable bastion SSH script</a></li><li><a href="#bash-06-create-reusable-cluster-node-ssh-script">BASH 06 - Create reusable cluster node SSH script</a></li><li><a href="#bash-07-mount-file-storage-on-exadata-vm-cluster-nodes">BASH 07 - Mount File Storage on Exadata VM cluster nodes</a></li><li><a href="#bash-08-create-executive-recovery-report">BASH 08 - Create executive recovery report</a></li><li><a href="#reuse-notes">Reuse notes</a></li></ol>
+      <ol><li><a href="#overview">Overview</a></li><li><a href="#introduction">Introduction</a></li><li><a href="#what-gets-recovered">What gets recovered</a></li><li><a href="#recovery-defaults">Recovery defaults</a></li><li><a href="#bash-01-recreate-workbook-helpers">BASH 01 - Recreate workbook helpers</a></li><li><a href="#bash-02-confirm-recovery-variables">BASH 02 - Confirm recovery variables</a></li><li><a href="#bash-03-download-and-run-recovery-discovery-tools">BASH 03 - Download and run recovery discovery tools</a></li><li><a href="#bash-04-validate-recovered-variables">BASH 04 - Validate recovered variables</a></li><li><a href="#bash-05-allow-cloud-shell-ssh-access-to-the-bastion">BASH 05 - Allow Cloud Shell SSH access to the bastion</a></li><li><a href="#bash-06-create-reusable-bastion-ssh-script">BASH 06 - Create reusable bastion SSH script</a></li><li><a href="#bash-07-create-reusable-cluster-node-ssh-script">BASH 07 - Create reusable cluster node SSH script</a></li><li><a href="#bash-08-mount-file-storage-on-exadata-vm-cluster-nodes">BASH 08 - Mount File Storage on Exadata VM cluster nodes</a></li><li><a href="#bash-09-create-executive-recovery-report">BASH 09 - Create executive recovery report</a></li><li><a href="#reuse-notes">Reuse notes</a></li><li><a href="#bash-10-rerun-recovery-discovery">BASH 10 - Rerun recovery discovery</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
         <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../16-stop-and-start-services/index.html"><span class="nav-card-label">Previous</span><strong>16. Stop and Start Services</strong></a><span class="chapter-link nav-card is-disabled" aria-disabled="true"><span class="nav-card-label">Next</span><strong>End of workbook</strong></span>
       </nav>
-      <section id="introduction" class="article-section">
+      <section id="overview" class="article-section">
+        <h2>Overview</h2>
+        <p>Whenever this workbook is edited, update the visible <code>Last updated &lt;Month Day, Year&gt;</code> label in <code>index.html</code> to the current publication date.</p>
+      </section><section id="introduction" class="article-section">
         <h2>Introduction</h2>
         <p>This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, another OCI user takes over, or the original <code>~/workbook/cli.env</code> file is unavailable. It does not recreate OCI resources. Instead, it discovers existing resources by using the names, compartment assumptions, and discovery approach established in earlier workbooks, especially Chapter 16.</p>
 <p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, stores <code>helpers.sh</code> under <code>~/workbook/lib</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, and creates a minimal export-enabled <code>cli.env</code>. BASH 01A confirms and saves the active profile, parent and assigned compartment, and VCN name. BASH 02 downloads the reusable discovery tool under <code>~/workbook/bin</code> and writes recovered variables back into <code>~/workbook/cli.env</code>. Text reports are stored under <code>~/workbook/reports</code>, and JSON discovery files are stored under <code>~/workbook/json</code>.</p>
@@ -187,6 +190,7 @@ CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 
 load_cli_env() {
   [ -f "$CLI_ENV" ] || { printf '%s does not exist. Create ~/workbook/cli.env before continuing.\n' "$CLI_ENV" &gt;&amp;2; return 1; }
+  bash -n "$CLI_ENV" || { printf 'STOP: %s has invalid shell syntax. Repair the reported line before continuing.\n' "$CLI_ENV" &gt;&amp;2; return 1; }
   . "$CLI_ENV"
 }
 
@@ -216,19 +220,12 @@ HELPERS
 chmod 700 "$HELPERS_FILE"
 
 cat &gt; "$ENV_FILE" &lt;&lt;'EOF'
-WORKBOOK_DIR="$HOME/workbook"
-cd "$WORKBOOK_DIR" || return 1
-LIB_DIR="$WORKBOOK_DIR/lib"
-. "$LIB_DIR/helpers.sh" || return 1
+BOOTSTRAP_WORKBOOK_DIR="$HOME/workbook"
+. "$BOOTSTRAP_WORKBOOK_DIR/lib/helpers.sh" || return 1
 load_cli_env || return 1
-export PATH="$WORKBOOK_DIR/bin:$PATH"
-PS1='$ '
-BIN_DIR="$WORKBOOK_DIR/bin"
-KEY_DIR="$WORKBOOK_DIR/keys"
-JSON_DIR="$WORKBOOK_DIR/json"
-REPORT_DIR="$WORKBOOK_DIR/reports"
-mkdir -p "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
-chmod 700 "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+cd "$WORKBOOK_DIR" || return 1
+export PATH="$BIN_DIR:$PATH"
+export PS1='$ '
 export WORKBOOK_DIR BIN_DIR LIB_DIR KEY_DIR JSON_DIR REPORT_DIR
 
 if [ "${1:-}" = "--quiet" ]; then
@@ -260,7 +257,7 @@ upsert_cli_env LIB_DIR "$LIB_DIR" &gt;/dev/null
 upsert_cli_env KEY_DIR "$KEY_DIR" &gt;/dev/null
 upsert_cli_env REPORT_DIR "$REPORT_DIR" &gt;/dev/null
 upsert_cli_env JSON_DIR "$JSON_DIR" &gt;/dev/null
-PS1='$ '
+export PS1='$ '
 
 printf '%-18s | %s\n' \
   "FIELD" "VALUE" "------------------" "-----" \
@@ -298,9 +295,9 @@ PROMPT             | $
 
 wb17_card01</code></pre>
 </div>
-      </section><section id="bash-01a-confirm-recovery-variables" class="article-section">
-        <h2>BASH 01A - Confirm recovery variables</h2>
-        <h3>BASH 01A - Confirm recovery variables</h3>
+      </section><section id="bash-02-confirm-recovery-variables" class="article-section">
+        <h2>BASH 02 - Confirm recovery variables</h2>
+        <h3>BASH 02 - Confirm recovery variables</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -412,29 +409,36 @@ printf '%-30s | %s\n' \
 
 wb17_card02</code></pre>
 </div>
-<h3>OUTPUT 02 - Expected command completion</h3>
+<h3>OUTPUT 02 - Expected recovery variable confirmation output</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the active profile, selected compartment path, and VCN name were saved before discovery starts.</span>
   </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
+  <pre class="code-scroll"><code>VARIABLE                       | VALUE
+------------------------------ | -----
+TENANCY_ID                     | &lt;tenancy_ocid&gt;
+REGION                         | &lt;region&gt;
+POC_PARENT_COMPARTMENT_NAME    | Partner
+POC_COMPARTMENT_NAME           | LAD-01
+POC_COMPARTMENT_OCID           | &lt;poc_compartment_ocid&gt;
+VCN_NAME                       | VCN-LAD-01
+VCN_OCID                       | &lt;vcn_ocid_or_not_found&gt;
 
 wb17_card02</code></pre>
 </div>
-      </section><section id="bash-02-download-and-run-recovery-discovery-tools" class="article-section">
-        <h2>BASH 02 - Download and run recovery discovery tools</h2>
-        <h3>BASH 02 - Download and run recovery discovery tools</h3>
+      </section><section id="bash-03-download-and-run-recovery-discovery-tools" class="article-section">
+        <h2>BASH 03 - Download and run recovery discovery tools</h2>
+        <h3>BASH 03 - Download and run recovery discovery tools</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Download the maintained recovery script into <code>~/workbook/bin</code>, use the confirmed profile, compartment, and VCN values from BASH 01A, discover existing OCI resources from their workbook names, show recovery status feedback while discovery runs, and save recovered values to <code>~/workbook/cli.env</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Download the maintained recovery script into <code>~/workbook/bin</code>, use the confirmed profile, compartment, and VCN values from BASH 02, discover existing OCI resources from their workbook names, show recovery status feedback while discovery runs, and save recovered values to <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb17_card03() {
@@ -473,27 +477,14 @@ rc=${PIPESTATUS[0]}
 
 wb17_card03</code></pre>
 </div>
-<h3>OUTPUT 03 - Expected command completion</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb17_card03</code></pre>
-</div>
-<h3>OUTPUT 02 - Expected recovery discovery output</h3>
+<h3>OUTPUT 03 - Expected recovery discovery output</h3>
 <p><code>DBMGMT_SECRET_POLICY_OCID</code> is optional during recovery. If the Chapter 14 policy does not yet exist, it is recorded as <code>OPTIONAL</code> in the recovery status file rather than listed as missing; Chapter 14 BASH 05 creates the policy when required.</p>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the recovery phase feedback, compact status summary, and missing-variable list, then run BASH 08 for the full inventory.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the recovery phase feedback, compact status summary, and missing-variable list, then run BASH 09 for the full inventory.</span>
   </div>
   <pre class="code-scroll"><code>Downloading recovery script ...
 Source: https://efrainsanchez-ai.github.io/OCI/PoC-RunBook/17-recover-variables/recover-poc-variables.sh
@@ -563,11 +554,11 @@ Missing variables:
 Detailed inventory: run wb17_card08.
 Recovered variables were saved to /home/&lt;cloud_shell_user&gt;/workbook/cli.env.
 
-wb17_card02</code></pre>
+wb17_card03</code></pre>
 </div>
-      </section><section id="bash-03-validate-recovered-variables" class="article-section">
-        <h2>BASH 03 - Validate recovered variables</h2>
-        <h3>BASH 03 - Validate recovered variables</h3>
+      </section><section id="bash-04-validate-recovered-variables" class="article-section">
+        <h2>BASH 04 - Validate recovered variables</h2>
+        <h3>BASH 04 - Validate recovered variables</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -625,20 +616,7 @@ printf '%-34s | %s\n' \
 
 wb17_card04</code></pre>
 </div>
-<h3>OUTPUT 04 - Expected command completion</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb17_card04</code></pre>
-</div>
-<h3>OUTPUT 03 - Expected recovered variable validation</h3>
+<h3>OUTPUT 04 - Expected recovered variable validation</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -680,12 +658,12 @@ FSS_CLUSTER_MOUNT_HOST              | &lt;dbclient_mount_target_host&gt;
 FSS_EXPORT_PATH                     | /FileSystem-01
 FSS_MOUNT_POINT                     | /mnt/FileSystem-01
 
-wb17_card03</code></pre>
+wb17_card04</code></pre>
 </div>
-      </section><section id="bash-04-allow-cloud-shell-ssh-access-to-the-bastion" class="article-section">
-        <h2>BASH 04 - Allow Cloud Shell SSH access to the bastion</h2>
-        <p>This recovery card reuses the SSH ingress pattern from Chapter 11 BASH 06. It resolves the current Cloud Shell public IPv4 address by default, then adds it as a <code>/32</code> TCP port 22 ingress rule on <code>NSG_BASTION_OCID</code>. The operation is idempotent: it reports an existing matching rule instead of creating a duplicate. To allow a different approved public IPv4 address, pass it as the first parameter: <code>wb17_card04 &lt;approved_source_ip&gt;</code>.</p>
-<h3>BASH 04 - Allow Cloud Shell SSH access to the bastion</h3>
+      </section><section id="bash-05-allow-cloud-shell-ssh-access-to-the-bastion" class="article-section">
+        <h2>BASH 05 - Allow Cloud Shell SSH access to the bastion</h2>
+        <p>This recovery card reuses the SSH ingress pattern from Chapter 11 BASH 06. It resolves the current Cloud Shell public IPv4 address by default, then adds it as a <code>/32</code> TCP port 22 ingress rule on <code>NSG_BASTION_OCID</code>. The operation is idempotent: it reports an existing matching rule instead of creating a duplicate. To allow a different approved public IPv4 address, pass it as the first parameter: <code>wb17_card05 &lt;approved_source_ip&gt;</code>.</p>
+<h3>BASH 05 - Allow Cloud Shell SSH access to the bastion</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -720,7 +698,7 @@ cat &gt; "$SCRIPT_FILE" &lt;&lt;'SCRIPT'
 #!/bin/sh
 
 allow_bastion_ssh_source() {
-  . "$HOME/workbook/env.sh" --quiet || return 1
+  . "$HOME/workbook/bin/env.sh" --quiet || return 1
 
   WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
   BIN_DIR="${BIN_DIR:-$WORKBOOK_DIR/bin}"
@@ -854,20 +832,7 @@ chmod 700 "$SCRIPT_FILE"
 
 wb17_card05</code></pre>
 </div>
-<h3>OUTPUT 05 - Expected command completion</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb17_card05</code></pre>
-</div>
-<h3>OUTPUT 04 - Expected bastion NSG SSH ingress output</h3>
+<h3>OUTPUT 05 - Expected bastion NSG SSH ingress output</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -885,11 +850,11 @@ NSG_RULE_STATUS              | added
 NSG_RULE_ID                  | &lt;nsg_security_rule_id&gt;
 SCRIPT_FILE                  | /home/&lt;cloud_shell_user&gt;/workbook/bin/allow-bastion-ssh-source.sh
 
-wb17_card04</code></pre>
+wb17_card05</code></pre>
 </div>
-      </section><section id="bash-05-create-reusable-bastion-ssh-script" class="article-section">
-        <h2>BASH 05 - Create reusable bastion SSH script</h2>
-        <h3>BASH 05 - Create reusable bastion SSH script</h3>
+      </section><section id="bash-06-create-reusable-bastion-ssh-script" class="article-section">
+        <h2>BASH 06 - Create reusable bastion SSH script</h2>
+        <h3>BASH 06 - Create reusable bastion SSH script</h3>
 <p>This card follows the same connection pattern used by Chapter 11 BASH 02. In a recovered Cloud Shell, <code>~/workbook/cli.env</code> can contain the bastion and Exadata VM cluster key object names while the local <code>~/keys</code> directory is empty, so this card restores both private keys before creating the reusable connection script. The generated helper connects as <code>oracle</code> when called without an argument; pass another user, such as <code>opc</code>, as its first argument when required.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -957,7 +922,7 @@ connect_bastion_vm() {
   chmod 700 "\$HOME/keys" "\$BASTION_KEY_PATH"
   printf 'Opening bastion SSH session to %s@%s\n' "\$BASTION_USER" "\$BASTION_HOST"
   printf 'When finished, run: exit\n'
-  ssh -i " -o StrictHostKeyChecking=accept-new\$BASTION_KEY_PATH" "\$BASTION_USER@\$BASTION_HOST"
+  ssh -i "\$BASTION_KEY_PATH" -o StrictHostKeyChecking=accept-new "\$BASTION_USER@\$BASTION_HOST"
 }
 
 connect_bastion_vm "\$@"
@@ -978,20 +943,7 @@ printf 'Reusable script: %s\n\n' "$BASTION_CONNECT_SCRIPT"
 
 wb17_card06</code></pre>
 </div>
-<h3>OUTPUT 06 - Expected command completion</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb17_card06</code></pre>
-</div>
-<h3>OUTPUT 05 - Expected bastion SSH script output</h3>
+<h3>OUTPUT 06 - Expected bastion SSH script output</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -1012,13 +964,13 @@ Last login: Fri Jul 10 16:19:42 2026 from 129.146.198.242
 logout
 Connection to &lt;bastion_public_ip&gt; closed.
 
-wb17_card05
+wb17_card06
 $</code></pre>
 </div>
 <p>After the bastion prompt appears, run <code>exit</code> to close the SSH session and return to the Cloud Shell prompt before continuing with BASH 06.</p>
-      </section><section id="bash-06-create-reusable-cluster-node-ssh-script" class="article-section">
-        <h2>BASH 06 - Create reusable cluster node SSH script</h2>
-        <h3>BASH 06 - Create reusable cluster node SSH script</h3>
+      </section><section id="bash-07-create-reusable-cluster-node-ssh-script" class="article-section">
+        <h2>BASH 07 - Create reusable cluster node SSH script</h2>
+        <h3>BASH 07 - Create reusable cluster node SSH script</h3>
 <p>This card follows the Chapter 11 BASH 03 jump-host pattern. It does not open both node sessions automatically because each SSH session is interactive; it prints the exact commands to connect to node 1 or node 2.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -1146,20 +1098,7 @@ printf '%-34s | %s\n' \
 
 wb17_card07</code></pre>
 </div>
-<h3>OUTPUT 07 - Expected command completion</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb17_card07</code></pre>
-</div>
-<h3>OUTPUT 06 - Expected cluster node SSH script output</h3>
+<h3>OUTPUT 07 - Expected cluster node SSH script output</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -1175,7 +1114,7 @@ NODE_2                             | exasc012-ahuip.client.poc.oraclevcn.com
 CONNECT_NODE_1                     | connect-cluster-node.sh 1 oracle
 CONNECT_NODE_2                     | connect-cluster-node.sh 2 oracle
 
-wb17_card06
+wb17_card07
 $ connect-cluster-node.sh 1 oracle
 Opening cluster node 1 through bastion: exasc011-fxafi.client.poc.oraclevcn.com as oracle
 [oracle@exasc011-fxafi ~]$ exit
@@ -1190,9 +1129,9 @@ logout
 Connection to exasc012-ahuip.client.poc.oraclevcn.com closed.
 Connection to &lt;bastion_public_ip&gt; closed.</code></pre>
 </div>
-      </section><section id="bash-07-mount-file-storage-on-exadata-vm-cluster-nodes" class="article-section">
-        <h2>BASH 07 - Mount File Storage on Exadata VM cluster nodes</h2>
-        <h3>BASH 07 - Mount File Storage on Exadata VM cluster nodes</h3>
+      </section><section id="bash-08-mount-file-storage-on-exadata-vm-cluster-nodes" class="article-section">
+        <h2>BASH 08 - Mount File Storage on Exadata VM cluster nodes</h2>
+        <h3>BASH 08 - Mount File Storage on Exadata VM cluster nodes</h3>
 <p>This recovery card uses the same default File Storage values as Chapter 15 BASH 01 when the <code>FSS_*</code> variables are not present in <code>~/workbook/cli.env</code>.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -1330,20 +1269,7 @@ printf 'Remote bastion script: %s\n' "$REMOTE_MOUNT_SCRIPT"
 
 wb17_card08</code></pre>
 </div>
-<h3>OUTPUT 08 - Expected command completion</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb17_card08</code></pre>
-</div>
-<h3>OUTPUT 07 - Expected cluster File Storage mount output</h3>
+<h3>OUTPUT 08 - Expected cluster File Storage mount output</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -1377,11 +1303,11 @@ Filesystem                                    Size  Used Avail Use% Mounted on
 fs01.client.poc.oraclevcn.com:/FileSystem-01  8.0E     0  8.0E   0% /mnt/FileSystem-01
 1.5K    /mnt/FileSystem-01
 
-wb17_card07</code></pre>
+wb17_card08</code></pre>
 </div>
-      </section><section id="bash-08-create-executive-recovery-report" class="article-section">
-        <h2>BASH 08 - Create executive recovery report</h2>
-        <h3>BASH 08 - Create executive recovery report</h3>
+      </section><section id="bash-09-create-executive-recovery-report" class="article-section">
+        <h2>BASH 09 - Create executive recovery report</h2>
+        <h3>BASH 09 - Create executive recovery report</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -1486,20 +1412,7 @@ cat "$REPORT_FILE"
 
 wb17_card09</code></pre>
 </div>
-<h3>OUTPUT 09 - Expected command completion</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb17_card09</code></pre>
-</div>
-<h3>OUTPUT 08 - Expected executive report summary</h3>
+<h3>OUTPUT 09 - Expected executive report summary</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
@@ -1540,18 +1453,21 @@ Missing variable detail
 ----------------------------------------
 Note: No missing variables were reported by recovery-status.tsv.
 
-wb17_card08</code></pre>
+wb17_card09</code></pre>
 </div>
       </section><section id="reuse-notes" class="article-section">
         <h2>Reuse notes</h2>
-        <p>The generated recovery script is reusable. After BASH 02 creates it, run it again whenever a different Cloud Shell user needs to rebuild the variable file:</p>
+        <p>The generated recovery script is reusable. After BASH 03 creates it, run it again whenever a different Cloud Shell user needs to rebuild the variable file:</p>
+      </section><section id="bash-10-rerun-recovery-discovery" class="article-section">
+        <h2>BASH 10 - Rerun recovery discovery</h2>
+        <h3>BASH 10 - Rerun recovery discovery</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run or adapt this CLI pattern for Reuse notes.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Run the recovered discovery tool again when a different Cloud Shell user needs to rebuild the variable file.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb17_card10() {

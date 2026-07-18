@@ -33,7 +33,7 @@
         <h1>Create Container Database</h1>
         <p class="subtitle">This section creates a new container database named <code>CDB01</code> under the existing <code>dbhome_01</code> Oracle home on <code>VMCluster-01</code>. The creation request uses the OCI Database CLI <code>database create</code> path, keeps automatic backups disabled, prompts for the database character set, uses the default national character set by omitting the national character-set override, and creates the initial pluggable database <code>PDB01</code>.</p>
         <div class="hero-meta">
-          <span>Last updated July 16, 2026</span>
+          <span>Last updated July 17, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -228,15 +228,33 @@ wb10_card01</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Save and display CDB01, PDB01, and the requested admin password values in the workbook environment.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the default CDB01 and PDB01 values, then save them with the requested admin password in the workbook environment.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb10_card02() {
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
-CDB_NAME="${CDB_NAME:-CDB01}"
-PDB_NAME="${PDB_NAME:-PDB01}"
-CDB_ADMIN_PASSWORD="${CDB_ADMIN_PASSWORD:-WelCome#2026_}"
+CDB_NAME_DEFAULT="CDB01"
+PDB_NAME_DEFAULT="PDB01"
+CDB_ADMIN_PASSWORD_DEFAULT="WelCome#2026_"
+
+printf 'Enter CDB name [%s]: ' "$CDB_NAME_DEFAULT"
+IFS= read -r CDB_NAME_INPUT
+CDB_NAME="${CDB_NAME_INPUT:-$CDB_NAME_DEFAULT}"
+
+printf 'Enter PDB name [%s]: ' "$PDB_NAME_DEFAULT"
+IFS= read -r PDB_NAME_INPUT
+PDB_NAME="${PDB_NAME_INPUT:-$PDB_NAME_DEFAULT}"
+
+printf 'Enter CDB admin password [press Enter to use the configured default]: '
+IFS= read -r -s CDB_ADMIN_PASSWORD_INPUT
+printf '\n'
+CDB_ADMIN_PASSWORD="${CDB_ADMIN_PASSWORD_INPUT:-$CDB_ADMIN_PASSWORD_DEFAULT}"
+
+CDB_NAME_SOURCE="provided value"
+PDB_NAME_SOURCE="provided value"
+if [ -z "$CDB_NAME_INPUT" ]; then CDB_NAME_SOURCE="default confirmed"; fi
+if [ -z "$PDB_NAME_INPUT" ]; then PDB_NAME_SOURCE="default confirmed"; fi
 
 upsert_cli_env CDB_NAME "$CDB_NAME" &gt;/dev/null
 upsert_cli_env PDB_NAME "$PDB_NAME" &gt;/dev/null
@@ -246,25 +264,29 @@ printf '%-30s | %s\n' \
   "VARIABLE" "VALUE" \
   "------------------------------" "-----" \
   "CDB_NAME" "$CDB_NAME" \
+  "CDB_NAME_SOURCE" "$CDB_NAME_SOURCE" \
   "PDB_NAME" "$PDB_NAME" \
+  "PDB_NAME_SOURCE" "$PDB_NAME_SOURCE" \
   "CDB_ADMIN_PASSWORD" "&lt;stored_in_cli_env&gt;"
   printf '\n%s\n' "wb10_card02"
 }
 
 wb10_card02</code></pre>
 </div>
-<h3>OUTPUT 02 - Expected CDB01 creation values</h3>
+<h3>OUTPUT 02 - Confirmed CDB01 creation values</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the CDB01 and PDB01 values saved in the workbook environment.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the default CDB01 and PDB01 values saved in the workbook environment.</span>
   </div>
   <pre class="code-scroll"><code>VARIABLE                       | VALUE
 ------------------------------ | -----
 CDB_NAME                       | CDB01
+CDB_NAME_SOURCE                | default confirmed
 PDB_NAME                       | PDB01
+PDB_NAME_SOURCE                | default confirmed
 CDB_ADMIN_PASSWORD             | &lt;stored_in_cli_env&gt;
 
 wb10_card02</code></pre>
@@ -388,6 +410,7 @@ printf '%-24s | %s\n' \
   "CDB_OCID" "$CDB_OCID" \
   "CDB_CHARACTER_SET" "$CDB_CHARACTER_SET" \
   "CDB_CHARACTER_SET_MODE" "$CDB_CHARACTER_SET_MODE"
+printf 'CDB creation work request in progress ...\n'
   printf '\n%s\n' "wb10_card03"
 }
 
@@ -407,6 +430,7 @@ wb10_card03</code></pre>
 CDB_OCID                 | &lt;database_ocid&gt;
 CDB_CHARACTER_SET        | AL32UTF8
 CDB_CHARACTER_SET_MODE   | DEFAULT
+CDB creation work request in progress ...
 
 wb10_card03</code></pre>
 </div>

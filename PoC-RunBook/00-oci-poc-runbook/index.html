@@ -33,7 +33,7 @@
         <h1>OCI PoC RunBook</h1>
         <p class="subtitle">This runbook implements an end-to-end Oracle Cloud Infrastructure (OCI) proof of concept in one assigned Partner child compartment. By default, it starts with the Virtual Cloud Network (VCN) baseline in the pre-created <code>(root)/Partner/LAD-01</code> compartment. It then covers the Exadata implementation, database creation, automatic backups, credential secrets, and OCI Database Management. The assigned child compartment name can change for other deployments.</p>
         <div class="hero-meta">
-          <span>Last updated July 16, 2026</span>
+          <span>Last updated July 17, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -306,6 +306,7 @@ CLI_ENV="${CLI_ENV:-$WORKBOOK_DIR/cli.env}"
 
 load_cli_env() {
   [ -f "$CLI_ENV" ] || { printf '%s does not exist. Create ~/workbook/cli.env before continuing.\n' "$CLI_ENV" &gt;&amp;2; return 1; }
+  bash -n "$CLI_ENV" || { printf 'STOP: %s has invalid shell syntax. Repair the reported line before continuing.\n' "$CLI_ENV" &gt;&amp;2; return 1; }
   . "$CLI_ENV"
 }
 
@@ -335,19 +336,12 @@ HELPERS
 chmod 700 "$HELPERS_FILE"
 
 cat &gt; "$ENV_FILE" &lt;&lt;'EOF'
-WORKBOOK_DIR="$HOME/workbook"
-cd "$WORKBOOK_DIR" || return 1
-LIB_DIR="$WORKBOOK_DIR/lib"
-. "$LIB_DIR/helpers.sh" || return 1
+BOOTSTRAP_WORKBOOK_DIR="$HOME/workbook"
+. "$BOOTSTRAP_WORKBOOK_DIR/lib/helpers.sh" || return 1
 load_cli_env || return 1
-export PATH="$WORKBOOK_DIR/bin:$PATH"
-PS1='$ '
-BIN_DIR="$WORKBOOK_DIR/bin"
-KEY_DIR="$WORKBOOK_DIR/keys"
-JSON_DIR="$WORKBOOK_DIR/json"
-REPORT_DIR="$WORKBOOK_DIR/reports"
-mkdir -p "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
-chmod 700 "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+cd "$WORKBOOK_DIR" || return 1
+export PATH="$BIN_DIR:$PATH"
+export PS1='$ '
 export WORKBOOK_DIR BIN_DIR LIB_DIR KEY_DIR JSON_DIR REPORT_DIR
 
 if [ "${1:-}" = "--quiet" ]; then
@@ -379,7 +373,9 @@ upsert_cli_env LIB_DIR "$LIB_DIR" &gt;/dev/null
 upsert_cli_env KEY_DIR "$KEY_DIR" &gt;/dev/null
 upsert_cli_env REPORT_DIR "$REPORT_DIR" &gt;/dev/null
 upsert_cli_env JSON_DIR "$JSON_DIR" &gt;/dev/null
-PS1='$ '
+export PS1='$ '
+mkdir -p "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
+chmod 700 "$BIN_DIR" "$LIB_DIR" "$KEY_DIR" "$JSON_DIR" "$REPORT_DIR"
 
 printf '%-18s | %s\n' \
   "FIELD" "VALUE" \

@@ -33,7 +33,7 @@
         <h1>Create Exadata Cluster</h1>
         <p class="subtitle">This section creates the Exadata Database Service on Exascale Infrastructure cluster in the assigned PoC compartment through DATABASE_COMPARTMENT_OCID. It keeps resource creation explicit: Storage Vault first, VMCluster-01 second, maintenance prechecks before patch application, dbhome_01 creation, dbhome patch checks, then ECPU scaling for memory.</p>
         <div class="hero-meta">
-          <span>Last updated July 16, 2026</span>
+          <span>Last updated July 17, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -45,7 +45,7 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#required-cluster-inputs">Required cluster inputs</a></li><li><a href="#create-vmcluster-01-ssh-keys-and-upload-them">Create VMCluster-01 SSH keys and upload them</a></li><li><a href="#set-exascale-vm-cluster-inputs">Set Exascale VM cluster inputs</a></li><li><a href="#create-vault-01-with-the-selected-exascale-availability-domain">Create Vault-01 with the selected Exascale availability domain</a></li><li><a href="#create-one-node-vmcluster-01">Create one-node VMCluster-01</a></li><li><a href="#precheck-and-apply-exadata-image-patches">Precheck and apply Exadata image patches</a></li><li><a href="#create-dbhome-01-with-version-23-26-2-0-0">Create dbhome_01 with version 23.26.2.0.0</a></li><li><a href="#upgrade-cdbs-through-a-new-oracle-home">Upgrade CDBs through a new Oracle home</a></li><li><a href="#upscale-cluster-memory-through-total-ecpus">Upscale cluster memory through total ECPUs</a></li></ol>
+      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#required-cluster-inputs">Required cluster inputs</a></li><li><a href="#create-vmcluster-01-ssh-keys-and-upload-them">Create VMCluster-01 SSH keys and upload them</a></li><li><a href="#set-exascale-vm-cluster-inputs">Set Exascale VM cluster inputs</a></li><li><a href="#create-vault-01-with-the-selected-exascale-availability-domain">Create Vault-01 with the selected Exascale availability domain</a></li><li><a href="#create-one-node-vmcluster-01">Create one-node VMCluster-01</a></li><li><a href="#precheck-and-apply-exadata-image-patches">Precheck and apply Exadata image patches</a></li><li><a href="#create-dbhome-01-with-version-23-26-2-0-0">Create dbhome_01 with version 23.26.2.0.0</a></li><li><a href="#upscale-cluster-memory-through-total-ecpus">Upscale cluster memory through total ECPUs</a></li><li><a href="#upgrade-cdbs-through-a-new-oracle-home">Upgrade CDBs through a new Oracle home</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
@@ -121,7 +121,7 @@
 </tr>
 <tr>
 <td><code>EXADATA_DOMAIN</code></td>
-<td>Private DNS domain for the Exascale VM cluster. Derived from the database client subnet domain name in BASH 05.</td>
+<td>Private DNS domain for the Exascale VM cluster. Derived from the database client subnet domain name in BASH 04.</td>
 </tr>
 <tr>
 <td><code>SUBNET_DBCLIENT_OCID</code></td>
@@ -187,7 +187,7 @@
       </section><section id="create-vmcluster-01-ssh-keys-and-upload-them" class="article-section">
         <h2>Create VMCluster-01 SSH keys and upload them</h2>
         <p>This step creates a separate RSA key pair for VMCluster-01 and uploads the private and public key files to the same private Object Storage bucket pattern used by the bastion VM section. Treat the private key object as sensitive material and restrict bucket access with IAM policies.</p>
-<h3>BASH 02 - Create and upload VMCluster-01 SSH keys</h3>
+<h3>BASH 01 - Create and upload VMCluster-01 SSH keys</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -201,8 +201,11 @@
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
-EXADATA_SSH_PRIVATE_KEY_FILE="${EXADATA_SSH_PRIVATE_KEY_FILE:-${WORKBOOK_DIR}/vmcluster-01_rsa}"
-EXADATA_SSH_PUBLIC_KEY_FILE="${EXADATA_SSH_PUBLIC_KEY_FILE:-${EXADATA_SSH_PRIVATE_KEY_FILE}.pub}"
+KEY_DIR="${KEY_DIR:-$WORKBOOK_DIR/keys}"
+mkdir -p "$KEY_DIR"
+chmod 700 "$KEY_DIR"
+EXADATA_SSH_PRIVATE_KEY_FILE="$KEY_DIR/vmcluster-01_rsa"
+EXADATA_SSH_PUBLIC_KEY_FILE="$KEY_DIR/vmcluster-01_rsa.pub"
 ADMIN_BUCKET_NAME="${ADMIN_BUCKET_NAME:-${REGION}-${POC_PARENT_COMPARTMENT_NAME}-${POC_COMPARTMENT_NAME}}"
 
 if [ ! -s "$EXADATA_SSH_PRIVATE_KEY_FILE" ]; then
@@ -286,29 +289,12 @@ STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb08_card01</code></pre>
 </div>
-<h3>OUTPUT 02 - Expected VMCluster SSH key upload summary</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the VMCluster private and public SSH key files were uploaded to the private Object Storage bucket.</span>
-  </div>
-  <pre class="code-scroll"><code>VARIABLE                     | VALUE
----------------------------- | -----
-ADMIN_BUCKET_NAME            | &lt;region&gt;-&lt;parent_compartment&gt;-&lt;poc_compartment&gt;
-EXADATA_SSH_PRIVATE_KEY_FILE | /home/&lt;cloud_shell_user&gt;/workbook/vmcluster-01_rsa
-EXADATA_SSH_PUBLIC_KEY_FILE  | /home/&lt;cloud_shell_user&gt;/workbook/vmcluster-01_rsa.pub
-STATUS                       | uploaded
-
-wb08_card02</code></pre>
-</div>
       </section><section id="set-exascale-vm-cluster-inputs" class="article-section">
         <h2>Set Exascale VM cluster inputs</h2>
         <p>This step prepares the values used by Vault-01 and VMCluster-01. Select the Exascale availability domain number when prompted; pressing Enter uses AD-1. The card then saves the resolved availability domain, Exascale shape values, Grid Infrastructure major version, the approved AD-specific Grid image OCID, and Exascale system version to <code>cli.env</code>.</p>
 <p>The Grid Infrastructure major version is resolved with <code>oci db gi-version list</code>. The Grid image OCID is selected from the approved AD mapping because this tenancy does not currently have the Grid image validation lookup feature enabled.</p>
 <p>Review and replace the AD-specific <code>GRID_IMAGE_ID_AD*</code> value if Oracle provides a different image OCID for the target tenancy, region, or shape family.</p>
-<h3>BASH 03 - Set Exascale VM cluster inputs</h3>
+<h3>BASH 02 - Set Exascale VM cluster inputs</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -453,38 +439,17 @@ STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb08_card02</code></pre>
 </div>
-<h3>OUTPUT 03 - Expected Exascale VM cluster input summary</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the Exascale shape, Grid Infrastructure major version, AD-specific Grid image OCID, and system version were saved to <code>cli.env</code>.</span>
-  </div>
-  <pre class="code-scroll"><code>VARIABLE                    | VALUE
---------------------------- | -----
-EXADATA_AD_NUMBER           | 1
-EXADATA_AVAILABILITY_DOMAIN | &lt;availability-domain-name&gt;
-EXADB_SHAPE                 | EXADBXS
-SHAPE_ATTRIBUTE             | SMART_STORAGE
-SHAPE_FAMILY                | EXADB_XS
-GI_VERSION                  | &lt;grid-infrastructure-major-version&gt;
-GRID_IMAGE_ID               | ocid1.dbpatch.oc1.iad.anuwcljtt5t4sqqasz3qnoo5rd57dcduckkxleotng5hnyxx22vko2g3w7ra
-GRID_IMAGE_VALIDATE_STATUS  | skipped-tenancy-feature-not-enabled
-GI_VERSION_JSON             | /home/&lt;cloud-shell-user&gt;/workbook/json/gi-version-list.json
-SYSTEM_VERSION              | 25.2.3.0.0.251020</code></pre>
-</div>
 <p>For AD-2, the expected <code>GRID_IMAGE_ID</code> is <code>ocid1.dbpatch.oc1.iad.anuwcljst5t4sqqa352vh7qiqpual26qxqwkmkcqiyi6draczpiblr73araa</code>.</p>
       </section><section id="create-vault-01-with-the-selected-exascale-availability-domain" class="article-section">
         <h2>Create Vault-01 with the selected Exascale availability domain</h2>
-        <h3>BASH 04 - Create Vault-01</h3>
+        <h3>BASH 03 - Create Vault-01</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create Exadata Database Storage Vault Vault-01 in the assigned PoC compartment through DATABASE_COMPARTMENT_OCID and the EXADATA_AVAILABILITY_DOMAIN selected in BASH 03.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create Exadata Database Storage Vault Vault-01 in the assigned PoC compartment through DATABASE_COMPARTMENT_OCID and the EXADATA_AVAILABILITY_DOMAIN selected in BASH 02.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb08_card03() {
@@ -494,7 +459,7 @@ EXADATA_STORAGE_GB="${EXADATA_STORAGE_GB:-512}"
 
 if [ -z "${EXADATA_AVAILABILITY_DOMAIN:-}" ] || [ "$EXADATA_AVAILABILITY_DOMAIN" = "null" ]; then
 
-  printf 'STOP: EXADATA_AVAILABILITY_DOMAIN is not set. Run BASH 03 first, then rerun this card.\n' &gt;&amp;2
+  printf 'STOP: EXADATA_AVAILABILITY_DOMAIN is not set. Run BASH 02 first, then rerun this card.\n' &gt;&amp;2
   return 1
 fi
 
@@ -540,14 +505,14 @@ wb08_card03</code></pre>
       </section><section id="create-one-node-vmcluster-01" class="article-section">
         <h2>Create one-node VMCluster-01</h2>
         <p>Estimated timing: plan for about 65 minutes to create one-node VMCluster-01 before post-create validation and follow-up patching. Actual duration can vary by region, capacity, and service conditions.</p>
-<h3>BASH 05 - Create one-node VMCluster-01</h3>
+<h3>BASH 04 - Submit one-node VMCluster-01 creation</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create VMCluster-01 as a one-node Exascale VM cluster with 8 enabled ECPUs.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Submit the one-node Exascale VM cluster create request with 8 enabled ECPUs without waiting for completion or refreshing its status.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb08_card04() {
@@ -674,13 +639,6 @@ if [ "$create_status" -ne 0 ]; then
   return 1
 fi
 
-VM_CLUSTER_OCID="$(
-  jq -r '.data.id // .id // empty' "$EXADATA_CREATE_RESPONSE_JSON"
-)"
-VM_CLUSTER_STATUS="$(
-  jq -r '.data["lifecycle-state"] // .data.lifecycleState // .["lifecycle-state"] // .lifecycleState // empty' "$EXADATA_CREATE_RESPONSE_JSON"
-)"
-
 upsert_cli_env EXADATA_AVAILABILITY_DOMAIN "$EXADATA_AVAILABILITY_DOMAIN" &gt;/dev/null
 upsert_cli_env EXADATA_DOMAIN "$EXADATA_DOMAIN" &gt;/dev/null
 upsert_cli_env EXADATA_CLUSTER_NAME "$EXADATA_CLUSTER_NAME" &gt;/dev/null
@@ -698,30 +656,14 @@ upsert_cli_env EXADATA_SCAN_PORT_TCP "$EXADATA_SCAN_PORT_TCP" &gt;/dev/null
 upsert_cli_env EXADATA_SCAN_PORT_TCPS "$EXADATA_SCAN_PORT_TCPS" &gt;/dev/null
 upsert_cli_env EXADATA_TIME_ZONE "$EXADATA_TIME_ZONE" &gt;/dev/null
 upsert_cli_env LICENSE_MODEL "$LICENSE_MODEL" &gt;/dev/null
-if [ -n "$VM_CLUSTER_OCID" ] &amp;&amp; [ "$VM_CLUSTER_OCID" != "null" ]; then
-  upsert_cli_env VM_CLUSTER_OCID "$VM_CLUSTER_OCID" &gt;/dev/null
-fi
-if [ -n "$VM_CLUSTER_STATUS" ] &amp;&amp; [ "$VM_CLUSTER_STATUS" != "null" ]; then
-  upsert_cli_env VM_CLUSTER_STATUS "$VM_CLUSTER_STATUS" &gt;/dev/null
-fi
 
 printf '%-28s | %s\n' \
   "VARIABLE" "VALUE" \
   "----------------------------" "-----" \
-  "EXADATA_DISPLAY_NAME" "$EXADATA_DISPLAY_NAME" \
-  "EXADATA_CLUSTER_NAME" "$EXADATA_CLUSTER_NAME" \
-  "EXADATA_HOSTNAME" "$EXADATA_HOSTNAME" \
-  "VAULT_NAME" "Vault-01" \
-  "EXADATA_DOMAIN" "$EXADATA_DOMAIN" \
-  "EXADB_SHAPE" "$EXADB_SHAPE" \
-  "SHAPE_ATTRIBUTE" "$EXADB_SHAPE_ATTRIBUTE" \
-  "GI_VERSION" "$GI_MAJOR_VERSION" \
-  "GRID_IMAGE_ID" "$GRID_IMAGE_ID" \
-  "LICENSE_MODEL" "$LICENSE_MODEL" \
-  "VM_CLUSTER_OCID" "${VM_CLUSTER_OCID:-&lt;pending-response-id&gt;}" \
-  "VM_CLUSTER_STATUS" "${VM_CLUSTER_STATUS:-&lt;pending-response-state&gt;}" \
+  "SUBMISSION_STATUS" "submitted" \
   "CREATE_RESPONSE_JSON" "$EXADATA_CREATE_RESPONSE_JSON" \
-  "CREATE_ERROR_TXT" "$EXADATA_CREATE_ERROR_TXT"
+  "CREATE_ERROR_TXT" "$EXADATA_CREATE_ERROR_TXT" \
+  "NEXT_ACTION" "End the Cloud Shell session if needed; later run BASH 05 to review the cluster status."
   printf '\n%s\n' "wb08_card04"
 }
 
@@ -740,32 +682,7 @@ STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb08_card04</code></pre>
 </div>
-<h3>OUTPUT 05 - Expected VMCluster-01 create request summary</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the VMCluster-01 create request was submitted and that the response and error capture files were created for review.</span>
-  </div>
-  <pre class="code-scroll"><code>VARIABLE                     | VALUE
----------------------------- | -----
-EXADATA_DISPLAY_NAME         | VMCluster-01
-EXADATA_CLUSTER_NAME         | vmc01
-EXADATA_HOSTNAME             | exasc01
-VAULT_NAME                   | Vault-01
-EXADATA_DOMAIN               | &lt;db-client-subnet-domain&gt;
-EXADB_SHAPE                  | EXADBXS
-SHAPE_ATTRIBUTE              | SMART_STORAGE
-GI_VERSION                   | &lt;grid-infrastructure-major-version&gt;
-GRID_IMAGE_ID                | &lt;grid-image-ocid&gt;
-LICENSE_MODEL                | BRING_YOUR_OWN_LICENSE
-VM_CLUSTER_OCID              | ocid1.exadbvmcluster.oc1.&lt;region-key&gt;.&lt;unique-id&gt;
-VM_CLUSTER_STATUS            | &lt;cluster-lifecycle-state&gt;
-CREATE_RESPONSE_JSON         | /home/&lt;cloud-shell-user&gt;/workbook/json/create-exadb-vm-cluster-response.json
-CREATE_ERROR_TXT             | /home/&lt;cloud-shell-user&gt;/workbook/reports/create-exadb-vm-cluster-error.txt</code></pre>
-</div>
-<h3>BASH 06 - Capture VMCluster-01 OCID and status</h3>
+<h3>BASH 05 - Capture VMCluster-01 OCID and status</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -844,37 +761,26 @@ printf '%-20s | %s\n' \
 
 wb08_card05</code></pre>
 </div>
-<h3>OUTPUT 05 - Expected command completion</h3>
+<h3>OUTPUT 05 - VMCluster-01 OCID and status</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb08_card05</code></pre>
-</div>
-<h3>OUTPUT 06 - Expected VMCluster-01 OCID and status</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the VMCluster-01 OCID and lifecycle state were captured and saved for later patching, database home creation, and scaling cards.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the VMCluster-01 OCID and lifecycle state were captured and saved for the remaining cards.</span>
   </div>
   <pre class="code-scroll"><code>VARIABLE             | VALUE
 -------------------- | -----
-VM_CLUSTER_OCID      | ocid1.exadbvmcluster.oc1.&lt;region-key&gt;.&lt;unique-id&gt;
-VM_CLUSTER_STATUS    | &lt;cluster-lifecycle-state&gt;
-CREATE_RESPONSE_ID   | ocid1.exadbvmcluster.oc1.&lt;region-key&gt;.&lt;unique-id&gt;
-VM_CLUSTER_JSON      | /home/&lt;cloud-shell-user&gt;/workbook/json/vmcluster-01-list.json</code></pre>
+VM_CLUSTER_OCID      | ocid1.exadbvmcluster.oc1.iad.anuwcljscszxurqananldkw7efdezflfbfbskoftzvz3qfdccg44o3qro74q
+VM_CLUSTER_STATUS    | PROVISIONING
+CREATE_RESPONSE_ID   | ocid1.exadbvmcluster.oc1.iad.anuwcljscszxurqananldkw7efdezflfbfbskoftzvz3qfdccg44o3qro74q
+VM_CLUSTER_JSON      | /home/EFRAIN_SAN/workbook/json/vmcluster-01-list.json
+
+wb08_card05</code></pre>
 </div>
       </section><section id="precheck-and-apply-exadata-image-patches" class="article-section">
         <h2>Precheck and apply Exadata image patches</h2>
-        <h3>BASH 07 - Precheck latest Exadata VM OS image patch</h3>
+        <h3>BASH 06 - Execute Precheck on latest Exadata VM OS image patch</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -889,7 +795,6 @@ VM_CLUSTER_JSON      | /home/&lt;cloud-shell-user&gt;/workbook/json/vmcluster-01
   . ~/workbook/bin/env.sh --quiet || return 1
 EXADATA_OS_UPDATES_JSON="${EXADATA_OS_UPDATES_JSON:-$JSON_DIR/exadata-vm-os-updates.json}"
 EXADATA_PRECHECK_RESPONSE_JSON="$JSON_DIR/exadata-vm-os-precheck-response.json"
-EXADATA_TARGET_SYSTEM_VERSION_SOURCE="existing cli.env value"
 
 if [ -z "${EXADATA_TARGET_SYSTEM_VERSION:-}" ] || [ "$EXADATA_TARGET_SYSTEM_VERSION" = "null" ]; then
   oci raw-request \
@@ -910,7 +815,6 @@ if [ -z "${EXADATA_TARGET_SYSTEM_VERSION:-}" ] || [ "$EXADATA_TARGET_SYSTEM_VERS
   fi
 
   upsert_cli_env EXADATA_TARGET_SYSTEM_VERSION "$EXADATA_TARGET_SYSTEM_VERSION" &gt;/dev/null
-  EXADATA_TARGET_SYSTEM_VERSION_SOURCE="$EXADATA_OS_UPDATES_JSON"
 fi
 
 oci db exadb-vm-cluster update \
@@ -921,25 +825,13 @@ oci db exadb-vm-cluster update \
   --max-wait-seconds 14400 \
   &gt; "$EXADATA_PRECHECK_RESPONSE_JSON"
 
-PRECHECK_EXECUTION_STATUS="$(
-  jq -r '.data."lifecycle-state" // empty' "$EXADATA_PRECHECK_RESPONSE_JSON"
-)"
-PRECHECK_RETURNED_SYSTEM_VERSION="$(
-  jq -r '.data."system-version" // empty' "$EXADATA_PRECHECK_RESPONSE_JSON"
-)"
-
 printf '%-32s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------------------" "-----" \
-  "LATEST_FOUND_SYSTEM_VERSION" "$EXADATA_TARGET_SYSTEM_VERSION" \
-  "TARGET_VERSION_SOURCE" "$EXADATA_TARGET_SYSTEM_VERSION_SOURCE" \
-  "PRECHECK_EXECUTION_STATUS" "$PRECHECK_EXECUTION_STATUS" \
-  "PRECHECK_RETURNED_SYSTEM_VERSION" "$PRECHECK_RETURNED_SYSTEM_VERSION" \
-  "PRECHECK_RESPONSE_JSON" "$EXADATA_PRECHECK_RESPONSE_JSON"
+  "LATEST_FOUND_SYSTEM_VERSION" "$EXADATA_TARGET_SYSTEM_VERSION"
 
-jq -r '
-  ["displayName","enabledEcpus","giVersion","nodeCount","state","systemVersion","totalEcpus","vmFileSystemGB"],
-  [
+PRECHECK_VM_CLUSTER_SUMMARY="$(
+  jq -r '[
     .data."display-name",
     (.data."enabled-e-cpu-count"|tostring),
     .data."gi-version",
@@ -948,48 +840,56 @@ jq -r '
     .data."system-version",
     (.data."total-e-cpu-count"|tostring),
     (.data."vm-file-system-storage"."total-size-in-gbs"|tostring)
-  ]
-  | @tsv
-' "$EXADATA_PRECHECK_RESPONSE_JSON" | column -t -s "$(printf '\t')"
+  ] | @tsv' "$EXADATA_PRECHECK_RESPONSE_JSON"
+)"
+IFS=$'\t' read -r PRECHECK_DISPLAY_NAME PRECHECK_ENABLED_ECPUS PRECHECK_GI_VERSION \
+  PRECHECK_NODE_COUNT PRECHECK_STATE PRECHECK_SYSTEM_VERSION PRECHECK_TOTAL_ECPUS \
+  PRECHECK_VM_FILESYSTEM_GB &lt;&lt;&lt; "$PRECHECK_VM_CLUSTER_SUMMARY"
+
+printf '\n'
+printf '%-32s | %s\n' \
+  "VM_CLUSTER_FIELD" "VALUE" \
+  "--------------------------------" "-----" \
+  "DISPLAY_NAME" "$PRECHECK_DISPLAY_NAME" \
+  "SYSTEM_VERSION" "$PRECHECK_SYSTEM_VERSION" \
+  "ENABLED_ECPUS" "$PRECHECK_ENABLED_ECPUS" \
+  "GI_VERSION" "$PRECHECK_GI_VERSION" \
+  "NODE_COUNT" "$PRECHECK_NODE_COUNT" \
+  "LIFECYCLE_STATE" "$PRECHECK_STATE" \
+  "TOTAL_ECPUS" "$PRECHECK_TOTAL_ECPUS" \
+  "VM_FILESYSTEM_GB" "$PRECHECK_VM_FILESYSTEM_GB"
   printf '\n%s\n' "wb08_card06"
 }
 
 wb08_card06</code></pre>
 </div>
-<h3>OUTPUT 06 - Expected command completion</h3>
+<h3>OUTPUT 06 - VM OS precheck summary</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the selected update version, completed precheck, and returned VMCluster-01 configuration.</span>
   </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
+  <pre class="code-scroll"><code>Action completed. Waiting until the resource has entered state: ('AVAILABLE',)
+VARIABLE                         | VALUE
+-------------------------------- | -----
+LATEST_FOUND_SYSTEM_VERSION      | 25.2.11.0.0.260604.1
+
+VM_CLUSTER_FIELD                 | VALUE
+-------------------------------- | -----
+DISPLAY_NAME                     | VMCluster-01
+SYSTEM_VERSION                   | 25.2.6.0.0.260117
+ENABLED_ECPUS                    | 8
+GI_VERSION                       | 23.26.2.0.0
+NODE_COUNT                       | 1
+LIFECYCLE_STATE                  | AVAILABLE
+TOTAL_ECPUS                      | 8
+VM_FILESYSTEM_GB                 | 260
 
 wb08_card06</code></pre>
 </div>
-<h3>OUTPUT 07 - Expected VM OS precheck summary</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the target VM OS update version, precheck execution status, and returned VM cluster summary.</span>
-  </div>
-  <pre class="code-scroll"><code>VARIABLE                         | VALUE
--------------------------------- | -----
-LATEST_FOUND_SYSTEM_VERSION      | 25.2.11.0.0.260604.1
-TARGET_VERSION_SOURCE            | /home/&lt;cloud-shell-user&gt;/workbook/json/exadata-vm-os-updates.json
-PRECHECK_EXECUTION_STATUS        | AVAILABLE
-PRECHECK_RETURNED_SYSTEM_VERSION | 25.2.6.0.0.260117
-PRECHECK_RESPONSE_JSON           | /home/&lt;cloud-shell-user&gt;/workbook/json/exadata-vm-os-precheck-response.json
-
-Action completed. Waiting until the resource has entered state: ('AVAILABLE',)
-displayName   enabledEcpus  giVersion     nodeCount  state      systemVersion      totalEcpus  vmFileSystemGB
-VMCluster-01  8             23.26.2.0.0   1          AVAILABLE  25.2.6.0.0.260117  12          220</code></pre>
-</div>
-<h3>BASH 08 - Review Pre-check execution</h3>
+<h3>BASH 07 - Review Pre-check Status</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -1052,26 +952,13 @@ SH
 
 wb08_card07</code></pre>
 </div>
-<h3>OUTPUT 07 - Expected command completion</h3>
+<h3>OUTPUT 07 - Pre-check status</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb08_card07</code></pre>
-</div>
-<h3>OUTPUT 08 - Expected precheck review summary</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the VM OS update precheck status table and confirm the target system version saved for the apply step.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the available VM OS update versions and the current precheck state.</span>
   </div>
   <pre class="code-scroll"><code>NO  | VERSION                | LAST_ACTION   | STATE       | TIME_RELEASED
 --- | ---------------------- | ------------- | ----------- | --------------------------
@@ -1084,9 +971,12 @@ wb08_card07</code></pre>
 VARIABLE                         | VALUE
 -------------------------------- | -----
 EXADATA_TARGET_SYSTEM_VERSION    | 25.2.11.0.0.260604.1
-EXADATA_OS_UPDATES_JSON          | /home/&lt;cloud-shell-user&gt;/workbook/json/exadata-vm-os-updates.json</code></pre>
+EXADATA_OS_UPDATES_JSON          | /home/EFRAIN_SAN/workbook/json/exadata-vm-os-updates.json
+
+wb08_card07</code></pre>
 </div>
-<h3>BASH 09 - Submit latest Exadata VM OS image patch apply</h3>
+<p>Proceed only after BASH 07 shows that the VM OS precheck completed successfully for the selected target version. Do not submit the patch apply request while the precheck is still in progress or has failed.</p>
+<h3>BASH 08 - Submit latest Exadata VM OS image patch apply</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -1106,7 +996,7 @@ oci db exadb-vm-cluster update \
   --query 'data.{displayName:"display-name",state:"lifecycle-state",giVersion:"gi-version",systemVersion:"system-version",nodeCount:"node-count",enabledEcpus:"enabled-e-cpu-count",totalEcpus:"total-e-cpu-count",vmFileSystemGB:"vm-file-system-storage"."total-size-in-gbs"}' \
   --output table
 
-printf '\nPatch apply request submitted. Do not wait in this Cloud Shell session; use BASH 10 to review progress.\n'
+printf '\nPatch apply request submitted. Use BASH 09 to review progress.\n'
   printf '\n%s\n' "wb08_card08"
 }
 
@@ -1125,7 +1015,7 @@ STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb08_card08</code></pre>
 </div>
-<h3>BASH 10 - Review VM OS update status after apply</h3>
+<h3>BASH 09 - Review VM OS update status after apply</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -1144,7 +1034,7 @@ cat &gt; "$POST_APPLY_STATUS_SCRIPT" &lt;&lt;'SH'
 #!/bin/bash
 set -euo pipefail
 
-. "$HOME/workbook/env.sh" --quiet
+. "$HOME/workbook/bin/env.sh" --quiet
 
 EXADATA_OS_UPDATES_JSON="$JSON_DIR/exadata-vm-os-updates.json"
 VM_CLUSTER_STATUS_JSON="$JSON_DIR/vmcluster-01-status-after-os-apply.json"
@@ -1153,10 +1043,6 @@ oci raw-request \
   --http-method GET \
   --target-uri "https://database.${REGION}.oraclecloud.com/20160918/exadbVmClusters/${VM_CLUSTER_OCID}/updates?updateType=OS_UPDATE" \
   &gt; "$EXADATA_OS_UPDATES_JSON"
-
-UPDATE_ROW_COUNT="$(
-  jq -r '(.data // []) | length' "$EXADATA_OS_UPDATES_JSON"
-)"
 
 LATEST_UPDATE_VERSION="$(
   jq -r '.data[0].version // empty' "$EXADATA_OS_UPDATES_JSON"
@@ -1190,49 +1076,25 @@ VM_CLUSTER_LIFECYCLE_STATE="$(
 VM_CLUSTER_SYSTEM_VERSION="$(
   jq -r '.data."system-version" // "-"' "$VM_CLUSTER_STATUS_JSON"
 )"
-VM_CLUSTER_GI_VERSION="$(
-  jq -r '.data."gi-version" // "-"' "$VM_CLUSTER_STATUS_JSON"
-)"
 VM_CLUSTER_NODE_COUNT="$(
   jq -r '.data."node-count" // "-"' "$VM_CLUSTER_STATUS_JSON"
 )"
 
-if [ "$UPDATE_ROW_COUNT" -gt 0 ]; then
-  UPDATE_ACTIVITY_STATUS="activity rows returned"
-  UPDATE_LATEST_VERSION="$(
-    jq -r '.data[0].version // "-"' "$EXADATA_OS_UPDATES_JSON"
-  )"
-  UPDATE_LAST_ACTION="$(
-    jq -r '.data[0].lastAction // "-"' "$EXADATA_OS_UPDATES_JSON"
-  )"
-  UPDATE_LIFECYCLE_STATE="$(
-    jq -r '.data[0].lifecycleState // "-"' "$EXADATA_OS_UPDATES_JSON"
-  )"
-  UPDATE_TIME_RELEASED="$(
-    jq -r '.data[0].timeReleased // "-"' "$EXADATA_OS_UPDATES_JSON"
-  )"
-else
-  UPDATE_ACTIVITY_STATUS="no update activity rows returned"
-  UPDATE_LATEST_VERSION="-"
-  UPDATE_LAST_ACTION="-"
-  UPDATE_LIFECYCLE_STATE="-"
-  UPDATE_TIME_RELEASED="-"
-fi
+UPDATE_LATEST_VERSION="$(
+  jq -r '.data[0].version // "-"' "$EXADATA_OS_UPDATES_JSON"
+)"
+UPDATE_LAST_ACTION="$(
+  jq -r '.data[0].lastAction // "-"' "$EXADATA_OS_UPDATES_JSON"
+)"
 
 printf '%-32s | %s\n' \
   "VARIABLE" "VALUE" \
   "--------------------------------" "-----" \
-  "UPDATE_ACTIVITY_STATUS" "$UPDATE_ACTIVITY_STATUS" \
-  "UPDATE_ROW_COUNT" "$UPDATE_ROW_COUNT" \
+  "VM_CLUSTER_DISPLAY_NAME" "$VM_CLUSTER_DISPLAY_NAME" \
+  "VM_CLUSTER_SYSTEM_VERSION" "$VM_CLUSTER_SYSTEM_VERSION" \
   "UPDATE_LATEST_VERSION" "$UPDATE_LATEST_VERSION" \
   "UPDATE_LAST_ACTION" "$UPDATE_LAST_ACTION" \
-  "UPDATE_LIFECYCLE_STATE" "$UPDATE_LIFECYCLE_STATE" \
-  "UPDATE_TIME_RELEASED" "$UPDATE_TIME_RELEASED" \
-  "EXADATA_TARGET_SYSTEM_VERSION" "$EXADATA_TARGET_SYSTEM_VERSION" \
-  "VM_CLUSTER_DISPLAY_NAME" "$VM_CLUSTER_DISPLAY_NAME" \
   "VM_CLUSTER_LIFECYCLE_STATE" "$VM_CLUSTER_LIFECYCLE_STATE" \
-  "VM_CLUSTER_SYSTEM_VERSION" "$VM_CLUSTER_SYSTEM_VERSION" \
-  "VM_CLUSTER_GI_VERSION" "$VM_CLUSTER_GI_VERSION" \
   "VM_CLUSTER_NODE_COUNT" "$VM_CLUSTER_NODE_COUNT" \
   "EXADATA_OS_UPDATES_JSON" "$EXADATA_OS_UPDATES_JSON" \
   "VM_CLUSTER_STATUS_JSON" "$VM_CLUSTER_STATUS_JSON"
@@ -1246,47 +1108,30 @@ chmod +x "$POST_APPLY_STATUS_SCRIPT"
 
 wb08_card09</code></pre>
 </div>
-<h3>OUTPUT 09 - Expected command completion</h3>
+<h3>OUTPUT 09 - VM OS update status</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb08_card09</code></pre>
-</div>
-<h3>OUTPUT 10 - Expected VM OS update status after apply</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the latest VM OS update shows <code>ROLLING_APPLY</code> and <code>SUCCESS</code> after apply.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the active rolling-apply request and VMCluster-01 status.</span>
   </div>
   <pre class="code-scroll"><code>VARIABLE                         | VALUE
 -------------------------------- | -----
-UPDATE_ACTIVITY_STATUS           | no update activity rows returned
-UPDATE_ROW_COUNT                 | 0
-UPDATE_LATEST_VERSION            | -
-UPDATE_LAST_ACTION               | -
-UPDATE_LIFECYCLE_STATE           | -
-UPDATE_TIME_RELEASED             | -
-EXADATA_TARGET_SYSTEM_VERSION    | 25.2.11.0.0.260604.1
 VM_CLUSTER_DISPLAY_NAME          | VMCluster-01
+VM_CLUSTER_SYSTEM_VERSION        | 25.2.6.0.0.260117
+UPDATE_LATEST_VERSION            | 25.2.11.0.0.260604.1
+UPDATE_LAST_ACTION               | ROLLING_APPLY
 VM_CLUSTER_LIFECYCLE_STATE       | AVAILABLE
-VM_CLUSTER_SYSTEM_VERSION        | 25.2.11.0.0.260604.1
-VM_CLUSTER_GI_VERSION            | 23.26.2.0.0
 VM_CLUSTER_NODE_COUNT            | 1
-EXADATA_OS_UPDATES_JSON          | /home/&lt;cloud-shell-user&gt;/workbook/json/exadata-vm-os-updates.json
-VM_CLUSTER_STATUS_JSON           | /home/&lt;cloud-shell-user&gt;/workbook/json/vmcluster-01-status-after-os-apply.json</code></pre>
+EXADATA_OS_UPDATES_JSON          | /home/EFRAIN_SAN/workbook/json/exadata-vm-os-updates.json
+VM_CLUSTER_STATUS_JSON           | /home/EFRAIN_SAN/workbook/json/vmcluster-01-status-after-os-apply.json
+
+wb08_card09</code></pre>
 </div>
       </section><section id="create-dbhome-01-with-version-23-26-2-0-0" class="article-section">
         <h2>Create dbhome_01 with version 23.26.2.0.0</h2>
-        <h3>BASH 11 - Create dbhome_01</h3>
+        <h3>BASH 10 - Create dbhome_01</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -1353,70 +1198,9 @@ STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb08_card10</code></pre>
 </div>
-      </section><section id="upgrade-cdbs-through-a-new-oracle-home" class="article-section">
-        <h2>Upgrade CDBs through a new Oracle home</h2>
-        <p>In Exadata Database Service on Exascale Infrastructure, the CDB upgrade path to a new database release is to create a new Oracle home at the target release, then upgrade the CDB to that new Oracle home.</p>
-<h3>BASH 12 - List available database home versions</h3>
-<div class="code-card" data-collapsible="true" data-collapsed="true">
-  <div class="code-toolbar">
-    <span class="code-type">Bash</span>
-    <button class="copy-btn" type="button">Copy</button>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> List the Oracle Database versions available for creating a new Oracle home.</span>
-    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
-  </div>
-  <pre class="code-scroll"><code>wb08_card11() {
-  clear
-  . ~/workbook/bin/env.sh --quiet || return 1
-DB_VERSION_LIST_JSON="$JSON_DIR/db-version-list.json"
-
-oci db version list \
-  --region "$REGION" \
-  --compartment-id "$DATABASE_COMPARTMENT_OCID" \
-  --is-upgrade-supported true \
-  --all \
-  &gt; "$DB_VERSION_LIST_JSON"
-
-printf '%-3s | %s\n' \
-  "NO" "VERSION" \
-  "---" "--------------------"
-
-jq -r '
-  .data
-  | to_entries[]
-  | [((.key + 1) | tostring), (.value.version // "-")]
-  | @tsv
-' "$DB_VERSION_LIST_JSON" |
-while IFS="$(printf '\t')" read -r row_number version; do
-  printf '%-3s | %s\n' "$row_number" "$version"
-done
-
-printf '\n%-24s | %s\n' \
-  "VARIABLE" "VALUE" \
-  "------------------------" "-----" \
-  "DB_VERSION_LIST_JSON" "$DB_VERSION_LIST_JSON"
-  printf '\n%s\n' "wb08_card11"
-}
-
-wb08_card11</code></pre>
-</div>
-<h3>OUTPUT 11 - Expected command completion</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb08_card11</code></pre>
-</div>
       </section><section id="upscale-cluster-memory-through-total-ecpus" class="article-section">
         <h2>Upscale cluster memory through total ECPUs</h2>
-        <h3>BASH 13 - Upscale cluster memory</h3>
+        <h3>BASH 12 - Upscale cluster memory</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -1478,6 +1262,102 @@ STATUS | &lt;completed_or_already_at_target_state&gt;
 
 wb08_card12</code></pre>
 </div>
+      </section><section id="upgrade-cdbs-through-a-new-oracle-home" class="article-section">
+        <h2>Upgrade CDBs through a new Oracle home</h2>
+        <p>In Exadata Database Service on Exascale Infrastructure, the CDB upgrade path to a new database release is to create a new Oracle home at the target release, then upgrade the CDB to that new Oracle home.</p>
+<h3>BASH 11 - List available database home versions</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> List the Oracle Database versions available for creating a new Oracle home.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>wb08_card11() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+DB_VERSION_LIST_JSON="$JSON_DIR/db-version-list.json"
+DB_VERSION_LIST_ERROR_TXT="$REPORT_DIR/db-version-list-error.txt"
+EXADB_SHAPE="${EXADB_SHAPE:-EXADBXS}"
+
+oci db version list \
+  --region "$REGION" \
+  --compartment-id "$DATABASE_COMPARTMENT_OCID" \
+  --db-system-shape "$EXADB_SHAPE" \
+  --is-upgrade-supported true \
+  --all \
+  &gt; "$DB_VERSION_LIST_JSON" \
+  2&gt; "$DB_VERSION_LIST_ERROR_TXT"
+
+db_version_list_status=$?
+if [ "$db_version_list_status" -ne 0 ]; then
+
+  printf '%s\n%s\n%s\n' \
+    "STOP: Unable to list database home versions." \
+    "OCI CLI status: $db_version_list_status" \
+    "Error file: $DB_VERSION_LIST_ERROR_TXT" &gt;&amp;2
+  return 1
+fi
+
+if ! jq -e '.data | type == "array"' "$DB_VERSION_LIST_JSON" &gt;/dev/null 2&gt;&amp;1; then
+
+  cp "$DB_VERSION_LIST_JSON" "$DB_VERSION_LIST_ERROR_TXT"
+  printf '%s\n%s\n' \
+    "STOP: The database-version API did not return a version list." \
+    "Review API response: $DB_VERSION_LIST_ERROR_TXT" &gt;&amp;2
+  return 1
+fi
+
+printf '%-3s | %-20s | %-20s | %s\n' \
+  "NO" "VERSION" "IS_UPGRADE_SUPPORTED" "IS_LATEST_FOR_MAJOR_VERSION" \
+  "---" "--------------------" "--------------------" "---------------------------"
+
+jq -r '
+  .data
+  | to_entries[]
+  | [((.key + 1) | tostring), (.value.version // "-"), (.value."is-upgrade-supported" | tostring), (.value."is-latest-for-major-version" | tostring)]
+  | @tsv
+' "$DB_VERSION_LIST_JSON" |
+while IFS="$(printf '\t')" read -r row_number version is_upgrade_supported is_latest_for_major_version; do
+  printf '%-3s | %-20s | %-20s | %s\n' "$row_number" "$version" "$is_upgrade_supported" "$is_latest_for_major_version"
+done
+
+printf '\n'
+printf '%-24s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "------------------------" "-----" \
+  "DB_VERSION_LIST_JSON" "$DB_VERSION_LIST_JSON" \
+  "DB_SYSTEM_SHAPE" "$EXADB_SHAPE"
+  printf '\n%s\n' "wb08_card11"
+}
+
+wb08_card11</code></pre>
+</div>
+<h3>OUTPUT 11 - Available database home versions</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the available Oracle Database versions for a new Oracle home on VMCluster-01.</span>
+  </div>
+  <pre class="code-scroll"><code>NO  | VERSION              | IS_UPGRADE_SUPPORTED | IS_LATEST_FOR_MAJOR_VERSION
+--- | -------------------- | -------------------- | ---------------------------
+1   | 19.0.0.0             | true                 | true
+2   | 19.31.0.0            | false                | false
+3   | 26.0.0.0.0           | true                 | true
+4   | 23.26.2.0.0          | false                | false
+
+VARIABLE                 | VALUE
+------------------------ | -----
+DB_VERSION_LIST_JSON     | /home/EFRAIN_SAN/workbook/json/db-version-list.json
+DB_SYSTEM_SHAPE          | EXADBXS
+
+wb08_card11</code></pre>
+</div>
+<p><code>IS_UPGRADE_SUPPORTED</code> marks an eligible upgrade target. <code>IS_LATEST_FOR_MAJOR_VERSION</code> marks the latest version in that major release. Here it shows that a CDB with <code>26.0.0.0.0</code> can be upgraded to <code>23.26.2.0.0</code>.</p>
       </section>
       <section id="chapter-navigation" class="article-section">
         <h2>Chapter navigation</h2>
