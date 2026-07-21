@@ -33,7 +33,7 @@
         <h1>Stop and Start Services</h1>
         <p class="subtitle">This section stops and starts the compute-heavy parts of a non-production PoC environment when the environment does not need 24/7 operation. The stop path downscales <code>VMCluster-01</code> enabled ECPUs to <code>0</code>, stops the bastion VM with a graceful <code>SOFTSTOP</code>, and validates both resources after the change. The start path restores Exadata Exascale enabled ECPUs and starts the bastion VM when the service window reopens.</p>
         <div class="hero-meta">
-          <span>Last updated July 17, 2026</span>
+          <span>Last updated July 20, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -610,6 +610,8 @@ CLUSTER_TOTAL_ECPUS="$(
     --query 'data."total-e-cpu-count"' \
     --raw-output
 )"
+CLUSTER_ADDITIONAL_RESERVED_ECPUS=$((CLUSTER_TOTAL_ECPUS - CLUSTER_ENABLED_ECPUS))
+CLUSTER_RESERVED_ECPUS="$CLUSTER_TOTAL_ECPUS"
 printf 'Reading bastion VM runtime state ...\n'
 BASTION_DISPLAY_NAME="$(
   oci compute instance get \
@@ -633,14 +635,17 @@ BASTION_SHAPE_CURRENT="$(
     --raw-output
 )"
 
-printf '%-26s | %s\n' \
+printf '%-36s | %s\n' \
   "FIELD" "VALUE" \
-  "--------------------------" "-----" \
+  "------------------------------------" "-----" \
   "CLUSTER_DISPLAY_NAME" "$CLUSTER_DISPLAY_NAME" \
   "CLUSTER_STATE" "$CLUSTER_STATE" \
   "CLUSTER_NODE_COUNT" "$CLUSTER_NODE_COUNT" \
   "CLUSTER_ENABLED_ECPUS" "$CLUSTER_ENABLED_ECPUS" \
   "CLUSTER_TOTAL_ECPUS" "$CLUSTER_TOTAL_ECPUS" \
+  "CLUSTER_RESERVED_ECPUS" "$CLUSTER_RESERVED_ECPUS" \
+  "CLUSTER_ADDITIONAL_RESERVED_ECPUS" "$CLUSTER_ADDITIONAL_RESERVED_ECPUS" \
+  "CALCULATED_MEMORY_PER_VM_GB" "$((CLUSTER_RESERVED_ECPUS * 11 / (CLUSTER_NODE_COUNT * 4)))" \
   "BASTION_DISPLAY_NAME" "$BASTION_DISPLAY_NAME" \
   "BASTION_STATE" "$BASTION_STATE" \
   "BASTION_SHAPE" "$BASTION_SHAPE_CURRENT"
@@ -657,16 +662,19 @@ wb16_card02</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the current service VM cluster and bastion VM state before shutdown.</span>
   </div>
-  <pre class="code-scroll"><code>FIELD                      | VALUE
--------------------------- | -----
-CLUSTER_DISPLAY_NAME       | VMCluster-01
-CLUSTER_STATE              | AVAILABLE
-CLUSTER_NODE_COUNT         | 2
-CLUSTER_ENABLED_ECPUS      | 16
-CLUSTER_TOTAL_ECPUS        | 24
-BASTION_DISPLAY_NAME       | bastion-01
-BASTION_STATE              | RUNNING
-BASTION_SHAPE              | VM.Standard.E5.Flex
+  <pre class="code-scroll"><code>FIELD                                | VALUE
+------------------------------------ | -----
+CLUSTER_DISPLAY_NAME                 | &lt;CLUSTER_DISPLAY_NAME&gt;
+CLUSTER_STATE                        | &lt;CLUSTER_STATE&gt;
+CLUSTER_NODE_COUNT                   | &lt;CLUSTER_NODE_COUNT&gt;
+CLUSTER_ENABLED_ECPUS                | &lt;CLUSTER_ENABLED_ECPUS&gt;
+CLUSTER_TOTAL_ECPUS                  | &lt;CLUSTER_TOTAL_ECPUS&gt;
+CLUSTER_RESERVED_ECPUS               | &lt;CLUSTER_RESERVED_ECPUS&gt;
+CLUSTER_ADDITIONAL_RESERVED_ECPUS    | &lt;CLUSTER_ADDITIONAL_RESERVED_ECPUS&gt;
+CALCULATED_MEMORY_PER_VM_GB          | &lt;CALCULATED_MEMORY_PER_VM_GB&gt;
+BASTION_DISPLAY_NAME                 | &lt;BASTION_DISPLAY_NAME&gt;
+BASTION_STATE                        | &lt;BASTION_STATE&gt;
+BASTION_SHAPE                        | &lt;BASTION_SHAPE&gt;
 
 wb16_card02</code></pre>
 </div>
@@ -708,6 +716,8 @@ SERVICE_RESTORE_TOTAL_ECPU_COUNT="$(
     --query 'data."total-e-cpu-count"' \
     --raw-output
 )"
+SERVICE_RESTORE_ADDITIONAL_RESERVED_ECPU_COUNT=$((SERVICE_RESTORE_TOTAL_ECPU_COUNT - SERVICE_RESTORE_ENABLED_ECPU_COUNT))
+SERVICE_RESTORE_RESERVED_ECPU_COUNT="$SERVICE_RESTORE_TOTAL_ECPU_COUNT"
 SERVICE_RESTORE_NODE_COUNT="$(
   oci db exadb-vm-cluster get \
     --region "$REGION" \
@@ -739,17 +749,21 @@ SERVICE_RESTORE_BASTION_SHAPE="$(
 
 upsert_cli_env SERVICE_RESTORE_ENABLED_ECPU_COUNT "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" &gt;/dev/null
 upsert_cli_env SERVICE_RESTORE_TOTAL_ECPU_COUNT "$SERVICE_RESTORE_TOTAL_ECPU_COUNT" &gt;/dev/null
+upsert_cli_env SERVICE_RESTORE_RESERVED_ECPU_COUNT "$SERVICE_RESTORE_RESERVED_ECPU_COUNT" &gt;/dev/null
+upsert_cli_env SERVICE_RESTORE_ADDITIONAL_RESERVED_ECPU_COUNT "$SERVICE_RESTORE_ADDITIONAL_RESERVED_ECPU_COUNT" &gt;/dev/null
 upsert_cli_env SERVICE_RESTORE_NODE_COUNT "$SERVICE_RESTORE_NODE_COUNT" &gt;/dev/null
 upsert_cli_env SERVICE_RESTORE_BASTION_OCID "$BASTION_VM_OCID" &gt;/dev/null
 upsert_cli_env SERVICE_RESTORE_BASTION_DISPLAY_NAME "$SERVICE_RESTORE_BASTION_DISPLAY_NAME" &gt;/dev/null
 upsert_cli_env SERVICE_RESTORE_BASTION_SHAPE "$SERVICE_RESTORE_BASTION_SHAPE" &gt;/dev/null
 upsert_cli_env SERVICE_RESTORE_BASTION_STATE "$SERVICE_RESTORE_BASTION_STATE" &gt;/dev/null
 
-printf '%-36s | %s\n' \
+printf '%-48s | %s\n' \
   "FIELD" "VALUE" \
-  "------------------------------------" "-----" \
+  "------------------------------------------------" "-----" \
   "SERVICE_RESTORE_ENABLED_ECPU_COUNT" "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" \
   "SERVICE_RESTORE_TOTAL_ECPU_COUNT" "$SERVICE_RESTORE_TOTAL_ECPU_COUNT" \
+  "SERVICE_RESTORE_RESERVED_ECPU_COUNT" "$SERVICE_RESTORE_RESERVED_ECPU_COUNT" \
+  "SERVICE_RESTORE_ADDITIONAL_RESERVED_ECPU_COUNT" "$SERVICE_RESTORE_ADDITIONAL_RESERVED_ECPU_COUNT" \
   "SERVICE_RESTORE_NODE_COUNT" "$SERVICE_RESTORE_NODE_COUNT" \
   "SERVICE_RESTORE_BASTION_OCID" "$BASTION_VM_OCID" \
   "SERVICE_RESTORE_BASTION_DISPLAY_NAME" "$SERVICE_RESTORE_BASTION_DISPLAY_NAME" \
@@ -768,15 +782,17 @@ wb16_card03</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the values saved for later scale-up or restart.</span>
   </div>
-  <pre class="code-scroll"><code>FIELD                                | VALUE
------------------------------------- | -----
-SERVICE_RESTORE_ENABLED_ECPU_COUNT   | 16
-SERVICE_RESTORE_TOTAL_ECPU_COUNT     | 24
-SERVICE_RESTORE_NODE_COUNT           | 2
-SERVICE_RESTORE_BASTION_OCID         | &lt;bastion_vm_ocid&gt;
-SERVICE_RESTORE_BASTION_DISPLAY_NAME | bastion-01
-SERVICE_RESTORE_BASTION_SHAPE        | VM.Standard.E5.Flex
-SERVICE_RESTORE_BASTION_STATE        | RUNNING
+  <pre class="code-scroll"><code>FIELD                                            | VALUE
+------------------------------------------------ | -----
+SERVICE_RESTORE_ENABLED_ECPU_COUNT               | &lt;SERVICE_RESTORE_ENABLED_ECPU_COUNT&gt;
+SERVICE_RESTORE_TOTAL_ECPU_COUNT                 | &lt;SERVICE_RESTORE_TOTAL_ECPU_COUNT&gt;
+SERVICE_RESTORE_RESERVED_ECPU_COUNT              | &lt;SERVICE_RESTORE_RESERVED_ECPU_COUNT&gt;
+SERVICE_RESTORE_ADDITIONAL_RESERVED_ECPU_COUNT   | &lt;SERVICE_RESTORE_ADDITIONAL_RESERVED_ECPU_COUNT&gt;
+SERVICE_RESTORE_NODE_COUNT                       | &lt;SERVICE_RESTORE_NODE_COUNT&gt;
+SERVICE_RESTORE_BASTION_OCID                     | &lt;BASTION_VM_OCID&gt;
+SERVICE_RESTORE_BASTION_DISPLAY_NAME             | &lt;BASTION_DISPLAY_NAME&gt;
+SERVICE_RESTORE_BASTION_SHAPE                    | &lt;BASTION_SHAPE&gt;
+SERVICE_RESTORE_BASTION_STATE                    | &lt;BASTION_STATE&gt;
 
 wb16_card03</code></pre>
 </div>
@@ -815,6 +831,15 @@ CURRENT_ENABLED_ECPUS="$(
     --query 'data."enabled-e-cpu-count"' \
     --raw-output
 )"
+CURRENT_TOTAL_ECPUS="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."total-e-cpu-count"' \
+    --raw-output
+)"
+CURRENT_ADDITIONAL_RESERVED_ECPUS=$((CURRENT_TOTAL_ECPUS - CURRENT_ENABLED_ECPUS))
+DOWNSCALE_TARGET_ADDITIONAL_RESERVED_ECPUS=$((CURRENT_TOTAL_ECPUS - DOWNSCALE_TARGET_ENABLED_ECPUS))
 
 if [ "$CLUSTER_STATE" != "AVAILABLE" ]; then
   printf '\n%s\n%s\n%s\n\n' \
@@ -828,10 +853,12 @@ if [ "$CURRENT_ENABLED_ECPUS" = "$DOWNSCALE_TARGET_ENABLED_ECPUS" ]; then
   DOWNSCALE_ACTION="SKIPPED_ALREADY_AT_TARGET"
   DOWNSCALE_STATUS="0"
 else
-  printf '%s\n%s\n%s\n' \
+  printf '%s\n%s\n%s\n%s\n%s\n' \
     "Confirm VM cluster downscale." \
     "Current enabled ECPUs: $CURRENT_ENABLED_ECPUS" \
-    "Target enabled ECPUs: $DOWNSCALE_TARGET_ENABLED_ECPUS"
+    "Current additional reserved ECPUs: $CURRENT_ADDITIONAL_RESERVED_ECPUS" \
+    "Target enabled ECPUs: $DOWNSCALE_TARGET_ENABLED_ECPUS" \
+    "Additional reserved ECPUs after downscale: $DOWNSCALE_TARGET_ADDITIONAL_RESERVED_ECPUS"
   printf 'Continue with VM cluster downscale? [y/N]: '
   IFS= read -r CONFIRM_DOWNSCALE
   case "$CONFIRM_DOWNSCALE" in
@@ -867,12 +894,14 @@ if command -v upsert_cli_env &gt;/dev/null 2&gt;&amp;1; then
   upsert_cli_env DOWNSCALE_TARGET_ENABLED_ECPUS "$DOWNSCALE_TARGET_ENABLED_ECPUS" &gt;/dev/null
 fi
 
-printf '%-31s | %s\n' \
+printf '%-42s | %s\n' \
   "FIELD" "VALUE" \
-  "-------------------------------" "-----" \
+  "------------------------------------------" "-----" \
   "DOWNSCALE_ACTION" "$DOWNSCALE_ACTION" \
   "PREVIOUS_ENABLED_ECPUS" "$CURRENT_ENABLED_ECPUS" \
+  "PREVIOUS_ADDITIONAL_RESERVED_ECPUS" "$CURRENT_ADDITIONAL_RESERVED_ECPUS" \
   "TARGET_ENABLED_ECPUS" "$DOWNSCALE_TARGET_ENABLED_ECPUS" \
+  "TARGET_ADDITIONAL_RESERVED_ECPUS" "$DOWNSCALE_TARGET_ADDITIONAL_RESERVED_ECPUS" \
   "DOWNSCALE_RESPONSE_JSON" "$DOWNSCALE_RESPONSE_JSON" \
   "DOWNSCALE_ERROR_TXT" "$DOWNSCALE_ERROR_TXT"
 printf '\n%s\n' "wb16_card04"
@@ -888,13 +917,15 @@ wb16_card04</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the submitted enabled ECPU downscale operation.</span>
   </div>
-  <pre class="code-scroll"><code>FIELD                           | VALUE
-------------------------------- | -----
-DOWNSCALE_ACTION                | SUBMITTED
-PREVIOUS_ENABLED_ECPUS          | 16
-TARGET_ENABLED_ECPUS            | 0
-DOWNSCALE_RESPONSE_JSON         | /home/oci/workbook/json/service-downscale-ecpu-response.json
-DOWNSCALE_ERROR_TXT             | /home/oci/workbook/reports/service-downscale-ecpu-error.txt
+  <pre class="code-scroll"><code>FIELD                                      | VALUE
+------------------------------------------ | -----
+DOWNSCALE_ACTION                           | SUBMITTED
+PREVIOUS_ENABLED_ECPUS                     | &lt;CURRENT_ENABLED_ECPUS&gt;
+PREVIOUS_ADDITIONAL_RESERVED_ECPUS         | &lt;CURRENT_ADDITIONAL_RESERVED_ECPUS&gt;
+TARGET_ENABLED_ECPUS                       | 0
+TARGET_ADDITIONAL_RESERVED_ECPUS           | &lt;TARGET_ADDITIONAL_RESERVED_ECPUS&gt;
+DOWNSCALE_RESPONSE_JSON                    | &lt;DOWNSCALE_RESPONSE_JSON&gt;
+DOWNSCALE_ERROR_TXT                        | &lt;DOWNSCALE_ERROR_TXT&gt;
 
 wb16_card04</code></pre>
 </div>
@@ -1047,6 +1078,7 @@ CLUSTER_TOTAL_ECPUS="$(
     --query 'data."total-e-cpu-count"' \
     --raw-output
 )"
+CLUSTER_ADDITIONAL_RESERVED_ECPUS=$((CLUSTER_TOTAL_ECPUS - CLUSTER_ENABLED_ECPUS))
 BASTION_DISPLAY_NAME="$(
   oci compute instance get \
     --region "$REGION" \
@@ -1062,13 +1094,14 @@ BASTION_STATE="$(
     --raw-output
 )"
 
-printf '%-29s | %s\n' \
+printf '%-36s | %s\n' \
   "FIELD" "VALUE" \
-  "-----------------------------" "-----" \
+  "------------------------------------" "-----" \
   "CLUSTER_DISPLAY_NAME" "$CLUSTER_DISPLAY_NAME" \
   "CLUSTER_STATE" "$CLUSTER_STATE" \
   "CLUSTER_ENABLED_ECPUS" "$CLUSTER_ENABLED_ECPUS" \
   "CLUSTER_TOTAL_ECPUS" "$CLUSTER_TOTAL_ECPUS" \
+  "CLUSTER_ADDITIONAL_RESERVED_ECPUS" "$CLUSTER_ADDITIONAL_RESERVED_ECPUS" \
   "BASTION_DISPLAY_NAME" "$BASTION_DISPLAY_NAME" \
   "BASTION_STATE" "$BASTION_STATE"
 printf '\n%s\n' "wb16_card06"
@@ -1084,14 +1117,15 @@ wb16_card06</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the target service shutdown state.</span>
   </div>
-  <pre class="code-scroll"><code>FIELD                         | VALUE
------------------------------ | -----
-CLUSTER_DISPLAY_NAME          | VMCluster-01
-CLUSTER_STATE                 | AVAILABLE
-CLUSTER_ENABLED_ECPUS         | 0
-CLUSTER_TOTAL_ECPUS           | 24
-BASTION_DISPLAY_NAME          | bastion-01
-BASTION_STATE                 | STOPPED
+  <pre class="code-scroll"><code>FIELD                                | VALUE
+------------------------------------ | -----
+CLUSTER_DISPLAY_NAME                 | &lt;CLUSTER_DISPLAY_NAME&gt;
+CLUSTER_STATE                        | &lt;CLUSTER_STATE&gt;
+CLUSTER_ENABLED_ECPUS                | &lt;CLUSTER_ENABLED_ECPUS&gt;
+CLUSTER_TOTAL_ECPUS                  | &lt;CLUSTER_TOTAL_ECPUS&gt;
+CLUSTER_ADDITIONAL_RESERVED_ECPUS    | &lt;CLUSTER_ADDITIONAL_RESERVED_ECPUS&gt;
+BASTION_DISPLAY_NAME                 | &lt;BASTION_DISPLAY_NAME&gt;
+BASTION_STATE                        | &lt;BASTION_STATE&gt;
 
 wb16_card06</code></pre>
 </div>
@@ -1115,7 +1149,7 @@ DIR="$JSON_DIR"; R="$DIR/service-residual-artifacts.json"; OCI=oci; mkdir -p "$D
 cnt(){ n="$(jq -r 'if (.data|type)=="array" then .data|length elif (.data.items|type)=="array" then .data.items|length else 0 end' "$1" 2&gt;/dev/null)"; case "$n" in ''|*[!0-9]*) printf 0;; *) printf '%s' "$n";; esac; }
 nam(){ jq -r 'if (.data|type)=="array" then .data[]? elif (.data.items|type)=="array" then .data.items[]? else empty end|."display-name"//.displayName//.name//."db-name"//.databaseName//.id//empty' "$1" 2&gt;/dev/null | awk 'BEGIN{s=""} NF{s=s (s?", ":"") $0} END{print s?s:"none discovered"}'; }
 vmart(){ jq -r 'if (.data|type)=="array" then .data[]? elif (.data.items|type)=="array" then .data.items[]? else empty end|[."display-name"//.displayName//.name//.id, (."vm-count"//.vmCount//."node-count"//.nodeCount//"unknown")]|@tsv' "$1" 2&gt;/dev/null | awk 'BEGIN{s=""} NF{s=s (s?", ":"") $1 " VMs " $2} END{print s?s:"none discovered"}'; }
-ecpuart(){ jq -r 'if (.data|type)=="array" then .data[]? elif (.data.items|type)=="array" then .data.items[]? else empty end|[."display-name"//.displayName//.name//.id, (."enabled-e-cpu-count"//.enabledEcpuCount//."enabled-ecpu-count"//.enabledECPUCount//"unknown"), (."total-e-cpu-count"//.totalEcpuCount//."total-ecpu-count"//.totalECPUCount//"unknown")]|@tsv' "$1" 2&gt;/dev/null | awk 'BEGIN{s=""} NF{s=s (s?", ":"") $1 " " $2 " Enabled , " $3 " Reserved"} END{print s?s:"none discovered"}'; }
+ecpuart(){ jq -r 'if (.data|type)=="array" then .data[]? elif (.data.items|type)=="array" then .data.items[]? else empty end|[."display-name"//.displayName//.name//.id, (."enabled-e-cpu-count"//.enabledEcpuCount//."enabled-ecpu-count"//.enabledECPUCount//"unknown"), (."total-e-cpu-count"//.totalEcpuCount//."total-ecpu-count"//.totalECPUCount//"unknown")]|@tsv' "$1" 2&gt;/dev/null | awk 'BEGIN{s=""} NF{reserved=(($2~/^[0-9]+$/ &amp;&amp; $3~/^[0-9]+$/)?$3-$2:"unknown"); s=s (s?", ":"") $1 " " $2 " Enabled, " reserved " Additional Reserved (Total " $3 ")"} END{print s?s:"none discovered"}'; }
 ecpubill(){ jq -r 'if (.data|type)=="array" then .data[]? elif (.data.items|type)=="array" then .data.items[]? else empty end|."enabled-e-cpu-count"//.enabledEcpuCount//."enabled-ecpu-count"//.enabledECPUCount//0' "$1" 2&gt;/dev/null | awk 'BEGIN{b="No"} $1+0&gt;0{b="Yes"} END{print b " - Only Enabled ECPUs are billed"}'; }
 flash(){ jq -r 'def items: if (.data|type)=="array" then .data elif (.data.items|type)=="array" then .data.items else [] end; items[]?|."additional-flash-cache-in-percent"//.additionalFlashCacheInPercent//."additional-flash-cache-in-gbs"//.additionalFlashCacheInGbs//."is-flash-cache-enabled"//.isFlashCacheEnabled//."flash-cache-enabled"//.flashCacheEnabled//"unknown"' "$1" 2&gt;/dev/null | awk 'BEGIN{s=""} NF{v=$0; if(v~/^[0-9]+$/) v=v"%"; s=s (s?", ":"") v} END{print s?s:"none discovered"}'; }
 run(){ l="$1"; f="$2"; shift 2; printf 'Discovering %s...\n' "$l"; "$@" &gt;"$f" 2&gt;/dev/null || printf '{"data":[]}\n' &gt;"$f"; printf 'Found %s %s.\n' "$(cnt "$f")" "$l"; }
@@ -1248,7 +1282,9 @@ Report JSON                  | /home/oci/workbook/json/service-residual-artifact
 COST_CATEGORY                          | STILL_CHARGED_WHEN_PAUSED
 -------------------------------------- | --------------------------------------------------------------------------------
 Exascale VM Cluster ECPUs              | No - Only Enabled ECPUs are billed
-                                       | Artifacts: VMCluster-01 0 Enabled , 24 Reserved
+                                       | Artifacts: &lt;VM_CLUSTER_NAME&gt; &lt;ENABLED_ECPUS&gt; Enabled,
+                                       | &lt;ADDITIONAL_RESERVED_ECPUS&gt; Additional Reserved
+                                       | (Total &lt;TOTAL_ECPUS&gt;)
 -------------------------------------- | --------------------------------------------------------------------------------
 Exascale VM storage                    | Yes - VM file system storage allocated to the Exadata VM cluster is billable
                                        | even when enabled ECPUs are set to 0.
@@ -1374,27 +1410,29 @@ wb16_card08</code></pre>
 </div>
       </section><section id="cluster-restore" class="article-section">
         <h2>Cluster Restore</h2>
-        <h3>BASH 09 - Restore Exadata Exascale enabled ECPUs</h3>
+        <h3>BASH 09 - Restore Exadata Exascale ECPUs</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Restore the VM cluster enabled ECPU count saved before the shutdown.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Restore the VM cluster using approved enabled and reserved ECPU values.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
 
 wb16_card09() {
 clear
-RESTORE_RESPONSE_JSON="$JSON_DIR/service-restore-ecpu-response.json"
+RESTORE_ENABLED_RESPONSE_JSON="$JSON_DIR/service-restore-enabled-ecpu-response.json"
+RESTORE_RESERVED_RESPONSE_JSON="$JSON_DIR/service-restore-reserved-ecpu-response.json"
 RESTORE_ERROR_TXT="$REPORT_DIR/service-restore-ecpu-error.txt"
 
-if [ -z "${SERVICE_RESTORE_ENABLED_ECPU_COUNT:-}" ]; then
+SAVED_RESERVED_ECPUS="${SERVICE_RESTORE_RESERVED_ECPU_COUNT:-${SERVICE_RESTORE_TOTAL_ECPU_COUNT:-}}"
+if [ -z "${SERVICE_RESTORE_ENABLED_ECPU_COUNT:-}" ] || [ -z "$SAVED_RESERVED_ECPUS" ]; then
   printf '\n%s\n%s\n\n' \
-    "STOP: SERVICE_RESTORE_ENABLED_ECPU_COUNT is not loaded." \
-    "Action: run BASH 03 before shutdown, or set the approved enabled ECPU count in ~/admin/cli.env." &gt;&amp;2
+    "STOP: Saved enabled or total ECPU values are not loaded." \
+    "Action: run BASH 03 before shutdown, or set the approved ECPU values in ~/admin/cli.env." &gt;&amp;2
   return 1
 fi
 
@@ -1413,6 +1451,24 @@ CURRENT_ENABLED_ECPUS="$(
     --query 'data."enabled-e-cpu-count"' \
     --raw-output
 )"
+CURRENT_TOTAL_ECPUS="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."total-e-cpu-count"' \
+    --raw-output
+)"
+CURRENT_NODE_COUNT="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."node-count"' \
+    --raw-output
+)"
+SAVED_ADDITIONAL_RESERVED_ECPUS=$((SAVED_RESERVED_ECPUS - SERVICE_RESTORE_ENABLED_ECPU_COUNT))
+CURRENT_ADDITIONAL_RESERVED_ECPUS=$((CURRENT_TOTAL_ECPUS - CURRENT_ENABLED_ECPUS))
+RESTORE_STEPS=""
+RESTORE_NEXT_ACTION="None"
 
 if [ "$CLUSTER_STATE" != "AVAILABLE" ]; then
   printf '\n%s\n%s\n%s\n\n' \
@@ -1422,38 +1478,143 @@ if [ "$CLUSTER_STATE" != "AVAILABLE" ]; then
   return 1
 fi
 
-if [ "$CURRENT_ENABLED_ECPUS" = "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" ]; then
+printf '%s\n%s\n%s\n%s\n' \
+  "Saved enabled ECPU value: $SERVICE_RESTORE_ENABLED_ECPU_COUNT" \
+  "Saved reserved ECPU value: $SAVED_RESERVED_ECPUS" \
+  "Current enabled ECPU value: $CURRENT_ENABLED_ECPUS" \
+  "Current reserved ECPU value: $CURRENT_TOTAL_ECPUS"
+while :; do
+  printf 'Enter TARGET_RESERVED_ECPUS [%s] (minimum 8; increments of 4): ' "$SAVED_RESERVED_ECPUS"
+  IFS= read -r TARGET_RESERVED_ECPUS
+  TARGET_RESERVED_ECPUS="${TARGET_RESERVED_ECPUS:-$SAVED_RESERVED_ECPUS}"
+
+  case "$TARGET_RESERVED_ECPUS" in
+    *[!0-9]*|'')
+      printf 'Enter a whole number that is at least 8 and divisible by 4.\n' &gt;&amp;2
+      continue
+      ;;
+  esac
+
+  if [ "$TARGET_RESERVED_ECPUS" -ge 8 ] &amp;&amp; [ $((TARGET_RESERVED_ECPUS % 4)) -eq 0 ]; then
+    break
+  fi
+
+  printf 'Enter a whole number that is at least 8 and divisible by 4.\n' &gt;&amp;2
+done
+DEFAULT_TARGET_ENABLED_ECPUS="$SERVICE_RESTORE_ENABLED_ECPU_COUNT"
+if [ "$DEFAULT_TARGET_ENABLED_ECPUS" -gt "$TARGET_RESERVED_ECPUS" ]; then
+  DEFAULT_TARGET_ENABLED_ECPUS="$TARGET_RESERVED_ECPUS"
+fi
+while :; do
+  printf 'Enter TARGET_ENABLED_ECPUS [%s] (minimum 8; increments of 4): ' "$DEFAULT_TARGET_ENABLED_ECPUS"
+  IFS= read -r TARGET_ENABLED_ECPUS
+  TARGET_ENABLED_ECPUS="${TARGET_ENABLED_ECPUS:-$DEFAULT_TARGET_ENABLED_ECPUS}"
+
+  case "$TARGET_ENABLED_ECPUS" in
+    *[!0-9]*|'')
+      printf 'Enter a whole number that is at least 8 and divisible by 4.\n' &gt;&amp;2
+      continue
+      ;;
+  esac
+
+  if [ "$TARGET_ENABLED_ECPUS" -ge 8 ] &amp;&amp; [ "$TARGET_ENABLED_ECPUS" -le "$TARGET_RESERVED_ECPUS" ] &amp;&amp; [ $((TARGET_ENABLED_ECPUS % 4)) -eq 0 ]; then
+    TARGET_ADDITIONAL_RESERVED_ECPUS=$((TARGET_RESERVED_ECPUS - TARGET_ENABLED_ECPUS))
+    break
+  fi
+
+  printf 'Enter a whole number from 8 through %s that is divisible by 4.\n' "$TARGET_RESERVED_ECPUS" &gt;&amp;2
+done
+
+if [ "$CURRENT_ENABLED_ECPUS" = "$TARGET_ENABLED_ECPUS" ] &amp;&amp; [ "$CURRENT_TOTAL_ECPUS" = "$TARGET_RESERVED_ECPUS" ]; then
   RESTORE_ACTION="SKIPPED_ALREADY_AT_TARGET"
   RESTORE_STATUS="0"
 else
-  printf 'Submitting Exadata enabled ECPU restore request ...\n'
-  oci db exadb-vm-cluster update \
-    --region "$REGION" \
-    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
-    --enabled-e-cpu-count "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" \
-    --force \
-    &gt; "$RESTORE_RESPONSE_JSON" \
-    2&gt; "$RESTORE_ERROR_TXT"
-  RESTORE_STATUS=$?
-  RESTORE_ACTION="SUBMITTED"
+  printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
+    "Confirm VM cluster enabled ECPU restore." \
+    "Current enabled ECPUs: $CURRENT_ENABLED_ECPUS" \
+    "Current reserved ECPUs: $CURRENT_TOTAL_ECPUS" \
+    "Target enabled ECPUs: $TARGET_ENABLED_ECPUS" \
+    "Target reserved ECPUs: $TARGET_RESERVED_ECPUS" \
+    "Additional reserved ECPUs after restore: $TARGET_ADDITIONAL_RESERVED_ECPUS" \
+    "Reserved and enabled ECPUs are submitted as separate updates to protect a restore from zero."
+  printf 'Continue with VM cluster enabled ECPU restore? [y/N]: '
+  IFS= read -r CONFIRM_RESTORE
+  case "$CONFIRM_RESTORE" in
+    y|Y|yes|YES) ;;
+    *)
+      printf '%s\n\n' "STOP: VM cluster enabled ECPU restore was not confirmed. No change was submitted." &gt;&amp;2
+      return 1
+      ;;
+  esac
+
+  RESTORE_STATUS=0
+  RESTORE_FAILED_STEP=""
+
+  submit_restore_update() {
+    restore_step="$1"
+    restore_flag="$2"
+    restore_value="$3"
+    restore_response="$4"
+    printf 'Submitting %s update ...\n' "$restore_step"
+    oci db exadb-vm-cluster update \
+      --region "$REGION" \
+      --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+      "$restore_flag" "$restore_value" \
+      --force \
+      &gt; "$restore_response" \
+      2&gt; "$RESTORE_ERROR_TXT"
+    RESTORE_STATUS=$?
+    if [ "$RESTORE_STATUS" -ne 0 ]; then
+      RESTORE_FAILED_STEP="$restore_step"
+      return 1
+    fi
+    RESTORE_STEPS="${RESTORE_STEPS}${RESTORE_STEPS:+, }$restore_step"
+  }
+
+  if [ "$TARGET_RESERVED_ECPUS" != "$CURRENT_TOTAL_ECPUS" ] &amp;&amp; [ "$TARGET_ENABLED_ECPUS" -gt "$CURRENT_TOTAL_ECPUS" ]; then
+    submit_restore_update "reserved ECPU" "--total-e-cpu-count" "$TARGET_RESERVED_ECPUS" "$RESTORE_RESERVED_RESPONSE_JSON" || true
+    RESTORE_ACTION="SUBMITTED_RESERVED_ECPU_UPDATE"
+    RESTORE_NEXT_ACTION="Wait for AVAILABLE, then rerun BASH 09 to restore enabled ECPUs."
+  elif [ "$TARGET_ENABLED_ECPUS" != "$CURRENT_ENABLED_ECPUS" ]; then
+    submit_restore_update "enabled ECPU" "--enabled-e-cpu-count" "$TARGET_ENABLED_ECPUS" "$RESTORE_ENABLED_RESPONSE_JSON" || true
+    RESTORE_ACTION="SUBMITTED_ENABLED_ECPU_UPDATE"
+    if [ "$TARGET_RESERVED_ECPUS" != "$CURRENT_TOTAL_ECPUS" ]; then
+      RESTORE_NEXT_ACTION="Wait for AVAILABLE, then rerun BASH 09 to restore reserved ECPUs."
+    fi
+  else
+    submit_restore_update "reserved ECPU" "--total-e-cpu-count" "$TARGET_RESERVED_ECPUS" "$RESTORE_RESERVED_RESPONSE_JSON" || true
+    RESTORE_ACTION="SUBMITTED_RESERVED_ECPU_UPDATE"
+  fi
 fi
 
 if [ "$RESTORE_STATUS" -ne 0 ]; then
-  printf '\n%s\n%s\n%s\n%s\n\n' \
-    "STOP: Unable to restore enabled ECPUs." \
+  printf '\n%s\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: Unable to restore ECPUs." \
+    "Failed step: $RESTORE_FAILED_STEP" \
     "OCI CLI status: $RESTORE_STATUS" \
     "Error file: $RESTORE_ERROR_TXT" \
     "The shell prompt is still active; no successful restore was confirmed." &gt;&amp;2
   return 1
 fi
 
-printf '%-32s | %s\n' \
+printf '%-42s | %s\n' \
   "FIELD" "VALUE" \
-  "--------------------------------" "-----" \
+  "------------------------------------------" "-----" \
   "RESTORE_ACTION" "$RESTORE_ACTION" \
   "PREVIOUS_ENABLED_ECPUS" "$CURRENT_ENABLED_ECPUS" \
-  "TARGET_ENABLED_ECPUS" "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" \
-  "RESTORE_RESPONSE_JSON" "$RESTORE_RESPONSE_JSON" \
+  "SAVED_ENABLED_ECPUS" "$SERVICE_RESTORE_ENABLED_ECPU_COUNT" \
+  "SAVED_RESERVED_ECPUS" "$SAVED_RESERVED_ECPUS" \
+  "SAVED_ADDITIONAL_RESERVED_ECPUS" "$SAVED_ADDITIONAL_RESERVED_ECPUS" \
+  "CURRENT_RESERVED_ECPUS" "$CURRENT_TOTAL_ECPUS" \
+  "CURRENT_ADDITIONAL_RESERVED_ECPUS" "$CURRENT_ADDITIONAL_RESERVED_ECPUS" \
+  "TARGET_ENABLED_ECPUS" "$TARGET_ENABLED_ECPUS" \
+  "TARGET_RESERVED_ECPUS" "$TARGET_RESERVED_ECPUS" \
+  "TARGET_ADDITIONAL_RESERVED_ECPUS" "$TARGET_ADDITIONAL_RESERVED_ECPUS" \
+  "CALCULATED_MEMORY_PER_VM_GB" "$((TARGET_RESERVED_ECPUS * 11 / (CURRENT_NODE_COUNT * 4)))" \
+  "RESTORE_STEPS" "$RESTORE_STEPS" \
+  "RESTORE_NEXT_ACTION" "$RESTORE_NEXT_ACTION" \
+  "RESTORE_ENABLED_RESPONSE_JSON" "$RESTORE_ENABLED_RESPONSE_JSON" \
+  "RESTORE_RESERVED_RESPONSE_JSON" "$RESTORE_RESERVED_RESPONSE_JSON" \
   "RESTORE_ERROR_TXT" "$RESTORE_ERROR_TXT"
 printf '\n%s\n' "wb16_card09"
 }
@@ -1466,15 +1627,26 @@ wb16_card09</code></pre>
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the restore operation that starts Exadata Exascale database compute capacity.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the approved enabled ECPU restore operation.</span>
   </div>
-  <pre class="code-scroll"><code>FIELD                            | VALUE
--------------------------------- | -----
-RESTORE_ACTION                   | SUBMITTED
-PREVIOUS_ENABLED_ECPUS           | 0
-TARGET_ENABLED_ECPUS             | 16
-RESTORE_RESPONSE_JSON            | /home/oci/workbook/json/service-restore-ecpu-response.json
-RESTORE_ERROR_TXT                | /home/oci/workbook/reports/service-restore-ecpu-error.txt
+  <pre class="code-scroll"><code>FIELD                                      | VALUE
+------------------------------------------ | -----
+RESTORE_ACTION                             | SUBMITTED_ENABLED_ECPU_UPDATE
+PREVIOUS_ENABLED_ECPUS                     | &lt;CURRENT_ENABLED_ECPUS&gt;
+SAVED_ENABLED_ECPUS                        | &lt;SAVED_ENABLED_ECPUS&gt;
+SAVED_RESERVED_ECPUS                       | &lt;SAVED_RESERVED_ECPUS&gt;
+SAVED_ADDITIONAL_RESERVED_ECPUS            | &lt;SAVED_ADDITIONAL_RESERVED_ECPUS&gt;
+CURRENT_RESERVED_ECPUS                     | &lt;CURRENT_RESERVED_ECPUS&gt;
+CURRENT_ADDITIONAL_RESERVED_ECPUS          | &lt;CURRENT_ADDITIONAL_RESERVED_ECPUS&gt;
+TARGET_ENABLED_ECPUS                       | &lt;TARGET_ENABLED_ECPUS&gt;
+TARGET_RESERVED_ECPUS                      | &lt;TARGET_RESERVED_ECPUS&gt;
+TARGET_ADDITIONAL_RESERVED_ECPUS           | &lt;TARGET_ADDITIONAL_RESERVED_ECPUS&gt;
+CALCULATED_MEMORY_PER_VM_GB                 | &lt;CALCULATED_MEMORY_PER_VM_GB&gt;
+RESTORE_STEPS                              | &lt;RESTORE_STEPS&gt;
+RESTORE_NEXT_ACTION                        | &lt;RESTORE_NEXT_ACTION&gt;
+RESTORE_ENABLED_RESPONSE_JSON              | &lt;RESTORE_ENABLED_RESPONSE_JSON&gt;
+RESTORE_RESERVED_RESPONSE_JSON             | &lt;RESTORE_RESERVED_RESPONSE_JSON&gt;
+RESTORE_ERROR_TXT                           | &lt;RESTORE_ERROR_TXT&gt;
 
 wb16_card09</code></pre>
 </div>
@@ -1523,6 +1695,14 @@ CLUSTER_TOTAL_ECPUS="$(
     --query 'data."total-e-cpu-count"' \
     --raw-output
 )"
+CLUSTER_NODE_COUNT="$(
+  oci db exadb-vm-cluster get \
+    --region "$REGION" \
+    --exadb-vm-cluster-id "$VM_CLUSTER_OCID" \
+    --query 'data."node-count"' \
+    --raw-output
+)"
+CLUSTER_ADDITIONAL_RESERVED_ECPUS=$((CLUSTER_TOTAL_ECPUS - CLUSTER_ENABLED_ECPUS))
 BASTION_DISPLAY_NAME="$(
   oci compute instance get \
     --region "$REGION" \
@@ -1538,13 +1718,15 @@ BASTION_STATE="$(
     --raw-output
 )"
 
-printf '%-29s | %s\n' \
+printf '%-36s | %s\n' \
   "FIELD" "VALUE" \
-  "-----------------------------" "-----" \
+  "------------------------------------" "-----" \
   "CLUSTER_DISPLAY_NAME" "$CLUSTER_DISPLAY_NAME" \
   "CLUSTER_STATE" "$CLUSTER_STATE" \
   "CLUSTER_ENABLED_ECPUS" "$CLUSTER_ENABLED_ECPUS" \
   "CLUSTER_TOTAL_ECPUS" "$CLUSTER_TOTAL_ECPUS" \
+  "CLUSTER_ADDITIONAL_RESERVED_ECPUS" "$CLUSTER_ADDITIONAL_RESERVED_ECPUS" \
+  "CALCULATED_MEMORY_PER_VM_GB" "$((CLUSTER_TOTAL_ECPUS * 11 / (CLUSTER_NODE_COUNT * 4)))" \
   "BASTION_DISPLAY_NAME" "$BASTION_DISPLAY_NAME" \
   "BASTION_STATE" "$BASTION_STATE"
 printf '\n%s\n' "wb16_card10"
@@ -1560,14 +1742,16 @@ wb16_card10</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the target service started state.</span>
   </div>
-  <pre class="code-scroll"><code>FIELD                         | VALUE
------------------------------ | -----
-CLUSTER_DISPLAY_NAME          | VMCluster-01
-CLUSTER_STATE                 | AVAILABLE
-CLUSTER_ENABLED_ECPUS         | 16
-CLUSTER_TOTAL_ECPUS           | 24
-BASTION_DISPLAY_NAME          | bastion-01
-BASTION_STATE                 | RUNNING
+  <pre class="code-scroll"><code>FIELD                                | VALUE
+------------------------------------ | -----
+CLUSTER_DISPLAY_NAME                 | &lt;CLUSTER_DISPLAY_NAME&gt;
+CLUSTER_STATE                        | &lt;CLUSTER_STATE&gt;
+CLUSTER_ENABLED_ECPUS                | &lt;CLUSTER_ENABLED_ECPUS&gt;
+CLUSTER_TOTAL_ECPUS                  | &lt;CLUSTER_TOTAL_ECPUS&gt;
+CLUSTER_ADDITIONAL_RESERVED_ECPUS    | &lt;CLUSTER_ADDITIONAL_RESERVED_ECPUS&gt;
+CALCULATED_MEMORY_PER_VM_GB          | &lt;CALCULATED_MEMORY_PER_VM_GB&gt;
+BASTION_DISPLAY_NAME                 | &lt;BASTION_DISPLAY_NAME&gt;
+BASTION_STATE                        | &lt;BASTION_STATE&gt;
 
 wb16_card10</code></pre>
 </div>

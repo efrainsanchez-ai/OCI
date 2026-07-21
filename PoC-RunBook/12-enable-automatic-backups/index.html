@@ -33,7 +33,7 @@
         <h1>Enable Automatic Backups</h1>
         <p class="subtitle">This section enables automatic backups for the existing container database <code>CDB01</code>, which was created with the default pluggable database <code>PDB01</code> in Chapter 10. The backup destination is Oracle Database Autonomous Recovery Service in the assigned PoC compartment through <code>DATABASE_COMPARTMENT_OCID</code>. The workflow uses the existing VCN baseline from the networking runbook: <code>subnet-dbbackup</code>, the private service route through the service gateway, and the backup subnet security list rules that permit Autonomous Recovery Service backup traffic. The <code>nsg-exadata-backup</code> network security group is no longer required for this workbook series.</p>
         <div class="hero-meta">
-          <span>Last updated July 17, 2026</span>
+          <span>Last updated July 20, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -45,7 +45,7 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#required-backup-inputs">Required backup inputs</a></li><li><a href="#recommended-choices">Recommended choices</a></li><li><a href="#bash-01-validate-cloud-shell-and-backup-prerequisites">BASH 01 - Validate Cloud Shell and backup prerequisites</a></li><li><a href="#bash-02-set-backup-configuration-values">BASH 02 - Set backup configuration values</a></li><li><a href="#bash-03-create-or-locate-the-recovery-service-subnet">BASH 03 - Create or locate the Recovery Service subnet</a></li><li><a href="#bash-04-locate-the-bronze-protection-policy">BASH 04 - Locate the Bronze protection policy</a></li><li><a href="#bash-05-build-the-automatic-backup-update-payload">BASH 05 - Build the automatic backup update payload</a></li><li><a href="#bash-06-enable-automatic-backups-for-cdb01">BASH 06 - Enable automatic backups for CDB01</a></li><li><a href="#bash-07-validate-automatic-backup-configuration">BASH 07 - Validate automatic backup configuration</a></li><li><a href="#bash-08-start-an-immediate-full-backup">BASH 08 - Start an immediate full backup</a></li><li><a href="#bash-09-validate-backup-inventory">BASH 09 - Validate backup inventory</a></li><li><a href="#bash-10-store-the-cdb01-backup-report">BASH 10 - Store the CDB01 backup report</a></li><li><a href="#oracle-documentation-references">Oracle documentation references</a></li></ol>
+      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#required-backup-inputs">Required backup inputs</a></li><li><a href="#recommended-choices">Recommended choices</a></li><li><a href="#bash-01-validate-cloud-shell-and-backup-prerequisites">BASH 01 - Validate Cloud Shell and backup prerequisites</a></li><li><a href="#bash-02-set-backup-configuration-values">BASH 02 - Set backup configuration values</a></li><li><a href="#bash-03-create-or-locate-the-recovery-service-subnet">BASH 03 - Create or locate the Recovery Service subnet</a></li><li><a href="#bash-04-locate-the-bronze-protection-policy">BASH 04 - Locate the Bronze protection policy</a></li><li><a href="#bash-05-build-the-automatic-backup-update-payload">BASH 05 - Build the automatic backup update payload</a></li><li><a href="#bash-06-enable-automatic-backups-for-cdb01">BASH 06 - Enable automatic backups for CDB01</a></li><li><a href="#bash-07-validate-automatic-backup-configuration">BASH 07 - Validate automatic backup configuration</a></li><li><a href="#bash-08-start-an-immediate-backup">BASH 08 - Start an immediate backup</a></li><li><a href="#bash-09-validate-backup-inventory">BASH 09 - Validate backup inventory</a></li><li><a href="#bash-10-store-the-cdb01-backup-report">BASH 10 - Store the CDB01 backup report</a></li><li><a href="#oracle-documentation-references">Oracle documentation references</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
@@ -500,24 +500,50 @@ oci db database update \
   --from-json "file://$DATABASE_UPDATE_JSON" \
   &gt; "$ENABLE_BACKUPS_RESPONSE_JSON"
 
-printf 'ENABLE_BACKUPS_RESPONSE_JSON=%s\n' "$ENABLE_BACKUPS_RESPONSE_JSON"
+jq -r '
+  [
+    ["DB_NAME", .data."db-name"],
+    ["STATE", .data."lifecycle-state"],
+    ["AUTO_BACKUP_ENABLED", .data."db-backup-config"."auto-backup-enabled"],
+    ["AUTO_FULL_BACKUP_DAY", .data."db-backup-config"."auto-full-backup-day"],
+    ["BACKUP_DESTINATION_TYPE", .data."db-backup-config"."backup-destination-details"[0].type],
+    ["PROTECTION_POLICY_OCID", .data."db-backup-config"."backup-destination-details"[0]."dbrs-policy-id"],
+    ["ZERO_DATA_LOSS_ENABLED", .data."db-backup-config"."backup-destination-details"[0]."is-zero-data-loss-enabled"],
+    ["RUN_IMMEDIATE_FULL_BACKUP", .data."db-backup-config"."run-immediate-full-backup"],
+    ["LAST_FAILED_BACKUP", (.data."last-failed-backup-timestamp" // "none")],
+    ["RESPONSE_FILE", "'"$ENABLE_BACKUPS_RESPONSE_JSON"'" ]
+  ]
+  | .[]
+  | @tsv' "$ENABLE_BACKUPS_RESPONSE_JSON" \
+| while IFS="$(printf '\t')" read -r field value; do
+    printf '%-28s | %s\n' "$field" "$value"
+  done
   printf '\n%s\n' "wb12_card06"
 }
 
 wb12_card06</code></pre>
 </div>
-<p>The response should show <code>auto-backup-enabled</code> as <code>true</code> and DBRS as the backup destination. In OCI CLI 3.73.1 validation, <code>backup-deletion-policy</code>, <code>backup-retention-policy-on-terminate</code>, and <code>run-immediate-full-backup</code> remained unset in the returned database resource, so BASH 08 starts the immediate backup explicitly.</p>
-<h3>OUTPUT 06 - Expected automatic backup update response file</h3>
+<p>The formatted output confirms that automatic backups are enabled, DBRS is the destination, and shows the most recent failed-backup timestamp when OCI reports one. The complete OCI response remains available in the saved JSON file.</p>
+<h3>OUTPUT 06 - Expected automatic backup configuration</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the local response file captured from the update request.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the applied automatic backup settings and any reported failed-backup timestamp.</span>
   </div>
-  <pre class="code-scroll"><code>ENABLE_BACKUPS_RESPONSE_JSON=/home/oci/workbook/json/cdb01-enable-automatic-backups-response.json
+  <pre class="code-scroll"><code>DB_NAME                      | CDB01
+STATE                        | AVAILABLE
+AUTO_BACKUP_ENABLED          | true
+AUTO_FULL_BACKUP_DAY          | SUNDAY
+BACKUP_DESTINATION_TYPE       | DBRS
+PROTECTION_POLICY_OCID        | &lt;protection_policy_ocid&gt;
+ZERO_DATA_LOSS_ENABLED        | false
+RUN_IMMEDIATE_FULL_BACKUP     | false
+LAST_FAILED_BACKUP            | &lt;timestamp_or_none&gt;
+RESPONSE_FILE                 | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb01-enable-automatic-backups-response.json
 
-wb11_card06</code></pre>
+wb12_card06</code></pre>
 </div>
       </section><section id="bash-07-validate-automatic-backup-configuration" class="article-section">
         <h2>BASH 07 - Validate automatic backup configuration</h2>
@@ -578,23 +604,23 @@ wb12_card07</code></pre>
 
 wb11_card07</code></pre>
 </div>
-      </section><section id="bash-08-start-an-immediate-full-backup" class="article-section">
-        <h2>BASH 08 - Start an immediate full backup</h2>
-        <h3>BASH 08 - Start an immediate full backup</h3>
+      </section><section id="bash-08-start-an-immediate-backup" class="article-section">
+        <h2>BASH 08 - Start an immediate backup</h2>
+        <h3>BASH 08 - Start an immediate backup</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Trigger the requested immediate named full backup for CDB01 after automatic backups are enabled.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a named immediate backup for CDB01 after automatic backups are enabled.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb12_card08() {
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
-MANUAL_BACKUP_DISPLAY_NAME="${CDB_NAME}-initial-full-$(date +%Y%m%d%H%M%S)"
-INITIAL_BACKUP_OCID_FILE="$REPORT_DIR/cdb01-initial-full-backup-ocid.txt"
+MANUAL_BACKUP_DISPLAY_NAME="${CDB_NAME}-initial-backup-$(date +%Y%m%d%H%M%S)"
+INITIAL_BACKUP_OCID_FILE="$REPORT_DIR/cdb01-initial-backup-ocid.txt"
 
 BACKUP_OCID="$(
   oci db backup create \
@@ -605,10 +631,10 @@ BACKUP_OCID="$(
     --raw-output
 )"
 
-if [ -z "$BACKUP_OCID" ] || [ "$BACKUP_OCID" = "null" ]; then
-  printf 'Unable to capture INITIAL_BACKUP_OCID from the backup create response.\n' &gt;&amp;2
+[ -n "$BACKUP_OCID" ] &amp;&amp; [ "$BACKUP_OCID" != "null" ] || {
+  printf 'STOP: Unable to capture the initial backup OCID.\n' &gt;&amp;2
   return 1
-fi
+}
 
 printf '%s\n' "$BACKUP_OCID" &gt; "$INITIAL_BACKUP_OCID_FILE"
 upsert_cli_env INITIAL_BACKUP_OCID "$BACKUP_OCID" &gt;/dev/null
@@ -620,7 +646,7 @@ printf 'INITIAL_BACKUP_OCID=%s\n' "$BACKUP_OCID"
 
 wb12_card08</code></pre>
 </div>
-<p>BASH 06 enables the automatic backup configuration. BASH 08 satisfies the workbook requirement to take the first backup immediately with a named full backup artifact, but does not wait for <code>ACTIVE</code> because Cloud Shell browser sessions can expire during long-running waits.</p>
+<p>BASH 06 enables automatic backups. BASH 08 creates a named immediate backup, but OCI reports its managed backup type; it does not request a full backup. It does not wait for completion because Cloud Shell browser sessions can expire during long-running waits.</p>
 <h3>OUTPUT 08 - Expected initial backup capture</h3>
 <div class="code-card">
   <div class="code-toolbar">
@@ -629,10 +655,10 @@ wb12_card08</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the initial backup OCID captured from OCI.</span>
   </div>
-  <pre class="code-scroll"><code>INITIAL_BACKUP_OCID_FILE=/home/oci/workbook/reports/cdb01-initial-full-backup-ocid.txt
+  <pre class="code-scroll"><code>INITIAL_BACKUP_OCID_FILE=/home/&lt;cloud_shell_user&gt;/workbook/reports/cdb01-initial-backup-ocid.txt
 INITIAL_BACKUP_OCID=&lt;backup_ocid&gt;
 
-wb11_card08</code></pre>
+wb12_card08</code></pre>
 </div>
       </section><section id="bash-09-validate-backup-inventory" class="article-section">
         <h2>BASH 09 - Validate backup inventory</h2>
@@ -705,9 +731,9 @@ wb12_card09</code></pre>
   </div>
   <pre class="code-scroll"><code>DISPLAY_NAME                             | STATE      | TYPE        | DURATION
 ---------------------------------------- | ---------- | ----------- | --------
-CDB01-initial-full-20260702200246        | CREATING   | INCREMENTAL | &lt;duration&gt;
+&lt;BACKUP_DISPLAY_NAME&gt;                     | ACTIVE     | INCREMENTAL | &lt;DURATION&gt;
 
-wb11_card09</code></pre>
+wb12_card09</code></pre>
 </div>
       </section><section id="bash-10-store-the-cdb01-backup-report" class="article-section">
         <h2>BASH 10 - Store the CDB01 backup report</h2>
@@ -766,8 +792,8 @@ chmod +x "$BACKUP_REPORT_SCRIPT"
   printf 'AUTO_BACKUP_ENABLED=true\n'
   printf 'REQUESTED_REAL_TIME_DATA_PROTECTION_ENABLED=%s\n' "$REAL_TIME_DATA_PROTECTION_ENABLED"
   printf 'REQUESTED_BACKUP_RETENTION_POLICY_ON_TERMINATE=%s\n' "$BACKUP_RETENTION_POLICY_ON_TERMINATE"
-  printf 'APPLIED_BACKUP_DELETION_POLICY=null\n'
-  printf 'APPLIED_RUN_IMMEDIATE_FULL_BACKUP=false\n'
+  printf 'REPORTED_BACKUP_DELETION_POLICY=null\n'
+  printf 'REQUESTED_RUN_IMMEDIATE_FULL_BACKUP=false\n'
   printf 'INITIAL_BACKUP_OCID=%s\n' "${INITIAL_BACKUP_OCID:-}"
 } &gt; "$BACKUP_REPORT"
 
@@ -787,23 +813,24 @@ wb12_card10</code></pre>
   </div>
   <pre class="code-scroll"><code>FIELD                                                | VALUE
 ---------------------------------------------------- | -----
-CDB_NAME                                             | CDB01
-PDB_NAME                                             | PDB01
-CDB_OCID                                             | &lt;database_ocid&gt;
-DATABASE_COMPARTMENT_OCID                            | &lt;poc_compartment_ocid&gt;
-RECOVERY_SERVICE_SUBNET_OCID                         | &lt;recovery_service_subnet_ocid&gt;
-PROTECTION_POLICY_NAME                               | Bronze
-PROTECTION_POLICY_OCID                               | &lt;protection_policy_ocid&gt;
-BACKUP_DESTINATION_TYPE                              | DBRS
+CDB_NAME                                             | &lt;CDB_NAME&gt;
+PDB_NAME                                             | &lt;PDB_NAME&gt;
+CDB_OCID                                             | &lt;CDB_OCID&gt;
+DATABASE_COMPARTMENT_OCID                            | &lt;DATABASE_COMPARTMENT_OCID&gt;
+RECOVERY_SERVICE_SUBNET_OCID                         | &lt;RECOVERY_SERVICE_SUBNET_OCID&gt;
+PROTECTION_POLICY_NAME                               | &lt;PROTECTION_POLICY_NAME&gt;
+PROTECTION_POLICY_OCID                               | &lt;PROTECTION_POLICY_OCID&gt;
+BACKUP_DESTINATION_TYPE                              | &lt;BACKUP_DESTINATION_TYPE&gt;
 AUTO_BACKUP_ENABLED                                  | true
 REQUESTED_REAL_TIME_DATA_PROTECTION_ENABLED          | false
 REQUESTED_BACKUP_RETENTION_POLICY_ON_TERMINATE       | RETAIN_FOR_72_HOURS
-APPLIED_BACKUP_DELETION_POLICY                       | null
-APPLIED_RUN_IMMEDIATE_FULL_BACKUP                    | false
-INITIAL_BACKUP_OCID                                  | &lt;backup_ocid&gt;
+REPORTED_BACKUP_DELETION_POLICY                      | null
+REQUESTED_RUN_IMMEDIATE_FULL_BACKUP                  | false
+INITIAL_BACKUP_OCID                                  | &lt;INITIAL_BACKUP_OCID&gt;
 
-wb11_card10</code></pre>
+wb12_card10</code></pre>
 </div>
+<p><strong>About <code>REPORTED_BACKUP_DELETION_POLICY | null</code>:</strong> Disabling automatic backups stops subsequent scheduled backups; it does not mean <strong>Retain backups for 72 hours, then delete</strong>. With Recovery Service, existing backups continue to be retained according to the assigned protection policy when automatic backups are disabled. The 72-hour option applies only after the database is terminated, and the OCI Console presents it as a deletion option while configuring automatic backups.</p>
       </section><section id="oracle-documentation-references" class="article-section">
         <h2>Oracle documentation references</h2>
         <div class="table-wrap">
