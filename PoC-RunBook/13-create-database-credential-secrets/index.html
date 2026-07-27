@@ -31,9 +31,9 @@
       <div class="hero-copy">
         <p class="eyebrow">Chapter 13</p>
         <h1>Create Database Credential Secrets</h1>
-        <p class="subtitle">This section creates the OCI Vault resources required before OCI Database Management can use database credentials. The workbook creates or reuses a Vault in the assigned PoC compartment through SECURITY_COMPARTMENT_OCID identified by <code>SECURITY_COMPARTMENT_OCID</code>, which chapter 05 aliases to the assigned PoC compartment, creates or reuses an AES KMS key in that Vault, and stores the <code>CDB_ADMIN_PASSWORD</code> value from Chapter 10 as separate Vault secrets for the <code>SYS</code> and <code>SYSTEM</code> users.</p>
+        <p class="subtitle">This section creates the OCI Vault resources required before OCI Database Management can use database credentials. The workbook creates or reuses a Vault in the operator-selected Vault compartment, creates or reuses an AES KMS key in the operator-selected key compartment, and stores the <code>CDB_ADMIN_PASSWORD</code> value from Chapter 10 as separate Vault secrets for the <code>SYS</code> and <code>SYSTEM</code> users in <code>SECURITY_COMPARTMENT_OCID</code>.</p>
         <div class="hero-meta">
-          <span>Last updated July 20, 2026</span>
+          <span>Last updated July 23, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -53,7 +53,7 @@
       </nav>
       <section id="section-purpose" class="article-section">
         <h2>Section purpose</h2>
-        <div class="note-box">This section creates the OCI Vault resources required before OCI Database Management can use database credentials. The workbook creates or reuses a Vault in the assigned PoC compartment through SECURITY_COMPARTMENT_OCID identified by <code>SECURITY_COMPARTMENT_OCID</code>, which chapter 05 aliases to the assigned PoC compartment, creates or reuses an AES KMS key in that Vault, and stores the <code>CDB_ADMIN_PASSWORD</code> value from Chapter 10 as separate Vault secrets for the <code>SYS</code> and <code>SYSTEM</code> users.</div>
+        <div class="note-box">This section creates the OCI Vault resources required before OCI Database Management can use database credentials. The workbook creates or reuses a Vault in the operator-selected Vault compartment, creates or reuses an AES KMS key in the operator-selected key compartment, and stores the <code>CDB_ADMIN_PASSWORD</code> value from Chapter 10 as separate Vault secrets for the <code>SYS</code> and <code>SYSTEM</code> users in <code>SECURITY_COMPARTMENT_OCID</code>.</div>
 <div class="note-box">The source password is not re-entered in this chapter. It is reused from <code>~/workbook/cli.env</code>, where Chapter 10 persists <code>CDB_ADMIN_PASSWORD</code> for the CDB01 creation workflow. The resulting secret OCIDs are stored for Chapter 14, which uses the <code>SYSTEM</code> secret as the Database Management credential secret.</div>
       </section><section id="required-security-inputs" class="article-section">
         <h2>Required security inputs</h2>
@@ -68,6 +68,14 @@
 <tr>
 <td><code>SECURITY_COMPARTMENT_OCID</code></td>
 <td>Compartment OCID for OCI Vault, KMS key, and secrets.</td>
+</tr>
+<tr>
+<td><code>CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID</code></td>
+<td>Resolved compartment OCID where the credential Vault is created or found.</td>
+</tr>
+<tr>
+<td><code>CDB_CREDENTIAL_KEY_COMPARTMENT_OCID</code></td>
+<td>Resolved compartment OCID where the KMS key is created or found.</td>
 </tr>
 <tr>
 <td><code>CDB_CREDENTIAL_VAULT_NAME</code></td>
@@ -91,11 +99,11 @@
 </tr>
 <tr>
 <td><code>CDB_SYS_SECRET_NAME</code></td>
-<td>SYS password secret name. Default: <code>cdb01-sys-password</code>.</td>
+<td>SYS password secret name. Default: <code>&lt;assigned-compartment-name&gt;-cdb01-sys-password</code>.</td>
 </tr>
 <tr>
 <td><code>CDB_SYSTEM_SECRET_NAME</code></td>
-<td>SYSTEM password secret name. Default: <code>cdb01-system-password</code>.</td>
+<td>SYSTEM password secret name. Default: <code>&lt;assigned-compartment-name&gt;-cdb01-system-password</code>.</td>
 </tr>
 <tr>
 <td><code>CDB_SYS_SECRET_OCID</code></td>
@@ -117,9 +125,14 @@
 </tr></thead>
 <tbody>
 <tr>
-<td>Compartment placement</td>
+<td>Secret compartment placement</td>
 <td><code>SECURITY_COMPARTMENT_OCID</code></td>
-<td>Keeps Vault, KMS key, and secret governance in the assigned PoC compartment through SECURITY_COMPARTMENT_OCID instead of the database or admin compartment.</td>
+<td>Stores Vault secrets in the assigned security compartment even when the Vault or key is placed elsewhere.</td>
+</tr>
+<tr>
+<td>Vault and key compartment placement</td>
+<td>Prompted path, resolved to OCID</td>
+<td>Allows the Vault and KMS key to live in <code>root</code> or in another compartment path. Parent compartments are used only for lookup and are not stored.</td>
 </tr>
 <tr>
 <td>Vault type</td>
@@ -225,7 +238,7 @@ SECURITY_COMPARTMENT_OCID            | &lt;poc_compartment_ocid&gt;
 CDB_NAME                             | CDB01
 CDB_ADMIN_PASSWORD                   | loaded
 
-wb12_card01</code></pre>
+wb13_card01</code></pre>
 </div>
       </section><section id="bash-02-set-vault-and-secret-names" class="article-section">
         <h2>BASH 02 - Set Vault and secret names</h2>
@@ -244,8 +257,43 @@ wb12_card01</code></pre>
   . ~/workbook/bin/env.sh --quiet || return 1
 CDB_CREDENTIAL_VAULT_NAME="${CDB_CREDENTIAL_VAULT_NAME:-vault-01}"
 CDB_CREDENTIAL_KEY_NAME="${CDB_CREDENTIAL_KEY_NAME:-key-01}"
-CDB_SYS_SECRET_NAME="${CDB_SYS_SECRET_NAME:-cdb01-sys-password}"
-CDB_SYSTEM_SECRET_NAME="${CDB_SYSTEM_SECRET_NAME:-cdb01-system-password}"
+
+missing_vars=""
+for name in POC_COMPARTMENT_NAME; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    missing_vars="${missing_vars}${missing_vars:+ }$name"
+  fi
+done
+
+if [ -n "$missing_vars" ]; then
+
+  printf '\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: Missing required workbook variables." \
+    "Missing: $missing_vars" \
+    "Action: run BASH 01, then rerun this card." \
+    "The shell prompt is still active; no OCI resource was changed." &gt;&amp;2
+  return 1
+fi
+
+if [ -z "$POC_COMPARTMENT_NAME" ] || [ "$POC_COMPARTMENT_NAME" = "null" ]; then
+  printf '\n%s\n%s\n\n' \
+    "STOP: Unable to resolve the assigned compartment name for secret naming." \
+    "POC_COMPARTMENT_NAME is empty in ~/workbook/cli.env." &gt;&amp;2
+  return 1
+fi
+
+CDB_SECRET_NAME_COMPARTMENT_PREFIX="$(
+  printf '%s' "$POC_COMPARTMENT_NAME" \
+  | tr '[:upper:]' '[:lower:]' \
+  | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//'
+)"
+
+CDB_SYS_SECRET_NAME_DEFAULT="${CDB_SECRET_NAME_COMPARTMENT_PREFIX}-cdb01-sys-password"
+CDB_SYSTEM_SECRET_NAME_DEFAULT="${CDB_SECRET_NAME_COMPARTMENT_PREFIX}-cdb01-system-password"
+
+CDB_SYS_SECRET_NAME="$CDB_SYS_SECRET_NAME_DEFAULT"
+CDB_SYSTEM_SECRET_NAME="$CDB_SYSTEM_SECRET_NAME_DEFAULT"
 
 upsert_cli_env CDB_CREDENTIAL_VAULT_NAME "$CDB_CREDENTIAL_VAULT_NAME" &gt;/dev/null
 upsert_cli_env CDB_CREDENTIAL_KEY_NAME "$CDB_CREDENTIAL_KEY_NAME" &gt;/dev/null
@@ -276,14 +324,14 @@ wb13_card02</code></pre>
 ------------------------------------ | -----
 CDB_CREDENTIAL_VAULT_NAME            | vault-01
 CDB_CREDENTIAL_KEY_NAME              | key-01
-CDB_SYS_SECRET_NAME                  | cdb01-sys-password
-CDB_SYSTEM_SECRET_NAME               | cdb01-system-password
+CDB_SYS_SECRET_NAME                  | lad-01-cdb01-sys-password
+CDB_SYSTEM_SECRET_NAME               | lad-01-cdb01-system-password
 
-wb12_card02</code></pre>
+wb13_card02</code></pre>
 </div>
       </section><section id="vault-choice-before-creation" class="article-section">
         <h2>Vault choice before creation</h2>
-        <p>OCI Vault provides the container for the encryption key and the database password secrets used by later Database Management cards. This workbook creates the Vault in <code>SECURITY_COMPARTMENT_OCID</code> so database credentials are governed with the rest of the security resources, not inside the assigned PoC compartment.</p>
+        <p>OCI Vault provides the container for the encryption key and the database password secrets used by later Database Management cards. This workbook prompts for the Vault and key compartment paths so shared security services can live at <code>root</code> or under another compartment path while the secrets remain stored in <code>SECURITY_COMPARTMENT_OCID</code>.</p>
 <p>Oracle exposes two Vault infrastructure choices through the CLI <code>--vault-type</code> parameter. The workbook uses <code>DEFAULT</code> because this lab needs one software-protected key and two database password secrets, and the official Oracle price list shows software-protected Vault keys as <code>Free</code> and Vault secrets as <code>Free</code>. A <code>VIRTUAL_PRIVATE</code> Vault is appropriate when the tenancy requires dedicated/private Vault infrastructure for stronger isolation or stricter compliance controls, but it introduces a private-vault hourly charge.</p>
 <div class="table-wrap">
 <table class="data-table">
@@ -310,7 +358,7 @@ wb12_card02</code></pre>
 <td>Higher than <code>DEFAULT</code> for this scenario because the fixed private-Vault charge is added before key or secret usage.</td>
 </tr>
 </tbody></table></div>
-<p>For this workbook, <code>DEFAULT</code> is the best fit: it avoids a recurring private-vault charge while still keeping the key and secrets in the assigned PoC compartment through SECURITY_COMPARTMENT_OCID. Revisit <code>VIRTUAL_PRIVATE</code> only when a formal security or compliance requirement calls for dedicated Vault infrastructure.</p>
+<p>For this workbook, <code>DEFAULT</code> is the best fit: it avoids a recurring private-vault charge while still supporting the selected Vault and key compartments. Revisit <code>VIRTUAL_PRIVATE</code> only when a formal security or compliance requirement calls for dedicated Vault infrastructure.</p>
 <h3>BASH 03 - Create or locate the credential Vault</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -318,7 +366,7 @@ wb12_card02</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create or reuse the CDB credential Vault in the assigned PoC compartment through SECURITY_COMPARTMENT_OCID and capture its Vault OCID.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Capture and validate Vault and key compartment paths, create or reuse the CDB credential Vault, and store only the resolved target compartment OCIDs.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb13_card03() {
@@ -327,7 +375,7 @@ wb12_card02</code></pre>
 VAULT_CREATE_RESPONSE_JSON="$JSON_DIR/cdb-credential-vault-create-response.json"
 
 missing_vars=""
-for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_NAME; do
+for name in REGION TENANCY_ID SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_NAME; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
     missing_vars="${missing_vars}${missing_vars:+ }$name"
@@ -344,10 +392,77 @@ if [ -n "$missing_vars" ]; then
   return 1
 fi
 
+resolve_compartment_path() {
+  target_label="$1"
+  raw_path="$2"
+  normalized_path="$(printf '%s' "$raw_path" | sed 's#^/*##; s#/*$##')"
+
+  case "$(printf '%s' "$normalized_path" | tr '[:upper:]' '[:lower:]')" in
+    ""|root)
+      printf '%s' "$TENANCY_ID"
+      return 0
+      ;;
+  esac
+
+  parent_ocid="$TENANCY_ID"
+  resolved_ocid=""
+  old_ifs="$IFS"
+  IFS='/'
+  for compartment_name in $normalized_path; do
+    IFS="$old_ifs"
+    if [ -z "$compartment_name" ]; then
+      IFS='/'
+      continue
+    fi
+    resolved_ocid="$(
+      oci iam compartment list \
+        --compartment-id "$parent_ocid" \
+        --all \
+        --query "data[?name=='$compartment_name' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+        --raw-output
+    )"
+    if [ -z "$resolved_ocid" ] || [ "$resolved_ocid" = "null" ]; then
+      IFS="$old_ifs"
+      printf 'STOP: %s compartment path "%s" was not found at "%s".\n' \
+        "$target_label" "$raw_path" "$compartment_name" &gt;&amp;2
+      return 1
+    fi
+    parent_ocid="$resolved_ocid"
+    IFS='/'
+  done
+  IFS="$old_ifs"
+
+  printf '%s' "$resolved_ocid"
+}
+
+if [ -n "${POC_PARENT_COMPARTMENT_NAME:-}" ] &amp;&amp; [ -n "${POC_COMPARTMENT_NAME:-}" ]; then
+  DEFAULT_VAULT_COMPARTMENT_PATH="${CDB_CREDENTIAL_VAULT_COMPARTMENT_PATH:-$POC_PARENT_COMPARTMENT_NAME/$POC_COMPARTMENT_NAME}"
+else
+  DEFAULT_VAULT_COMPARTMENT_PATH="${CDB_CREDENTIAL_VAULT_COMPARTMENT_PATH:-root}"
+fi
+DEFAULT_KEY_COMPARTMENT_PATH="${CDB_CREDENTIAL_KEY_COMPARTMENT_PATH:-$DEFAULT_VAULT_COMPARTMENT_PATH}"
+
+printf 'Enter Vault compartment path [/%s]: ' "$DEFAULT_VAULT_COMPARTMENT_PATH"
+IFS= read -r CDB_CREDENTIAL_VAULT_COMPARTMENT_PATH_INPUT
+CDB_CREDENTIAL_VAULT_COMPARTMENT_PATH="${CDB_CREDENTIAL_VAULT_COMPARTMENT_PATH_INPUT:-$DEFAULT_VAULT_COMPARTMENT_PATH}"
+
+printf 'Enter Key compartment path [/%s]: ' "$DEFAULT_KEY_COMPARTMENT_PATH"
+IFS= read -r CDB_CREDENTIAL_KEY_COMPARTMENT_PATH_INPUT
+CDB_CREDENTIAL_KEY_COMPARTMENT_PATH="${CDB_CREDENTIAL_KEY_COMPARTMENT_PATH_INPUT:-$DEFAULT_KEY_COMPARTMENT_PATH}"
+
+printf 'Secrets will be stored in SECURITY_COMPARTMENT_OCID: %s\n' "$SECURITY_COMPARTMENT_OCID"
+printf 'Confirm Vault path "%s" and Key path "%s"? [y/N]: ' \
+  "$CDB_CREDENTIAL_VAULT_COMPARTMENT_PATH" "$CDB_CREDENTIAL_KEY_COMPARTMENT_PATH"
+IFS= read -r answer
+case "$answer" in y|Y|yes|YES) ;; *) printf 'STOP: Vault setup was not confirmed.\n' &gt;&amp;2; return 1;; esac
+
+CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID="$(resolve_compartment_path "Vault" "$CDB_CREDENTIAL_VAULT_COMPARTMENT_PATH")" || return 1
+CDB_CREDENTIAL_KEY_COMPARTMENT_OCID="$(resolve_compartment_path "Key" "$CDB_CREDENTIAL_KEY_COMPARTMENT_PATH")" || return 1
+
 CDB_CREDENTIAL_VAULT_OCID="$(
   oci kms management vault list \
     --region "$REGION" \
-    --compartment-id "$SECURITY_COMPARTMENT_OCID" \
+    --compartment-id "$CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" \
     --all \
     --query "data[?\"display-name\"=='$CDB_CREDENTIAL_VAULT_NAME']|[0].id" \
     --raw-output
@@ -356,7 +471,7 @@ CDB_CREDENTIAL_VAULT_OCID="$(
 if [ -z "$CDB_CREDENTIAL_VAULT_OCID" ] || [ "$CDB_CREDENTIAL_VAULT_OCID" = "null" ]; then
   oci kms management vault create \
     --region "$REGION" \
-    --compartment-id "$SECURITY_COMPARTMENT_OCID" \
+    --compartment-id "$CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" \
     --display-name "$CDB_CREDENTIAL_VAULT_NAME" \
     --vault-type DEFAULT \
     &gt; "$VAULT_CREATE_RESPONSE_JSON"
@@ -364,7 +479,7 @@ if [ -z "$CDB_CREDENTIAL_VAULT_OCID" ] || [ "$CDB_CREDENTIAL_VAULT_OCID" = "null
   CDB_CREDENTIAL_VAULT_OCID="$(
     oci kms management vault list \
       --region "$REGION" \
-      --compartment-id "$SECURITY_COMPARTMENT_OCID" \
+      --compartment-id "$CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" \
       --all \
       --query "data[?\"display-name\"=='$CDB_CREDENTIAL_VAULT_NAME']|[0].id" \
       --raw-output
@@ -376,35 +491,41 @@ if [ -z "$CDB_CREDENTIAL_VAULT_OCID" ] || [ "$CDB_CREDENTIAL_VAULT_OCID" = "null
   printf '\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to create or locate the credential Vault." \
     "Vault name: $CDB_CREDENTIAL_VAULT_NAME" \
-    "Compartment variable: SECURITY_COMPARTMENT_OCID" \
+    "Vault compartment path: $CDB_CREDENTIAL_VAULT_COMPARTMENT_PATH" \
     "Review the OCI CLI error above, then rerun this card." &gt;&amp;2
   return 1
 fi
 
+upsert_cli_env CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID "$CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" &gt;/dev/null
+upsert_cli_env CDB_CREDENTIAL_KEY_COMPARTMENT_OCID "$CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" &gt;/dev/null
 upsert_cli_env CDB_CREDENTIAL_VAULT_OCID "$CDB_CREDENTIAL_VAULT_OCID" &gt;/dev/null
 
-printf '%-30s | %s\n' \
+printf '%-42s | %s\n' \
   "VARIABLE" "VALUE" \
-  "------------------------------" "-----" \
+  "------------------------------------------" "-----" \
+  "CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" "$CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" \
+  "CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" "$CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" \
   "CDB_CREDENTIAL_VAULT_OCID" "$CDB_CREDENTIAL_VAULT_OCID"
   printf '\n%s\n' "wb13_card03"
 }
 
 wb13_card03</code></pre>
 </div>
-<h3>OUTPUT 03 - Expected Vault OCID capture</h3>
+<h3>OUTPUT 03 - Expected Vault compartment and OCID capture</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the Vault OCID captured for endpoint lookup.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the resolved Vault and key compartment OCIDs plus the Vault OCID captured for endpoint lookup.</span>
   </div>
-  <pre class="code-scroll"><code>VARIABLE                       | VALUE
------------------------------- | -----
-CDB_CREDENTIAL_VAULT_OCID      | &lt;vault_ocid&gt;
+  <pre class="code-scroll"><code>VARIABLE                                   | VALUE
+------------------------------------------ | -----
+CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID     | &lt;vault_compartment_ocid&gt;
+CDB_CREDENTIAL_KEY_COMPARTMENT_OCID       | &lt;key_compartment_ocid&gt;
+CDB_CREDENTIAL_VAULT_OCID                 | &lt;vault_ocid&gt;
 
-wb12_card03</code></pre>
+wb13_card03</code></pre>
 </div>
       </section><section id="bash-04-capture-the-vault-management-endpoint" class="article-section">
         <h2>BASH 04 - Capture the Vault management endpoint</h2>
@@ -415,14 +536,14 @@ wb12_card03</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Capture the Vault management endpoint after OCI finishes populating it.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Capture the Vault management endpoint and confirm the Vault belongs to the resolved Vault compartment from BASH 03.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb13_card04() {
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
 missing_vars=""
-for name in REGION CDB_CREDENTIAL_VAULT_OCID; do
+for name in REGION CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_OCID; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
     missing_vars="${missing_vars}${missing_vars:+ }$name"
@@ -436,6 +557,24 @@ if [ -n "$missing_vars" ]; then
     "Missing: $missing_vars" \
     "Action: run BASH 03, then rerun this card." \
     "The shell prompt is still active; no OCI resource was changed." &gt;&amp;2
+  return 1
+fi
+
+CDB_CREDENTIAL_VAULT_RESOLVED_COMPARTMENT_OCID="$(
+  oci kms management vault get \
+    --region "$REGION" \
+    --vault-id "$CDB_CREDENTIAL_VAULT_OCID" \
+    --query 'data."compartment-id"' \
+    --raw-output
+)"
+
+if [ "$CDB_CREDENTIAL_VAULT_RESOLVED_COMPARTMENT_OCID" != "$CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" ]; then
+
+  printf '\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: Vault compartment validation failed." \
+    "Expected Vault compartment OCID: $CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" \
+    "Actual Vault compartment OCID: ${CDB_CREDENTIAL_VAULT_RESOLVED_COMPARTMENT_OCID:-&lt;not_found&gt;}" \
+    "Review the BASH 03 Vault compartment path, then rerun BASH 03 and BASH 04." &gt;&amp;2
   return 1
 fi
 
@@ -462,6 +601,7 @@ upsert_cli_env CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT "$CDB_CREDENTIAL_VAULT_M
 printf '%-42s | %s\n' \
   "VARIABLE" "VALUE" \
   "------------------------------------------" "-----" \
+  "CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" "$CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" \
   "CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT"
   printf '\n%s\n' "wb13_card04"
 }
@@ -474,13 +614,14 @@ wb13_card04</code></pre>
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the Vault management endpoint captured for key creation.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the resolved Vault compartment and management endpoint captured for key creation.</span>
   </div>
   <pre class="code-scroll"><code>VARIABLE                                   | VALUE
 ------------------------------------------ | -----
+CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID     | &lt;vault_compartment_ocid&gt;
 CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT   | https://...management...oraclecloud.com
 
-wb12_card04</code></pre>
+wb13_card04</code></pre>
 </div>
       </section><section id="bash-05-validate-the-credential-vault-state" class="article-section">
         <h2>BASH 05 - Validate the credential Vault state</h2>
@@ -542,7 +683,7 @@ wb13_card05</code></pre>
 | managementEndpoint | https://...management...         |
 +--------------------+----------------------------------+
 
-wb12_card05</code></pre>
+wb13_card05</code></pre>
 </div>
 <p>If the state is <code>CREATING</code>, wait a few minutes and rerun BASH 05 before continuing.</p>
       </section><section id="key-defaults-before-creation" class="article-section">
@@ -579,8 +720,8 @@ wb12_card05</code></pre>
 </tr>
 <tr>
 <td>Key compartment</td>
-<td><code>SECURITY_COMPARTMENT_OCID</code></td>
-<td>Keeps key ownership with security resources instead of the database workload.</td>
+<td><code>CDB_CREDENTIAL_KEY_COMPARTMENT_OCID</code></td>
+<td>Uses the key compartment path captured and validated in BASH 03.</td>
 </tr>
 <tr>
 <td>Key endpoint</td>
@@ -598,7 +739,7 @@ wb12_card05</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create or reuse the AES KMS key used to encrypt the CDB password secrets.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create or reuse the AES KMS key and confirm it belongs to the resolved key compartment from BASH 03.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb13_card06() {
@@ -608,7 +749,7 @@ KEY_SHAPE_JSON="$JSON_DIR/cdb-credential-key-shape.json"
 KEY_CREATE_RESPONSE_JSON="$JSON_DIR/cdb-credential-key-create-response.json"
 
 missing_vars=""
-for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT CDB_CREDENTIAL_KEY_NAME; do
+for name in REGION CDB_CREDENTIAL_KEY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT CDB_CREDENTIAL_KEY_NAME; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
     missing_vars="${missing_vars}${missing_vars:+ }$name"
@@ -636,7 +777,7 @@ CDB_CREDENTIAL_KEY_OCID="$(
   oci kms management key list \
     --region "$REGION" \
     --endpoint "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" \
-    --compartment-id "$SECURITY_COMPARTMENT_OCID" \
+    --compartment-id "$CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" \
     --all \
     --query "data[?\"display-name\"=='$CDB_CREDENTIAL_KEY_NAME']|[0].id" \
     --raw-output
@@ -646,7 +787,7 @@ if [ -z "$CDB_CREDENTIAL_KEY_OCID" ] || [ "$CDB_CREDENTIAL_KEY_OCID" = "null" ];
   oci kms management key create \
     --region "$REGION" \
     --endpoint "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" \
-    --compartment-id "$SECURITY_COMPARTMENT_OCID" \
+    --compartment-id "$CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" \
     --display-name "$CDB_CREDENTIAL_KEY_NAME" \
     --key-shape "file://$KEY_SHAPE_JSON" \
     &gt; "$KEY_CREATE_RESPONSE_JSON"
@@ -655,7 +796,7 @@ if [ -z "$CDB_CREDENTIAL_KEY_OCID" ] || [ "$CDB_CREDENTIAL_KEY_OCID" = "null" ];
     oci kms management key list \
       --region "$REGION" \
       --endpoint "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" \
-      --compartment-id "$SECURITY_COMPARTMENT_OCID" \
+      --compartment-id "$CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" \
       --all \
       --query "data[?\"display-name\"=='$CDB_CREDENTIAL_KEY_NAME']|[0].id" \
       --raw-output
@@ -671,11 +812,31 @@ if [ -z "$CDB_CREDENTIAL_KEY_OCID" ] || [ "$CDB_CREDENTIAL_KEY_OCID" = "null" ];
   return 1
 fi
 
+CDB_CREDENTIAL_KEY_RESOLVED_COMPARTMENT_OCID="$(
+  oci kms management key get \
+    --region "$REGION" \
+    --endpoint "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" \
+    --key-id "$CDB_CREDENTIAL_KEY_OCID" \
+    --query 'data."compartment-id"' \
+    --raw-output
+)"
+
+if [ "$CDB_CREDENTIAL_KEY_RESOLVED_COMPARTMENT_OCID" != "$CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" ]; then
+
+  printf '\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: KMS key compartment validation failed." \
+    "Expected key compartment OCID: $CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" \
+    "Actual key compartment OCID: ${CDB_CREDENTIAL_KEY_RESOLVED_COMPARTMENT_OCID:-&lt;not_found&gt;}" \
+    "Review the BASH 03 key compartment path, then rerun BASH 03 and BASH 06." &gt;&amp;2
+  return 1
+fi
+
 upsert_cli_env CDB_CREDENTIAL_KEY_OCID "$CDB_CREDENTIAL_KEY_OCID" &gt;/dev/null
 
-printf '%-28s | %s\n' \
+printf '%-42s | %s\n' \
   "VARIABLE" "VALUE" \
-  "----------------------------" "-----" \
+  "------------------------------------------" "-----" \
+  "CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" "$CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" \
   "CDB_CREDENTIAL_KEY_OCID" "$CDB_CREDENTIAL_KEY_OCID"
   printf '\n%s\n' "wb13_card06"
 }
@@ -688,13 +849,14 @@ wb13_card06</code></pre>
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the credential KMS key OCID.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the resolved key compartment and credential KMS key OCID.</span>
   </div>
-  <pre class="code-scroll"><code>VARIABLE                     | VALUE
----------------------------- | -----
-CDB_CREDENTIAL_KEY_OCID      | &lt;key_ocid&gt;
+  <pre class="code-scroll"><code>VARIABLE                                   | VALUE
+------------------------------------------ | -----
+CDB_CREDENTIAL_KEY_COMPARTMENT_OCID       | &lt;key_compartment_ocid&gt;
+CDB_CREDENTIAL_KEY_OCID                   | &lt;key_ocid&gt;
 
-wb12_card06</code></pre>
+wb13_card06</code></pre>
 </div>
       </section><section id="secret-defaults-before-creation" class="article-section">
         <h2>Secret defaults before creation</h2>
@@ -710,12 +872,12 @@ wb12_card06</code></pre>
 <tbody>
 <tr>
 <td>SYS secret name</td>
-<td><code>cdb01-sys-password</code></td>
+<td><code>&lt;assigned-compartment-name&gt;-cdb01-sys-password</code></td>
 <td>Keeps the <code>SYS</code> credential available for approved administrative workflows without using it as the default Database Management credential.</td>
 </tr>
 <tr>
 <td>SYSTEM secret name</td>
-<td><code>cdb01-system-password</code></td>
+<td><code>&lt;assigned-compartment-name&gt;-cdb01-system-password</code></td>
 <td>Stores the credential Chapter 14 uses for OCI Database Management enablement.</td>
 </tr>
 <tr>
@@ -726,7 +888,7 @@ wb12_card06</code></pre>
 <tr>
 <td>Encryption key</td>
 <td><code>CDB_CREDENTIAL_KEY_OCID</code></td>
-<td>Encrypts both secrets with the workbook KMS key in <code>vault-01</code>.</td>
+<td>Encrypts both secrets with the workbook KMS key from the resolved key compartment.</td>
 </tr>
 <tr>
 <td>Secret content format</td>
@@ -737,6 +899,11 @@ wb12_card06</code></pre>
 <td>Secret version label</td>
 <td><code>&lt;secret-name&gt;-v1</code></td>
 <td>Gives the initial secret content a predictable version name for audit and later rotation.</td>
+</tr>
+<tr>
+<td>Existing secret lookup</td>
+<td>Any non-deleted matching name</td>
+<td>Avoids duplicate-name create failures when a just-created secret is still provisioning and not yet <code>ACTIVE</code>.</td>
 </tr>
 <tr>
 <td>Terminal output</td>
@@ -787,9 +954,8 @@ CDB_SYS_SECRET_OCID="$(
     --region "$REGION" \
     --compartment-id "$SECURITY_COMPARTMENT_OCID" \
     --vault-id "$CDB_CREDENTIAL_VAULT_OCID" \
-    --lifecycle-state ACTIVE \
     --all \
-    --query "data[?\"secret-name\"=='$CDB_SYS_SECRET_NAME']|[0].id" \
+    --query "data[?\"secret-name\"=='$CDB_SYS_SECRET_NAME' &amp;&amp; \"lifecycle-state\"!='DELETED']|[0].id" \
     --raw-output
 )"
 
@@ -807,6 +973,40 @@ if [ -z "$CDB_SYS_SECRET_OCID" ] || [ "$CDB_SYS_SECRET_OCID" = "null" ]; then
       --query 'data.id' \
       --raw-output
   )"
+fi
+
+if [ -n "$CDB_SYS_SECRET_OCID" ] &amp;&amp; [ "$CDB_SYS_SECRET_OCID" != "null" ]; then
+  CDB_SYS_SECRET_STATE="$(
+    oci vault secret get \
+      --region "$REGION" \
+      --secret-id "$CDB_SYS_SECRET_OCID" \
+      --query 'data."lifecycle-state"' \
+      --raw-output
+  )"
+  if [ "$CDB_SYS_SECRET_STATE" != "ACTIVE" ]; then
+    printf '\n%s\n%s\n%s\n%s\n\n' \
+      "STOP: Existing SYS password secret is not active yet." \
+      "Secret name: $CDB_SYS_SECRET_NAME" \
+      "Current state: ${CDB_SYS_SECRET_STATE:-&lt;not_found&gt;}" \
+      "Action: wait a few minutes for secret provisioning to finish, then rerun this card." &gt;&amp;2
+    return 1
+  fi
+
+  CDB_SYS_SECRET_KEY_OCID="$(
+    oci vault secret get \
+      --region "$REGION" \
+      --secret-id "$CDB_SYS_SECRET_OCID" \
+      --query 'data."key-id"' \
+      --raw-output
+  )"
+  if [ "$CDB_SYS_SECRET_KEY_OCID" != "$CDB_CREDENTIAL_KEY_OCID" ]; then
+    printf '\n%s\n%s\n%s\n%s\n\n' \
+      "STOP: Existing SYS password secret uses a different KMS key." \
+      "Secret name: $CDB_SYS_SECRET_NAME" \
+      "Expected key OCID: $CDB_CREDENTIAL_KEY_OCID" \
+      "Actual key OCID: ${CDB_SYS_SECRET_KEY_OCID:-&lt;not_found&gt;}" &gt;&amp;2
+    return 1
+  fi
 fi
 
 if [ -z "$CDB_SYS_SECRET_OCID" ] || [ "$CDB_SYS_SECRET_OCID" = "null" ]; then
@@ -841,7 +1041,7 @@ wb13_card07</code></pre>
 -------------------- | -----
 CDB_SYS_SECRET_OCID  | &lt;vault_secret_ocid&gt;
 
-wb12_card07</code></pre>
+wb13_card07</code></pre>
 </div>
       </section><section id="bash-08-create-or-locate-the-system-password-secret" class="article-section">
         <h2>BASH 08 - Create or locate the SYSTEM password secret</h2>
@@ -885,9 +1085,8 @@ CDB_SYSTEM_SECRET_OCID="$(
     --region "$REGION" \
     --compartment-id "$SECURITY_COMPARTMENT_OCID" \
     --vault-id "$CDB_CREDENTIAL_VAULT_OCID" \
-    --lifecycle-state ACTIVE \
     --all \
-    --query "data[?\"secret-name\"=='$CDB_SYSTEM_SECRET_NAME']|[0].id" \
+    --query "data[?\"secret-name\"=='$CDB_SYSTEM_SECRET_NAME' &amp;&amp; \"lifecycle-state\"!='DELETED']|[0].id" \
     --raw-output
 )"
 
@@ -905,6 +1104,40 @@ if [ -z "$CDB_SYSTEM_SECRET_OCID" ] || [ "$CDB_SYSTEM_SECRET_OCID" = "null" ]; t
       --query 'data.id' \
       --raw-output
   )"
+fi
+
+if [ -n "$CDB_SYSTEM_SECRET_OCID" ] &amp;&amp; [ "$CDB_SYSTEM_SECRET_OCID" != "null" ]; then
+  CDB_SYSTEM_SECRET_STATE="$(
+    oci vault secret get \
+      --region "$REGION" \
+      --secret-id "$CDB_SYSTEM_SECRET_OCID" \
+      --query 'data."lifecycle-state"' \
+      --raw-output
+  )"
+  if [ "$CDB_SYSTEM_SECRET_STATE" != "ACTIVE" ]; then
+    printf '\n%s\n%s\n%s\n%s\n\n' \
+      "STOP: Existing SYSTEM password secret is not active yet." \
+      "Secret name: $CDB_SYSTEM_SECRET_NAME" \
+      "Current state: ${CDB_SYSTEM_SECRET_STATE:-&lt;not_found&gt;}" \
+      "Action: wait a few minutes for secret provisioning to finish, then rerun this card." &gt;&amp;2
+    return 1
+  fi
+
+  CDB_SYSTEM_SECRET_KEY_OCID="$(
+    oci vault secret get \
+      --region "$REGION" \
+      --secret-id "$CDB_SYSTEM_SECRET_OCID" \
+      --query 'data."key-id"' \
+      --raw-output
+  )"
+  if [ "$CDB_SYSTEM_SECRET_KEY_OCID" != "$CDB_CREDENTIAL_KEY_OCID" ]; then
+    printf '\n%s\n%s\n%s\n%s\n\n' \
+      "STOP: Existing SYSTEM password secret uses a different KMS key." \
+      "Secret name: $CDB_SYSTEM_SECRET_NAME" \
+      "Expected key OCID: $CDB_CREDENTIAL_KEY_OCID" \
+      "Actual key OCID: ${CDB_SYSTEM_SECRET_KEY_OCID:-&lt;not_found&gt;}" &gt;&amp;2
+    return 1
+  fi
 fi
 
 if [ -z "$CDB_SYSTEM_SECRET_OCID" ] || [ "$CDB_SYSTEM_SECRET_OCID" = "null" ]; then
@@ -942,7 +1175,7 @@ wb13_card08</code></pre>
 CDB_SYSTEM_SECRET_OCID    | &lt;vault_secret_ocid&gt;
 DBMGMT_SYSTEM_SECRET_OCID | &lt;vault_secret_ocid&gt;
 
-wb12_card08</code></pre>
+wb13_card08</code></pre>
 </div>
       </section><section id="bash-09-validate-created-secrets" class="article-section">
         <h2>BASH 09 - Validate created secrets</h2>
@@ -953,14 +1186,14 @@ wb12_card08</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the SYS and SYSTEM secrets are active in the assigned PoC compartment through SECURITY_COMPARTMENT_OCID Vault.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the SYS and SYSTEM secrets are active in SECURITY_COMPARTMENT_OCID.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb13_card09() {
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
 missing_vars=""
-for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_OCID CDB_SYS_SECRET_NAME CDB_SYSTEM_SECRET_NAME; do
+for name in REGION SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_OCID CDB_CREDENTIAL_KEY_OCID CDB_SYS_SECRET_NAME CDB_SYSTEM_SECRET_NAME; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
     missing_vars="${missing_vars}${missing_vars:+ }$name"
@@ -987,6 +1220,27 @@ SECRETS_JSON="$(
     --query "data[?\"secret-name\"=='$CDB_SYS_SECRET_NAME' || \"secret-name\"=='$CDB_SYSTEM_SECRET_NAME']" \
     --output json
 )"
+
+SECRET_VALIDATION_COUNTS="$(
+  printf '%s' "$SECRETS_JSON" \
+  | jq -r --arg expected_key "$CDB_CREDENTIAL_KEY_OCID" '
+      [ .[] | select(."key-id" == $expected_key) ] as $matching_key
+      | [ .[] | select(."key-id" != $expected_key) ] as $wrong_key
+      | "\(. | length)|\($matching_key | length)|\($wrong_key | length)"
+    '
+)"
+IFS='|' read -r SECRET_COUNT MATCHING_KEY_COUNT WRONG_KEY_COUNT &lt;&lt;EOF
+$SECRET_VALIDATION_COUNTS
+EOF
+
+if [ "$SECRET_COUNT" != "2" ] || [ "$MATCHING_KEY_COUNT" != "2" ] || [ "$WRONG_KEY_COUNT" != "0" ]; then
+  printf '\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: Secret validation failed." \
+    "Expected two active secrets in SECURITY_COMPARTMENT_OCID using key: $CDB_CREDENTIAL_KEY_OCID" \
+    "Found active secrets: ${SECRET_COUNT:-0}; matching key: ${MATCHING_KEY_COUNT:-0}; wrong key: ${WRONG_KEY_COUNT:-0}" \
+    "Review BASH 07 and BASH 08, then rerun this card." &gt;&amp;2
+  return 1
+fi
 
 printf '%s' "$SECRETS_JSON" \
 | jq -r '
@@ -1015,17 +1269,17 @@ wb13_card09</code></pre>
   <div class="code-description code-objective">
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the expected active SYS and SYSTEM secrets.</span>
   </div>
-  <pre class="code-scroll"><code>SECRET_NAME  | cdb01-sys-password
+  <pre class="code-scroll"><code>SECRET_NAME  | lad-01-cdb01-sys-password
 STATE        | ACTIVE
 KEY_OCID     | &lt;key_ocid&gt;
 SECRET_OCID  | &lt;vault_secret_ocid&gt;
 
-SECRET_NAME  | cdb01-system-password
+SECRET_NAME  | lad-01-cdb01-system-password
 STATE        | ACTIVE
 KEY_OCID     | &lt;key_ocid&gt;
 SECRET_OCID  | &lt;vault_secret_ocid&gt;
 
-wb12_card09</code></pre>
+wb13_card09</code></pre>
 </div>
       </section><section id="bash-10-store-the-credential-secret-report" class="article-section">
         <h2>BASH 10 - Store the credential secret report</h2>
@@ -1043,7 +1297,7 @@ wb12_card09</code></pre>
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
 missing_vars=""
-for name in SECURITY_COMPARTMENT_OCID CDB_NAME CDB_CREDENTIAL_VAULT_NAME CDB_CREDENTIAL_VAULT_OCID CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT CDB_CREDENTIAL_KEY_NAME CDB_CREDENTIAL_KEY_OCID CDB_SYS_SECRET_NAME CDB_SYS_SECRET_OCID CDB_SYSTEM_SECRET_NAME CDB_SYSTEM_SECRET_OCID DBMGMT_SYSTEM_SECRET_OCID; do
+for name in SECURITY_COMPARTMENT_OCID CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID CDB_CREDENTIAL_KEY_COMPARTMENT_OCID CDB_NAME CDB_CREDENTIAL_VAULT_NAME CDB_CREDENTIAL_VAULT_OCID CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT CDB_CREDENTIAL_KEY_NAME CDB_CREDENTIAL_KEY_OCID CDB_SYS_SECRET_NAME CDB_SYS_SECRET_OCID CDB_SYSTEM_SECRET_NAME CDB_SYSTEM_SECRET_OCID; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
     missing_vars="${missing_vars}${missing_vars:+ }$name"
@@ -1059,6 +1313,9 @@ if [ -n "$missing_vars" ]; then
     "The shell prompt is still active; no report was written." &gt;&amp;2
   return 1
 fi
+
+DBMGMT_SYSTEM_SECRET_OCID="${DBMGMT_SYSTEM_SECRET_OCID:-$CDB_SYSTEM_SECRET_OCID}"
+upsert_cli_env DBMGMT_SYSTEM_SECRET_OCID "$DBMGMT_SYSTEM_SECRET_OCID" &gt;/dev/null
 
 CDB_SECRET_REPORT="$REPORT_DIR/cdb01-credential-secrets.txt"
 CDB_SECRET_REPORT_SCRIPT="$BIN_DIR/show-cdb01-credential-secrets.sh"
@@ -1078,6 +1335,8 @@ chmod +x "$CDB_SECRET_REPORT_SCRIPT"
 
 {
   printf '%s=%s\n' "SECURITY_COMPARTMENT_OCID" "$SECURITY_COMPARTMENT_OCID"
+  printf '%s=%s\n' "CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" "$CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID"
+  printf '%s=%s\n' "CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" "$CDB_CREDENTIAL_KEY_COMPARTMENT_OCID"
   printf '%s=%s\n' "CDB_NAME" "$CDB_NAME"
   printf '%s=%s\n' "CDB_CREDENTIAL_VAULT_NAME" "$CDB_CREDENTIAL_VAULT_NAME"
   printf '%s=%s\n' "CDB_CREDENTIAL_VAULT_OCID" "$CDB_CREDENTIAL_VAULT_OCID"
@@ -1108,19 +1367,21 @@ wb13_card10</code></pre>
   <pre class="code-scroll"><code>VARIABLE                                   | VALUE
 ------------------------------------------ | -----
 SECURITY_COMPARTMENT_OCID                  | &lt;poc_compartment_ocid&gt;
+CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID     | &lt;vault_compartment_ocid&gt;
+CDB_CREDENTIAL_KEY_COMPARTMENT_OCID       | &lt;key_compartment_ocid&gt;
 CDB_NAME                                   | CDB01
 CDB_CREDENTIAL_VAULT_NAME                  | vault-01
 CDB_CREDENTIAL_VAULT_OCID                  | &lt;vault_ocid&gt;
 CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT   | https://...management...oraclecloud.com
 CDB_CREDENTIAL_KEY_NAME                    | key-01
 CDB_CREDENTIAL_KEY_OCID                    | &lt;key_ocid&gt;
-CDB_SYS_SECRET_NAME                        | cdb01-sys-password
+CDB_SYS_SECRET_NAME                        | lad-01-cdb01-sys-password
 CDB_SYS_SECRET_OCID                        | &lt;vault_secret_ocid&gt;
-CDB_SYSTEM_SECRET_NAME                     | cdb01-system-password
+CDB_SYSTEM_SECRET_NAME                     | lad-01-cdb01-system-password
 CDB_SYSTEM_SECRET_OCID                     | &lt;vault_secret_ocid&gt;
 DBMGMT_SYSTEM_SECRET_OCID                  | &lt;vault_secret_ocid&gt;
 
-wb12_card10</code></pre>
+wb13_card10</code></pre>
 </div>
       </section><section id="oracle-documentation-references" class="article-section">
         <h2>Oracle documentation references</h2>

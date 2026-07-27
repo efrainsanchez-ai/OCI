@@ -1,0 +1,630 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Create New PDB | OCI PoC RunBook</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../assets/workbook.css">
+</head>
+<body class="workbook-chapter" data-guide-key="18-create-new-pdb" data-guide-scope="nested">
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-mark" aria-hidden="true">OCI</span>
+        <span class="brand-text">
+          <span class="brand-title" data-series-brand-title>OCI PoC RunBook</span>
+          <span class="brand-subtitle" data-series-brand-subtitle>Workbook</span>
+        </span>
+      </a>
+      <div class="top-actions">
+        <a class="top-link" href="../index.html#documentation">Documentation</a>
+        <a class="top-link" href="../index.html#glossary">Glossary</a>
+        <button class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+      </div>
+    </div>
+  </header>
+  <div id="top"></div>
+  <section class="hero hero-compact">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Chapter 18</p>
+        <h1>Create New PDB</h1>
+        <p class="subtitle">This section creates a new pluggable database (PDB) in the existing <code>CDB01</code> container database. Oracle Multitenant architecture lets one CDB host multiple isolated PDBs while sharing the CDB infrastructure and Oracle home. This reduces administrative and infrastructure overhead, supports tenant-level lifecycle operations, and makes it easier to consolidate databases while retaining logical separation for applications and schemas.</p>
+        <div class="hero-meta">
+          <span>Last updated July 23, 2026</span>
+        </div>
+        <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+  <div class="page-grid">
+    <nav class="toc" aria-label="Table of contents">
+      <p>Table of contents</p>
+      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#required-database-inputs">Required database inputs</a></li><li><a href="#recommended-choices">Recommended choices</a></li><li><a href="#bash-01-preflight-the-cdb-environment">BASH 01 - Preflight the CDB environment</a></li><li><a href="#bash-02-request-the-new-pdb">BASH 02 - Request the new PDB</a></li><li><a href="#bash-03-monitor-pdb-creation-status">BASH 03 - Monitor PDB creation status</a></li><li><a href="#bash-04-enable-database-management-for-the-new-pdb">BASH 04 - Enable Database Management for the new PDB</a></li><li><a href="#operational-notes">Operational notes</a></li></ol>
+    </nav>
+    <main id="main" class="article">
+      <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../17-recover-variables/index.html"><span class="nav-card-label">Previous</span><strong>17. Recover Variables</strong></a><span class="chapter-link nav-card is-disabled" aria-disabled="true"><span class="nav-card-label">Next</span><strong>End of workbook</strong></span>
+      </nav>
+      <section id="section-purpose" class="article-section">
+        <h2>Section purpose</h2>
+        <div class="note-box">This section creates a new pluggable database (PDB) in the existing <code>CDB01</code> container database. Oracle Multitenant architecture lets one CDB host multiple isolated PDBs while sharing the CDB infrastructure and Oracle home. This reduces administrative and infrastructure overhead, supports tenant-level lifecycle operations, and makes it easier to consolidate databases while retaining logical separation for applications and schemas.</div>
+<div class="note-box">The workflow first validates the Cloud Shell environment and the target CDB, then asks for the new PDB name. It reuses the configured default CDB administrator password for the PDB administrator, CDB administrator, and existing TDE wallet password fields. The create request deliberately does not use <code>--wait-for-state</code>, so Cloud Shell returns as soon as OCI accepts the asynchronous request. The last card checks status until the PDB is ready.</div>
+<div class="note-box">The request disables the immediate PDB backup (<code>createPdbBackup: false</code>). When automatic backups are enabled on the CDB, Oracle states that the PDB cannot be recovered until the next daily backup completes successfully; it does not describe that next backup as an incremental backup. If CDB automatic backups are disabled, no daily automatic backup is scheduled, so create and validate an appropriate backup before relying on PDB recovery.</div>
+<div class="note-box">OCI CLI 3.73.1 is the target command-line version for this workbook. The commands use the documented <code>oci db pluggable-database create</code>, <code>oci db pluggable-database get</code>, and <code>oci db pluggable-database list</code> surfaces.</div>
+      </section><section id="required-database-inputs" class="article-section">
+        <h2>Required database inputs</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Variable</th>
+<th scope="col">Purpose</th>
+</tr></thead>
+<tbody>
+<tr>
+<td><code>REGION</code></td>
+<td>OCI region loaded by <code>~/workbook/bin/env.sh</code> and passed explicitly to OCI CLI commands.</td>
+</tr>
+<tr>
+<td><code>CDB_OCID</code></td>
+<td>Existing <code>CDB01</code> OCID captured in Chapter 10.</td>
+</tr>
+<tr>
+<td><code>CDB_NAME</code></td>
+<td>Existing container database name. Default: <code>CDB01</code>.</td>
+</tr>
+<tr>
+<td><code>CDB_ADMIN_PASSWORD</code></td>
+<td>Existing configured default password reused for the PDB administrator, CDB administrator, and TDE wallet update fields.</td>
+</tr>
+<tr>
+<td><code>NEW_PDB_NAME</code></td>
+<td>New PDB name requested in BASH 02. Default: <code>PDB02</code>.</td>
+</tr>
+<tr>
+<td><code>NEW_PDB_OCID</code></td>
+<td>New PDB OCID captured from the asynchronous create response.</td>
+</tr>
+</tbody></table></div>
+      </section><section id="recommended-choices" class="article-section">
+        <h2>Recommended choices</h2>
+        <div class="table-wrap">
+<table class="data-table">
+<thead><tr>
+<th scope="col">Choice</th>
+<th scope="col">Workbook value</th>
+<th scope="col">Rationale</th>
+</tr></thead>
+<tbody>
+<tr>
+<td>Target CDB</td>
+<td><code>CDB01</code></td>
+<td>Reuses the established container database and its shared Oracle home.</td>
+</tr>
+<tr>
+<td>New PDB name</td>
+<td><code>PDB02</code></td>
+<td>Provides a distinct, short default name; replace it with an environment-approved name when needed.</td>
+</tr>
+<tr>
+<td>PDB backup after creation</td>
+<td>Disabled</td>
+<td>No immediate PDB backup is requested. With CDB automatic backups enabled, recovery remains unavailable until Oracle's next daily backup completes successfully; otherwise arrange a backup separately.</td>
+</tr>
+<tr>
+<td>Wallet password</td>
+<td><code>CDB_ADMIN_PASSWORD</code></td>
+<td>Reuses the configured default password for the existing TDE wallet update fields without displaying it in terminal output.</td>
+</tr>
+<tr>
+<td>Request behavior</td>
+<td>Asynchronous</td>
+<td>Omits <code>--wait-for-state</code> so the browser session is not held open while OCI provisions the PDB.</td>
+</tr>
+</tbody></table></div>
+      </section><section id="bash-01-preflight-the-cdb-environment" class="article-section">
+        <h2>BASH 01 - Preflight the CDB environment</h2>
+        <p>Before submitting a create request, verify that the runbook environment has the CDB identity, region, and configured password required by the OCI API. This prevents an accidental create against an unknown CDB and confirms that the container database is available to host another isolated PDB.</p>
+<h3>BASH 01 - Preflight the CDB environment</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Validate the required environment variables and the lifecycle state of CDB01 before creating a new PDB.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>wb18_card01() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+EXPECTED_OCI_CLI_VERSION="3.73.1"
+ACTUAL_OCI_CLI_VERSION="$(oci --version 2&gt;/dev/null || true)"
+
+missing=0
+for name in REGION CDB_OCID CDB_NAME CDB_ADMIN_PASSWORD; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    clear
+    printf 'STOP: Missing required variable: %s\n' "$name" &gt;&amp;2
+    missing=1
+  fi
+done
+
+if [ "$missing" -ne 0 ]; then
+  clear
+  printf 'STOP: Run Chapter 10 and load ~/workbook/cli.env before continuing.\n' &gt;&amp;2
+  return 1
+fi
+
+CDB_STATE="$(
+  oci db database get \
+    --region "$REGION" \
+    --database-id "$CDB_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+
+if [ "$CDB_STATE" != "AVAILABLE" ]; then
+  clear
+  printf 'STOP: %s is %s. Wait for AVAILABLE before creating a PDB.\n' "$CDB_NAME" "$CDB_STATE" &gt;&amp;2
+  return 1
+fi
+
+printf '%-28s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "----------------------------" "-----" \
+  "EXPECTED_OCI_CLI_VERSION" "$EXPECTED_OCI_CLI_VERSION" \
+  "ACTUAL_OCI_CLI_VERSION" "$ACTUAL_OCI_CLI_VERSION" \
+  "REGION" "$REGION" \
+  "CDB_NAME" "$CDB_NAME" \
+  "CDB_OCID" "$CDB_OCID" \
+  "CDB_STATE" "$CDB_STATE" \
+  "CDB_ADMIN_PASSWORD" "&lt;loaded_from_cli_env&gt;"
+  printf '\n%s\n' "wb18_card01"
+}
+
+wb18_card01</code></pre>
+</div>
+<h3>OUTPUT 01 - Expected preflight summary</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the validated CDB environment before submitting a new PDB request.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                     | VALUE
+---------------------------- | -----
+EXPECTED_OCI_CLI_VERSION     | 3.73.1
+ACTUAL_OCI_CLI_VERSION       | 3.73.1
+REGION                       | &lt;region&gt;
+CDB_NAME                     | CDB01
+CDB_OCID                     | &lt;database_ocid&gt;
+CDB_STATE                    | AVAILABLE
+CDB_ADMIN_PASSWORD           | &lt;loaded_from_cli_env&gt;
+
+wb18_card01</code></pre>
+</div>
+      </section><section id="bash-02-request-the-new-pdb" class="article-section">
+        <h2>BASH 02 - Request the new PDB</h2>
+        <p>Choose the new PDB name, then submit the OCI request. The card builds a local JSON payload so secrets are not printed in terminal output. It reuses the configured default password for the CDB administrator, PDB administrator, and existing TDE wallet password fields. The command intentionally has no waiter, so record the returned PDB OCID and use the next card to monitor provisioning.</p>
+<p>This request sets <code>createPdbBackup</code> to <code>false</code>, so it does not take an immediate PDB backup. If CDB automatic backups are enabled, Oracle documents recovery as unavailable until the next successful daily backup; Oracle does not label that next backup as incremental. If automatic backups are disabled, schedule and validate a backup separately.</p>
+<h3>BASH 02 - Request the new PDB</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Ask for the PDB name, submit an asynchronous PDB creation request, and capture the returned PDB OCID.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>wb18_card02() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+NEW_PDB_NAME_DEFAULT="PDB02"
+CREATE_PDB_JSON="$JSON_DIR/create-new-pdb.json"
+CREATE_PDB_OCID_FILE="$REPORT_DIR/create-new-pdb-ocid.txt"
+
+for name in REGION CDB_OCID CDB_NAME CDB_ADMIN_PASSWORD; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    clear
+    printf 'STOP: Missing required variable: %s. Run BASH 01 first.\n' "$name" &gt;&amp;2
+    return 1
+  fi
+done
+
+printf 'Enter new PDB name [%s]: ' "$NEW_PDB_NAME_DEFAULT"
+IFS= read -r NEW_PDB_NAME_INPUT
+NEW_PDB_NAME="${NEW_PDB_NAME_INPUT:-$NEW_PDB_NAME_DEFAULT}"
+NEW_PDB_NAME="$(printf '%s' "$NEW_PDB_NAME" | tr '[:lower:]' '[:upper:]')"
+
+case "$NEW_PDB_NAME" in
+  *[!A-Z0-9]*|'')
+    clear
+    printf 'STOP: PDB name must start with a letter and contain only alphanumeric characters.\n' &gt;&amp;2
+    return 1
+    ;;
+esac
+
+if [ "${#NEW_PDB_NAME}" -gt 30 ] || ! printf '%s' "$NEW_PDB_NAME" | grep -q '^[A-Z]'; then
+  clear
+  printf 'STOP: PDB name must begin with a letter and contain at most 30 characters.\n' &gt;&amp;2
+  return 1
+fi
+
+EXISTING_PDB_OCID="$(
+  oci db pluggable-database list \
+    --region "$REGION" \
+    --database-id "$CDB_OCID" \
+    --pdb-name "$NEW_PDB_NAME" \
+    --all \
+    --query 'data[0].id' \
+    --raw-output
+)"
+
+if [ -n "$EXISTING_PDB_OCID" ] &amp;&amp; [ "$EXISTING_PDB_OCID" != "null" ]; then
+  clear
+  printf 'STOP: PDB %s already exists in %s (%s). Choose another name.\n' "$NEW_PDB_NAME" "$CDB_NAME" "$EXISTING_PDB_OCID" &gt;&amp;2
+  return 1
+fi
+
+jq -n \
+  --arg container_database_id "$CDB_OCID" \
+  --arg pdb_name "$NEW_PDB_NAME" \
+  --arg default_password "$CDB_ADMIN_PASSWORD" \
+  '{
+    containerDatabaseId: $container_database_id,
+    pdbName: $pdb_name,
+    cdbAdminPassword: $default_password,
+    pdbAdminPassword: $default_password,
+    tdeWalletPassword: $default_password,
+    createPdbBackup: false
+  }' &gt; "$CREATE_PDB_JSON"
+
+NEW_PDB_OCID="$(
+  oci db pluggable-database create \
+    --region "$REGION" \
+    --from-json "file://$CREATE_PDB_JSON" \
+    --query 'data.id' \
+    --raw-output
+)"
+
+if [ -z "$NEW_PDB_OCID" ] || [ "$NEW_PDB_OCID" = "null" ]; then
+  clear
+  printf 'STOP: Unable to capture NEW_PDB_OCID from the create response.\n' &gt;&amp;2
+  return 1
+fi
+
+printf '%s\n' "$NEW_PDB_OCID" &gt; "$CREATE_PDB_OCID_FILE"
+upsert_cli_env NEW_PDB_NAME "$NEW_PDB_NAME" &gt;/dev/null
+upsert_cli_env NEW_PDB_OCID "$NEW_PDB_OCID" &gt;/dev/null
+upsert_cli_env NEW_PDB_CREATE_BACKUP "false" &gt;/dev/null
+
+printf '%-28s | %s\n' \
+  "VARIABLE" "VALUE" \
+  "----------------------------" "-----" \
+  "NEW_PDB_NAME" "$NEW_PDB_NAME" \
+  "NEW_PDB_OCID" "$NEW_PDB_OCID" \
+  "CREATE_PDB_BACKUP" "false" \
+  "REQUEST_MODE" "asynchronous; no waiter"
+printf 'PDB creation request accepted. Run BASH 03 to monitor status.\n'
+  printf '\n%s\n' "wb18_card02"
+}
+
+wb18_card02</code></pre>
+</div>
+<h3>OUTPUT 02 - Expected create request capture</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the PDB identity and asynchronous request settings captured after submission.</span>
+  </div>
+  <pre class="code-scroll"><code>VARIABLE                     | VALUE
+---------------------------- | -----
+NEW_PDB_NAME                 | PDB02
+NEW_PDB_OCID                 | &lt;pdb_ocid&gt;
+CREATE_PDB_BACKUP            | false
+REQUEST_MODE                 | asynchronous; no waiter
+PDB creation request accepted. Run BASH 03 to monitor status.
+
+wb18_card02</code></pre>
+</div>
+      </section><section id="bash-03-monitor-pdb-creation-status" class="article-section">
+        <h2>BASH 03 - Monitor PDB creation status</h2>
+        <p>Use the PDB OCID returned by the create request to inspect OCI lifecycle state without holding the initial provisioning card open. While the PDB is provisioning, the card calculates elapsed time from OCI's creation timestamp to the current check. On the first <code>AVAILABLE</code> result, it records the observation time and calculates the completed-after duration from the same creation timestamp. OCI returns a creation timestamp but not a distinct completion timestamp, so the recorded completion duration is the first observed upper bound.</p>
+<h3>BASH 03 - Monitor PDB creation status</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Display the new PDB lifecycle state plus elapsed provisioning time or the calculated first-observed completion time.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>wb18_card03() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+
+for name in REGION NEW_PDB_NAME NEW_PDB_OCID; do
+  value="${!name:-}"
+  if [ -z "$value" ]; then
+    clear
+    printf 'STOP: Missing required variable: %s. Run BASH 02 first.\n' "$name" &gt;&amp;2
+    return 1
+  fi
+done
+
+PDB_JSON="$(
+  oci db pluggable-database get \
+    --region "$REGION" \
+    --pluggable-database-id "$NEW_PDB_OCID" \
+    --query 'data' \
+    --output json
+)"
+
+PDB_STATE="$(printf '%s' "$PDB_JSON" | jq -r '."lifecycle-state"')"
+PDB_TIME_CREATED="$(printf '%s' "$PDB_JSON" | jq -r '."time-created"')"
+PDB_CREATED_EPOCH="$(
+  printf '%s' "$PDB_TIME_CREATED" \
+    | jq -Rr 'sub("\\.[0-9]+"; "") | sub("\\+00:00$"; "Z") | fromdateiso8601'
+)"
+PDB_CHECK_EPOCH="$(date -u +%s)"
+
+if [ -z "$PDB_CREATED_EPOCH" ] || [ "$PDB_CREATED_EPOCH" = "null" ]; then
+  clear
+  printf 'STOP: OCI did not return a usable time-created value for %s.\n' "$NEW_PDB_NAME" &gt;&amp;2
+  return 1
+fi
+
+PDB_AVAILABLE_EPOCH_KEY="PDB_${NEW_PDB_NAME}_AVAILABLE_OBSERVED_EPOCH"
+PDB_AVAILABLE_AT_KEY="PDB_${NEW_PDB_NAME}_AVAILABLE_OBSERVED_AT"
+PDB_AVAILABLE_OBSERVED_EPOCH="${!PDB_AVAILABLE_EPOCH_KEY:-}"
+
+if [ "$PDB_STATE" = "AVAILABLE" ]; then
+  if ! [[ "$PDB_AVAILABLE_OBSERVED_EPOCH" =~ ^[0-9]+$ ]] || [ "$PDB_AVAILABLE_OBSERVED_EPOCH" -lt "$PDB_CREATED_EPOCH" ]; then
+    PDB_AVAILABLE_OBSERVED_EPOCH="$PDB_CHECK_EPOCH"
+    upsert_cli_env "$PDB_AVAILABLE_EPOCH_KEY" "$PDB_AVAILABLE_OBSERVED_EPOCH" &gt;/dev/null
+    upsert_cli_env "$PDB_AVAILABLE_AT_KEY" "$(date -u -d "@$PDB_AVAILABLE_OBSERVED_EPOCH" +%Y-%m-%dT%H:%M:%SZ)" &gt;/dev/null
+  fi
+  PDB_DURATION_EPOCH="$PDB_AVAILABLE_OBSERVED_EPOCH"
+  PDB_DURATION_LABEL="COMPLETED_AFTER_OBSERVED"
+else
+  PDB_DURATION_EPOCH="$PDB_CHECK_EPOCH"
+  PDB_DURATION_LABEL="ELAPSED_TIME"
+fi
+
+PDB_DURATION_SECONDS=$((PDB_DURATION_EPOCH - PDB_CREATED_EPOCH))
+if [ "$PDB_DURATION_SECONDS" -lt 0 ]; then
+  PDB_DURATION_SECONDS=0
+fi
+
+if [ "$PDB_DURATION_SECONDS" -lt 60 ]; then
+  PDB_DURATION_TEXT="${PDB_DURATION_SECONDS}s"
+elif [ "$PDB_DURATION_SECONDS" -lt 3600 ]; then
+  PDB_DURATION_TEXT="$((PDB_DURATION_SECONDS / 60))m $((PDB_DURATION_SECONDS % 60))s"
+else
+  PDB_DURATION_TEXT="$((PDB_DURATION_SECONDS / 3600))h $(((PDB_DURATION_SECONDS % 3600) / 60))m"
+fi
+
+printf '%-28s | %s\n' \
+  "FIELD" "VALUE" \
+  "----------------------------" "-----" \
+  "NEW_PDB_NAME" "$NEW_PDB_NAME" \
+  "NEW_PDB_OCID" "$NEW_PDB_OCID" \
+  "PDB_STATE" "$PDB_STATE" \
+  "TIME_CREATED" "$PDB_TIME_CREATED" \
+  "$PDB_DURATION_LABEL" "$PDB_DURATION_TEXT"
+
+if [ "$PDB_STATE" = "AVAILABLE" ]; then
+  printf 'PDB is AVAILABLE. Completion duration is based on the first observed AVAILABLE check.\n'
+else
+  printf 'Rerun this card while PDB_STATE is PROVISIONING. Continue only when it is AVAILABLE.\n'
+fi
+  printf '\n%s\n' "wb18_card03"
+}
+
+wb18_card03</code></pre>
+</div>
+<h3>OUTPUT 03 - Expected PDB lifecycle summary</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review elapsed provisioning time or the calculated first-observed completion time.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                        | VALUE
+---------------------------- | -----
+NEW_PDB_NAME                 | PDB02
+NEW_PDB_OCID                 | &lt;pdb_ocid&gt;
+PDB_STATE                    | PROVISIONING
+TIME_CREATED                 | &lt;timestamp&gt;
+ELAPSED_TIME                 | &lt;elapsed_time&gt;
+
+Rerun this card while PDB_STATE is PROVISIONING. Continue only when it is AVAILABLE.
+
+wb18_card03</code></pre>
+</div>
+<h3>OUTPUT 03A - Expected PDB completion summary</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the calculated completion duration after OCI first reports the PDB as available.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                        | VALUE
+---------------------------- | -----
+NEW_PDB_NAME                 | PDB02
+NEW_PDB_OCID                 | &lt;pdb_ocid&gt;
+PDB_STATE                    | AVAILABLE
+TIME_CREATED                 | &lt;timestamp&gt;
+COMPLETED_AFTER_OBSERVED     | &lt;calculated_duration&gt;
+
+PDB is AVAILABLE. Completion duration is based on the first observed AVAILABLE check.
+
+wb18_card03</code></pre>
+</div>
+      </section><section id="bash-04-enable-database-management-for-the-new-pdb" class="article-section">
+        <h2>BASH 04 - Enable Database Management for the new PDB</h2>
+        <p>After OCI reports that the PDB is available, register this specific PDB with OCI Database Management. The card reuses the Database Management private endpoint, Vault credential secret, and connection defaults established in Chapter 14; it does not create a second endpoint or expose a password. Enabling Database Management changes the PDB's operational management state and can affect service consumption, so confirm the target PDB before the request is submitted.</p>
+<h3>BASH 04 - Enable Database Management for the new PDB</h3>
+<div class="code-card" data-collapsible="true" data-collapsed="true">
+  <div class="code-toolbar">
+    <span class="code-type">Bash</span>
+    <button class="copy-btn" type="button">Copy</button>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Enable OCI Database Management for the available PDB by using the existing private endpoint and Vault credential secret.</span>
+    <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
+  </div>
+  <pre class="code-scroll"><code>wb18_card04() {
+  clear
+  . ~/workbook/bin/env.sh --quiet || return 1
+DBMGMT_ENABLE_RESPONSE_JSON="$JSON_DIR/${NEW_PDB_NAME:-new-pdb}-dbmgmt-enable-response.json"
+DBMGMT_ENABLE_ERROR_TXT="$REPORT_DIR/${NEW_PDB_NAME:-new-pdb}-dbmgmt-enable-error.txt"
+
+for name in REGION CDB_NAME NEW_PDB_NAME NEW_PDB_OCID DBMGMT_PASSWORD_SECRET_OCID DBMGMT_PRIVATE_ENDPOINT_OCID DBMGMT_CREDENTIAL_USERNAME DBMGMT_PROTOCOL DBMGMT_PORT DBMGMT_ROLE; do
+  value="${!name:-}"
+  if [ -z "$value" ]; then
+    clear
+    printf 'STOP: Missing required variable: %s. Complete Chapter 14 before enabling Database Management.\n' "$name" &gt;&amp;2
+    return 1
+  fi
+done
+
+PDB_STATE="$(
+  oci db pluggable-database get \
+    --region "$REGION" \
+    --pluggable-database-id "$NEW_PDB_OCID" \
+    --query 'data."lifecycle-state"' \
+    --raw-output
+)"
+
+if [ "$PDB_STATE" != "AVAILABLE" ]; then
+  clear
+  printf 'STOP: %s is %s. Run BASH 03 and wait for AVAILABLE before enabling Database Management.\n' "$NEW_PDB_NAME" "$PDB_STATE" &gt;&amp;2
+  return 1
+fi
+
+CDB_NAME_LOWER="$(printf '%s' "$CDB_NAME" | tr '[:upper:]' '[:lower:]')"
+PDB_NAME_LOWER="$(printf '%s' "$NEW_PDB_NAME" | tr '[:upper:]' '[:lower:]')"
+DBMGMT_PDB_SERVICE_NAME="${CDB_NAME_LOWER}_${PDB_NAME_LOWER}.paas.oracle.com"
+
+clear
+printf 'Enable OCI Database Management for PDB %s by using service %s? [y/N]: ' \
+  "$NEW_PDB_NAME" "$DBMGMT_PDB_SERVICE_NAME"
+IFS= read -r DBMGMT_CONFIRM
+case "$DBMGMT_CONFIRM" in
+  y|Y|yes|YES)
+    ;;
+  *)
+    clear
+    printf 'Database Management enablement canceled for %s.\n' "$NEW_PDB_NAME"
+    printf '\n%s\n' "wb18_card04"
+    return 0
+    ;;
+esac
+
+oci db pluggable-database enable-pluggable-database-management \
+  --region "$REGION" \
+  --password-secret-id "$DBMGMT_PASSWORD_SECRET_OCID" \
+  --pluggable-database-id "$NEW_PDB_OCID" \
+  --private-end-point-id "$DBMGMT_PRIVATE_ENDPOINT_OCID" \
+  --service-name "$DBMGMT_PDB_SERVICE_NAME" \
+  --user-name "$DBMGMT_CREDENTIAL_USERNAME" \
+  --protocol "$DBMGMT_PROTOCOL" \
+  --port "$DBMGMT_PORT" \
+  --role "$DBMGMT_ROLE" \
+  &gt; "$DBMGMT_ENABLE_RESPONSE_JSON" \
+  2&gt; "$DBMGMT_ENABLE_ERROR_TXT"
+DBMGMT_ENABLE_STATUS=$?
+
+if [ "$DBMGMT_ENABLE_STATUS" -eq 0 ]; then
+  DBMGMT_ENABLE_ACTION="ENABLE_REQUEST_SUBMITTED"
+elif grep -qi 'already enabled\|request to enable it is already created' "$DBMGMT_ENABLE_ERROR_TXT" "$DBMGMT_ENABLE_RESPONSE_JSON" 2&gt;/dev/null; then
+  DBMGMT_ENABLE_ACTION="ALREADY_ENABLED_OR_REQUESTED"
+else
+  clear
+  printf 'STOP: Database Management enablement failed for %s. Review %s.\n' \
+    "$NEW_PDB_NAME" "$DBMGMT_ENABLE_ERROR_TXT" &gt;&amp;2
+  return 1
+fi
+
+upsert_cli_env NEW_PDB_DBMGMT_SERVICE_NAME "$DBMGMT_PDB_SERVICE_NAME" &gt;/dev/null
+
+clear
+printf '%-32s | %s\n' \
+  "FIELD" "VALUE" \
+  "--------------------------------" "-----" \
+  "NEW_PDB_NAME" "$NEW_PDB_NAME" \
+  "NEW_PDB_OCID" "$NEW_PDB_OCID" \
+  "PDB_STATE" "$PDB_STATE" \
+  "DBMGMT_PDB_SERVICE_NAME" "$DBMGMT_PDB_SERVICE_NAME" \
+  "DBMGMT_ENABLE_ACTION" "$DBMGMT_ENABLE_ACTION" \
+  "DBMGMT_ENABLE_RESPONSE_JSON" "$DBMGMT_ENABLE_RESPONSE_JSON" \
+  "DBMGMT_ENABLE_ERROR_TXT" "$DBMGMT_ENABLE_ERROR_TXT"
+printf '\n%s\n' "wb18_card04"
+}
+
+wb18_card04</code></pre>
+</div>
+<h3>OUTPUT 04 - Expected Database Management enablement summary</h3>
+<div class="code-card">
+  <div class="code-toolbar">
+    <span class="code-type">Output</span>
+  </div>
+  <div class="code-description code-objective">
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the submitted or already-existing Database Management request for the new PDB.</span>
+  </div>
+  <pre class="code-scroll"><code>FIELD                            | VALUE
+-------------------------------- | -----
+NEW_PDB_NAME                     | PDB02
+NEW_PDB_OCID                     | &lt;pdb_ocid&gt;
+PDB_STATE                        | AVAILABLE
+DBMGMT_PDB_SERVICE_NAME          | cdb01_pdb02.paas.oracle.com
+DBMGMT_ENABLE_ACTION             | ENABLE_REQUEST_SUBMITTED
+DBMGMT_ENABLE_RESPONSE_JSON      | /home/&lt;cloud_shell_user&gt;/workbook/json/pdb02-dbmgmt-enable-response.json
+DBMGMT_ENABLE_ERROR_TXT          | /home/&lt;cloud_shell_user&gt;/workbook/reports/pdb02-dbmgmt-enable-error.txt
+
+wb18_card04</code></pre>
+</div>
+      </section><section id="operational-notes" class="article-section">
+        <h2>Operational notes</h2>
+        <p>The new PDB is a separate logical database inside <code>CDB01</code>; it can have its own application schemas and service configuration while sharing CDB-level infrastructure. Do not treat <code>AVAILABLE</code> or a submitted Database Management request as an application readiness signal by itself: validate the required PDB services, users, network path, backup policy, application connectivity, and the Database Management managed-database record before onboarding workload.</p>
+<p>For the PDB creation API parameters and lifecycle states, see <a href="https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/db/pluggable-database/create.html" target="_blank" rel="noopener">OCI CLI: create a pluggable database</a>, <a href="https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/db/pluggable-database/enable-pluggable-database-management.html" target="_blank" rel="noopener">OCI CLI: enable PDB Database Management</a>, and <a href="https://docs.oracle.com/en-us/iaas/tools/oci-cli/latest/oci_cli_docs/cmdref/db/pluggable-database.html" target="_blank" rel="noopener">OCI CLI: pluggable database commands</a>.</p>
+      </section>
+      <section id="chapter-navigation" class="article-section">
+        <h2>Chapter navigation</h2>
+        <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
+        <a class="chapter-link nav-card" href="../index.html"><span class="nav-card-label">Main</span><strong>Workbook home</strong></a><a class="chapter-link nav-card" href="../17-recover-variables/index.html"><span class="nav-card-label">Previous</span><strong>17. Recover Variables</strong></a><span class="chapter-link nav-card is-disabled" aria-disabled="true"><span class="nav-card-label">Next</span><strong>End of workbook</strong></span>
+      </nav>
+        <div class="two-up">
+          <a class="content-card link-card" href="../index.html#documentation"><strong>Series documentation</strong></a>
+          <a class="content-card link-card" href="../index.html#glossary"><strong>Series glossary</strong></a>
+        </div>
+      </section>
+    </main>
+  </div>
+  <footer class="site-footer">
+    <details class="disclaimer">
+          <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
+          <p>This content is for educational and planning purposes only. Apply every command and configuration first in a non-production test environment that mirrors your target platform, product version, network, security, workload, integration, and failover requirements. The recommended values shown here may not work in your specific environment, may require change-control approval, and can affect availability, performance, security, routing, transaction behavior, resource use, or operational placement. Validate with application owners, administrators, network teams, security teams, and vendor support guidance before using any setting in production.</p>
+        </details>
+  </footer>
+  <button class="back-top" type="button" aria-label="Back to top">Back to top</button>
+  <script src="../shared-guide-set.js"></script>
+  <script src="../assets/workbook.js"></script>
+</body>
+</html>

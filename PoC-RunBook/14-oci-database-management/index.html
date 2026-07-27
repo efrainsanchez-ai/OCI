@@ -33,7 +33,7 @@
         <h1>OCI Database Management</h1>
         <p class="subtitle">This section enables and validates OCI Database Management Diagnostics &amp; Management for the existing Exadata Database Service on Exascale Infrastructure container database <code>CDB01</code> and its pluggable databases, including default pluggable database <code>PDB01</code>. The workflow uses OCI Cloud Shell, OCI CLI target version <code>3.73.1</code>, the existing <code>subnet-dbtools</code> subnet for the Database Management private endpoint, and the <code>SYSTEM</code> password secret created in Chapter 13.</p>
         <div class="hero-meta">
-          <span>Last updated July 20, 2026</span>
+          <span>Last updated July 23, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -45,7 +45,7 @@
   <div class="page-grid">
     <nav class="toc" aria-label="Table of contents">
       <p>Table of contents</p>
-      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#required-database-management-inputs">Required Database Management inputs</a></li><li><a href="#recommended-decisions">Recommended decisions</a></li><li><a href="#bash-01-validate-database-management-prerequisites">BASH 01 - Validate Database Management prerequisites</a></li><li><a href="#bash-02-set-database-management-chapter-values">BASH 02 - Set Database Management chapter values</a></li><li><a href="#bash-03-create-or-locate-the-database-management-private-endpoint">BASH 03 - Create or locate the Database Management private endpoint</a></li><li><a href="#bash-04-validate-the-private-endpoint">BASH 04 - Validate the private endpoint</a></li><li><a href="#bash-05-create-the-database-management-secret-access-policy">BASH 05 - Create the Database Management secret access policy</a></li><li><a href="#bash-06-build-the-database-management-raw-request-payload">BASH 06 - Build the Database Management raw-request payload</a></li><li><a href="#bash-07-enable-database-management-for-cdb01">BASH 07 - Enable Database Management for CDB01</a></li><li><a href="#bash-08-display-pdb-database-management-status">BASH 08 - Display PDB Database Management status</a></li><li><a href="#bash-09-enable-database-management-for-unmanaged-pdbs">BASH 09 - Enable Database Management for unmanaged PDBs</a></li><li><a href="#bash-10-list-database-management-managed-databases">BASH 10 - List Database Management managed databases</a></li><li><a href="#bash-11-connect-to-the-bastion-vm">BASH 11 - Connect to the bastion VM</a></li><li><a href="#bash-11a-execute-the-pdb01-sql-grants">BASH 11A - Execute the PDB01 SQL grants</a></li><li><a href="#bash-12-store-the-database-management-report">BASH 12 - Store the Database Management report</a></li><li><a href="#credential-follow-up-in-oci">Credential follow-up in OCI</a></li><li><a href="#oracle-documentation-references">Oracle documentation references</a></li></ol>
+      <ol><li><a href="#section-purpose">Section purpose</a></li><li><a href="#required-database-management-inputs">Required Database Management inputs</a></li><li><a href="#recommended-decisions">Recommended decisions</a></li><li><a href="#bash-01-validate-database-management-prerequisites">BASH 01 - Validate Database Management prerequisites</a></li><li><a href="#bash-02-set-database-management-chapter-values">BASH 02 - Set Database Management chapter values</a></li><li><a href="#bash-03-create-or-locate-the-database-management-private-endpoint">BASH 03 - Create or locate the Database Management private endpoint</a></li><li><a href="#bash-04-validate-the-private-endpoint">BASH 04 - Validate the private endpoint</a></li><li><a href="#bash-05-create-the-database-management-secret-access-policy">BASH 05 - Create the Database Management secret access policy</a></li><li><a href="#bash-06-build-the-database-management-raw-request-payload">BASH 06 - Build the Database Management raw-request payload</a></li><li><a href="#bash-07-enable-database-management-for-cdb01">BASH 07 - Enable Database Management for CDB01</a></li><li><a href="#bash-08-display-pdb-database-management-status">BASH 08 - Display PDB Database Management status</a></li><li><a href="#bash-09-enable-database-management-for-unmanaged-pdbs">BASH 09 - Enable Database Management for unmanaged PDBs</a></li><li><a href="#bash-10-list-database-management-managed-databases">BASH 10 - List Database Management managed databases</a></li><li><a href="#bash-11-execute-the-cdb01-sql-grants-on-the-bastion-vm">BASH 11 - Execute the CDB01 SQL grants on the bastion VM</a></li><li><a href="#bash-11a-execute-pdb-sql-grants">BASH 11A - Execute PDB SQL grants</a></li><li><a href="#bash-12-store-the-database-management-report">BASH 12 - Store the Database Management report</a></li><li><a href="#credential-follow-up-in-oci">Credential follow-up in OCI</a></li><li><a href="#oracle-documentation-references">Oracle documentation references</a></li></ol>
     </nav>
     <main id="main" class="article">
       <nav class="chapter-nav chapter-card-nav" aria-label="Chapter navigation">
@@ -111,7 +111,7 @@
 </tr>
 <tr>
 <td><code>DBMGMT_PASSWORD_SECRET_OCID</code></td>
-<td>Database Management credential secret OCID; defaults to <code>DBMGMT_SYSTEM_SECRET_OCID</code>.</td>
+<td>Database Management credential secret OCID; refreshed from <code>CDB_SYSTEM_SECRET_OCID</code> by BASH 02.</td>
 </tr>
 <tr>
 <td><code>DBMGMT_MANAGED_DATABASE_LIST_JSON</code></td>
@@ -206,12 +206,12 @@ if [ "$ACTUAL_OCI_CLI_VERSION" != "$EXPECTED_OCI_CLI_VERSION" ]; then
   printf 'Expected OCI CLI %s for this workbook. Review command compatibility before continuing.\n' "$EXPECTED_OCI_CLI_VERSION" &gt;&amp;2
 fi
 
-DBMGMT_SYSTEM_SECRET_OCID_EFFECTIVE="${DBMGMT_SYSTEM_SECRET_OCID:-${CDB_SYSTEM_SECRET_OCID:-}}"
+DBMGMT_SYSTEM_SECRET_OCID_EFFECTIVE="${CDB_SYSTEM_SECRET_OCID:-${DBMGMT_SYSTEM_SECRET_OCID:-}}"
 
-if [ -n "${DBMGMT_SYSTEM_SECRET_OCID:-}" ]; then
-  DBMGMT_SYSTEM_SECRET_SOURCE="DBMGMT_SYSTEM_SECRET_OCID"
-elif [ -n "${CDB_SYSTEM_SECRET_OCID:-}" ]; then
+if [ -n "${CDB_SYSTEM_SECRET_OCID:-}" ]; then
   DBMGMT_SYSTEM_SECRET_SOURCE="CDB_SYSTEM_SECRET_OCID"
+elif [ -n "${DBMGMT_SYSTEM_SECRET_OCID:-}" ]; then
+  DBMGMT_SYSTEM_SECRET_SOURCE="DBMGMT_SYSTEM_SECRET_OCID"
 else
   DBMGMT_SYSTEM_SECRET_SOURCE="not loaded"
 fi
@@ -261,7 +261,7 @@ CDB_SYSTEM_SECRET_OCID             | &lt;vault_secret_ocid&gt;
 DBMGMT_SYSTEM_SECRET_OCID          | &lt;vault_secret_ocid&gt;
 DBMGMT_SYSTEM_SECRET_SOURCE        | CDB_SYSTEM_SECRET_OCID
 
-wb13_card01</code></pre>
+wb14_card01</code></pre>
 </div>
       </section><section id="bash-02-set-database-management-chapter-values" class="article-section">
         <h2>BASH 02 - Set Database Management chapter values</h2>
@@ -285,8 +285,8 @@ DBMGMT_PROTOCOL="${DBMGMT_PROTOCOL:-TCP}"
 DBMGMT_PORT="${DBMGMT_PORT:-${EXADATA_SCAN_PORT_TCP:-1521}}"
 DBMGMT_ROLE="${DBMGMT_ROLE:-NORMAL}"
 DBMGMT_SECRET_POLICY_NAME="${DBMGMT_SECRET_POLICY_NAME:-DBMgmt_Resource_Policy}"
-DBMGMT_SYSTEM_SECRET_OCID="${DBMGMT_SYSTEM_SECRET_OCID:-${CDB_SYSTEM_SECRET_OCID:-}}"
-DBMGMT_PASSWORD_SECRET_OCID="${DBMGMT_PASSWORD_SECRET_OCID:-$DBMGMT_SYSTEM_SECRET_OCID}"
+DBMGMT_SYSTEM_SECRET_OCID="${CDB_SYSTEM_SECRET_OCID:-${DBMGMT_SYSTEM_SECRET_OCID:-}}"
+DBMGMT_PASSWORD_SECRET_OCID="$DBMGMT_SYSTEM_SECRET_OCID"
 DBMGMT_PRIVATE_ENDPOINT_NAME_ACTION="REUSED"
 DBMGMT_CDB_CONNECT_STRING="$(
   oci db database get \
@@ -398,7 +398,7 @@ DBMGMT_SECRET_POLICY_NAME              | DBMgmt_Resource_Policy
 DBMGMT_SYSTEM_SECRET_OCID              | &lt;vault_secret_ocid&gt;
 DBMGMT_PASSWORD_SECRET_OCID            | &lt;vault_secret_ocid&gt;
 
-wb13_card02</code></pre>
+wb14_card02</code></pre>
 </div>
       </section><section id="bash-03-create-or-locate-the-database-management-private-endpoint" class="article-section">
         <h2>BASH 03 - Create or locate the Database Management private endpoint</h2>
@@ -573,7 +573,7 @@ DBMGMT_PRIVATE_ENDPOINT_ACTION              | REUSED_EXISTING_SUBNET
 DBMGMT_PRIVATE_ENDPOINT_OCID                | &lt;dbmgmt_private_endpoint_ocid&gt;
 DBMGMT_PRIVATE_ENDPOINT_RESPONSE_JSON        | /home/&lt;cloud_shell_user&gt;/workbook/json/dbmgmt-private-endpoint-create-response.json
 
-wb13_card03</code></pre>
+wb14_card03</code></pre>
 </div>
       </section><section id="bash-04-validate-the-private-endpoint" class="article-section">
         <h2>BASH 04 - Validate the private endpoint</h2>
@@ -624,14 +624,14 @@ wb14_card04</code></pre>
 | privateEndpointId | &lt;dbmgmt_private_endpoint_ocid&gt;                                                           |
 +-------------------+--------------------------------------------------------------------------------------------------+
 
-wb13_card04</code></pre>
+wb14_card04</code></pre>
 </div>
-<p>Wait until the Database Management private endpoint lifecycle state changes from <code>CREATING</code> to <code>ACTIVE</code> before continuing. To check again, go back in the Bash history for the pasted card and execute only <code>wb13_card04</code>; if it still reports <code>CREATING</code>, wait a few minutes and run <code>wb13_card04</code> again.</p>
+<p>Wait until the Database Management private endpoint lifecycle state changes from <code>CREATING</code> to <code>ACTIVE</code> before continuing. To check again, go back in the Bash history for the pasted card and execute only <code>wb14_card04</code>; if it still reports <code>CREATING</code>, wait a few minutes and run <code>wb14_card04</code> again.</p>
       </section><section id="bash-05-create-the-database-management-secret-access-policy" class="article-section">
         <h2>BASH 05 - Create the Database Management secret access policy</h2>
         <h3>BASH 05 - Create the Database Management secret access policy</h3>
-<p>OCI user ownership of the Vault secret is not enough for enablement. Database Management reads the password secret as a managed database resource principal, so the secret compartment must include a policy that allows <code>dbmgmtmanageddatabase</code> to read the specific password secret. Oracle documents the specific-secret form as <code>Allow any-user to read secret-family in compartment ABC where ALL {target.secret.id = &lt;Secret OCID&gt;,request.principal.type = dbmgmtmanageddatabase}</code>.</p>
-<p>This workbook creates or updates a dedicated IAM policy in the assigned PoC compartment. Chapter 05 aliases <code>SECURITY_COMPARTMENT_OCID</code> to that compartment. IAM policy create and update operations must run in the tenancy home region, so this card uses <code>DBMGMT_IAM_HOME_REGION</code>, defaulting to <code>us-phoenix-1</code> unless <code>IAM_HOME_REGION</code> or <code>HOME_REGION</code> is already set. The policy grants access only to the password secret and only when the caller principal type is <code>dbmgmtmanageddatabase</code>. It resolves the assigned compartment name from <code>POC_COMPARTMENT_NAME</code> or <code>SECURITY_COMPARTMENT_OCID</code> before composing the policy statement. The grant is intentionally limited to the Chapter 13 password secret rather than every secret in the compartment.</p>
+<p>OCI user ownership of the Vault secret is not enough for enablement. Database Management reads the password secret as a managed database resource principal, so the secret compartment must include a policy that allows the <code>dbmgmtmanageddatabase</code> principal type to read the specific password secret. Oracle documents the specific-secret form as <code>Allow any-user to read secret-family in compartment ABC where ALL {target.secret.id = &lt;Secret OCID&gt;,request.principal.type = dbmgmtmanageddatabase}</code>. In this statement, <code>any-user</code> is constrained by the <code>where</code> clause; the grant applies only when <code>request.principal.type = dbmgmtmanageddatabase</code> and does not grant tenancy users general access to the secret.</p>
+<p>This workbook creates or updates a dedicated IAM policy in the assigned PoC compartment. Chapter 05 aliases <code>SECURITY_COMPARTMENT_OCID</code> to that compartment. This card uses the active workbook <code>REGION</code> for IAM policy calls so Identity requests stay in the same region as the PoC resources. The policy grants access only to the Chapter 13 password secret and only for Database Management managed database resource-principal requests. It resolves the assigned compartment name from <code>POC_COMPARTMENT_NAME</code> or <code>SECURITY_COMPARTMENT_OCID</code> before composing the policy statement.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -644,14 +644,25 @@ wb13_card04</code></pre>
   <pre class="code-scroll"><code>wb14_card05() {
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
-DBMGMT_IAM_HOME_REGION="${DBMGMT_IAM_HOME_REGION:-${IAM_HOME_REGION:-${HOME_REGION:-us-phoenix-1}}}"
+DBMGMT_IAM_HOME_REGION="$REGION"
 DBMGMT_SECRET_GET_JSON="$JSON_DIR/dbmgmt-password-secret-get.json"
 DBMGMT_SECRET_GET_ERROR_TXT="$REPORT_DIR/dbmgmt-password-secret-get-error.txt"
 DBMGMT_SECRET_POLICY_STATEMENTS_JSON="$JSON_DIR/dbmgmt-secret-policy-statements.json"
 DBMGMT_SECRET_POLICY_RESPONSE_JSON="$JSON_DIR/dbmgmt-secret-policy-response.json"
+DBMGMT_SECRET_POLICY_LIST_JSON="$JSON_DIR/dbmgmt-secret-policy-list.json"
+DBMGMT_SECRET_POLICY_LIST_ERROR_TXT="$REPORT_DIR/dbmgmt-secret-policy-list-error.txt"
 DBMGMT_SECRET_POLICY_ERROR_TXT="$REPORT_DIR/dbmgmt-secret-policy-error.txt"
 DBMGMT_SECRET_COMPARTMENT_GET_JSON="$JSON_DIR/dbmgmt-secret-compartment-get.json"
 DBMGMT_SECRET_COMPARTMENT_GET_ERROR_TXT="$REPORT_DIR/dbmgmt-secret-compartment-get-error.txt"
+
+if [ -z "$DBMGMT_IAM_HOME_REGION" ] || [ "$DBMGMT_IAM_HOME_REGION" = "null" ]; then
+
+  printf '\n%s\n%s\n%s\n\n' \
+    "STOP: Unable to determine the IAM policy region." \
+    "REGION: ${REGION:-not loaded}" \
+    "Action: set REGION in ~/workbook/cli.env, then rerun this card." &gt;&amp;2
+  return 1
+fi
 
 oci vault secret get \
   --region "$REGION" \
@@ -740,15 +751,30 @@ cat &gt; "$DBMGMT_SECRET_POLICY_STATEMENTS_JSON" &lt;&lt;JSON
 ]
 JSON
 
+oci iam policy list \
+  --region "$DBMGMT_IAM_HOME_REGION" \
+  --compartment-id "$SECURITY_COMPARTMENT_OCID" \
+  --name "$DBMGMT_SECRET_POLICY_NAME" \
+  --lifecycle-state ACTIVE \
+  --all \
+  &gt; "$DBMGMT_SECRET_POLICY_LIST_JSON" \
+  2&gt; "$DBMGMT_SECRET_POLICY_LIST_ERROR_TXT"
+
+policy_list_status=$?
+if [ "$policy_list_status" -ne 0 ]; then
+
+  printf '\n%s\n%s\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: Unable to list IAM policies in the assigned security compartment." \
+    "Policy compartment OCID: $SECURITY_COMPARTMENT_OCID" \
+    "IAM policy region: $DBMGMT_IAM_HOME_REGION" \
+    "OCI CLI status: $policy_list_status" \
+    "Error file: $DBMGMT_SECRET_POLICY_LIST_ERROR_TXT" \
+    "Action: confirm REGION and that your user can inspect/manage policies in this compartment." &gt;&amp;2
+  return 1
+fi
+
 DBMGMT_SECRET_POLICY_OCID="$(
-  oci iam policy list \
-    --region "$DBMGMT_IAM_HOME_REGION" \
-    --compartment-id "$SECURITY_COMPARTMENT_OCID" \
-    --name "$DBMGMT_SECRET_POLICY_NAME" \
-    --lifecycle-state ACTIVE \
-    --all \
-    --query 'data[0].id' \
-    --raw-output
+  sed -n 's/^[[:space:]]*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$DBMGMT_SECRET_POLICY_LIST_JSON" | sed -n '1p'
 )"
 
 if [ -z "$DBMGMT_SECRET_POLICY_OCID" ] || [ "$DBMGMT_SECRET_POLICY_OCID" = "null" ]; then
@@ -779,7 +805,7 @@ if [ "$policy_status" -ne 0 ]; then
   printf '\n%s\n%s\n%s\n%s\n%s\n\n' \
     "STOP: Unable to create or update the Database Management secret access policy." \
     "Policy name: $DBMGMT_SECRET_POLICY_NAME" \
-    "IAM home region: $DBMGMT_IAM_HOME_REGION" \
+    "IAM policy region: $DBMGMT_IAM_HOME_REGION" \
     "OCI CLI status: $policy_status" \
     "Error file: $DBMGMT_SECRET_POLICY_ERROR_TXT" \
     "The shell prompt is still active; no IAM policy was changed." &gt;&amp;2
@@ -821,7 +847,7 @@ wb14_card05</code></pre>
   </div>
   <pre class="code-scroll"><code>FIELD                                    | VALUE
 ---------------------------------------- | -----
-DBMGMT_IAM_HOME_REGION                   | us-phoenix-1
+DBMGMT_IAM_HOME_REGION                   | &lt;iam_policy_region&gt;
 POLICY_COMPARTMENT_OCID                  | &lt;poc_compartment_ocid&gt;
 SECRET_POLICY_SCOPE                      | compartment '&lt;poc_compartment_name&gt;'
 DBMGMT_SECRET_STATE                      | ACTIVE
@@ -831,7 +857,7 @@ DBMGMT_SECRET_POLICY_ACTION              | CREATE
 DBMGMT_SECRET_POLICY_OCID                | &lt;policy_ocid&gt;
 DBMGMT_SECRET_POLICY_STATEMENTS_JSON     | /home/&lt;cloud_shell_user&gt;/workbook/json/dbmgmt-secret-policy-statements.json
 
-wb13_card05</code></pre>
+wb14_card05</code></pre>
 </div>
       </section><section id="bash-06-build-the-database-management-raw-request-payload" class="article-section">
         <h2>BASH 06 - Build the Database Management raw-request payload</h2>
@@ -930,7 +956,7 @@ DBMGMT_CDB_SERVICE_NAME               | &lt;cdb_service_name&gt;
 DBMGMT_CDB_CONNECT_STRING             | &lt;cdb_easy_connect_string&gt;
 DBMGMT_CDB_ENABLE_PAYLOAD_JSON        | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb-enable-dbmgmt.json
 
-wb13_card06</code></pre>
+wb14_card06</code></pre>
 </div>
       </section><section id="bash-07-enable-database-management-for-cdb01" class="article-section">
         <h2>BASH 07 - Enable Database Management for CDB01</h2>
@@ -1037,13 +1063,13 @@ CDB_ENABLE_RESPONSE_JSON      | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb
 CDB_ENABLE_ERROR_TXT          | /home/&lt;cloud_shell_user&gt;/workbook/reports/cdb01-dbmgmt-enable-error.txt
 CDB_ENABLE_STATUS_TXT         | /home/&lt;cloud_shell_user&gt;/workbook/reports/cdb01-dbmgmt-enable-status.txt
 
-wb13_card07</code></pre>
+wb14_card07</code></pre>
 </div>
 <p><code>CDB_ENABLE_STATUS</code> equal to <code>0</code> and <code>CDB_ENABLE_HTTP_STATUS</code> equal to <code>200 OK</code> means the raw request was accepted. <code>CDB_DBMGMT_STATUS</code> can remain <code>ENABLING</code> while the work request completes; continue with BASH 08 after the status has had time to propagate, and inspect <code>CDB_ENABLE_ERROR_TXT</code> only when <code>CDB_ENABLE_STATUS</code> is not <code>0</code>.</p>
       </section><section id="bash-08-display-pdb-database-management-status" class="article-section">
         <h2>BASH 08 - Display PDB Database Management status</h2>
         <h3>BASH 08 - Display PDB Database Management status</h3>
-<p>Use this read-only card after CDB01 enablement completes. It discovers the current PDB list from <code>CDB_OCID</code>, checks each PDB name against Database Management managed database records in <code>DATABASE_COMPARTMENT_OCID</code>, and prints a clear status table. Rerun this card after new PDBs are created later.</p>
+<p>Use this read-only card after CDB01 enablement completes. It displays the current CDB lifecycle and Database Management status first, discovers the current PDB list from <code>CDB_OCID</code>, checks each PDB name against Database Management managed database records in <code>DATABASE_COMPARTMENT_OCID</code>, and prints a clear status table. Rerun this card after new PDBs are created later.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -1059,6 +1085,27 @@ wb13_card07</code></pre>
 PDB_LIST_JSON="$JSON_DIR/cdb01-pdb-list.json"
 PDB_LIST_ERROR_TXT="$REPORT_DIR/cdb01-pdb-list-error.txt"
 PDB_STATUS_SUMMARY_TXT="$REPORT_DIR/all-pdbs-dbmgmt-status-summary.txt"
+
+CDB_STATUS_JSON="$(
+  oci db database get \
+    --region "$REGION" \
+    --database-id "$CDB_OCID" \
+    --query 'data.{"lifecycleState":"lifecycle-state","managementStatus":"database-management-config"."management-status"}' \
+    --output json
+)"
+
+CDB_LIFECYCLE_STATE="$(printf '%s' "$CDB_STATUS_JSON" | jq -r '."lifecycleState" // "not returned"')"
+CDB_DBMGMT_STATUS="$(printf '%s' "$CDB_STATUS_JSON" | jq -r '."managementStatus" // "not returned"')"
+CDB_MANAGED_DATABASE_OCID="$(
+  oci database-management managed-database list \
+    --region "$REGION" \
+    --compartment-id "$DATABASE_COMPARTMENT_OCID" \
+    --name "$CDB_NAME" \
+    --all \
+    --query 'data.items[0].id' \
+    --raw-output 2&gt;/dev/null
+)"
+[ -n "$CDB_MANAGED_DATABASE_OCID" ] &amp;&amp; [ "$CDB_MANAGED_DATABASE_OCID" != "null" ] || CDB_MANAGED_DATABASE_OCID="-"
 
 oci db pluggable-database list \
   --region "$REGION" \
@@ -1142,7 +1189,10 @@ IFS='|' read -r pdb_count managed_count unmanaged_count &lt; "$REPORT_DIR/all-pd
 
 summary_output="$(sed -n '1,200p' "$PDB_STATUS_SUMMARY_TXT")"
 
-printf '%s\n\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n' \
+printf '%-30s | %s\n%-30s | %s\n%-30s | %s\n\n%s\n\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n' \
+  "CDB_LIFECYCLE_STATE" "$CDB_LIFECYCLE_STATE" \
+  "CDB_DBMGMT_STATUS" "$CDB_DBMGMT_STATUS" \
+  "CDB_MANAGED_DATABASE_OCID" "$CDB_MANAGED_DATABASE_OCID" \
   "$summary_output" \
   "PDB_COUNT" "$pdb_count" \
   "PDB_ENABLED_COUNT" "$managed_count" \
@@ -1154,15 +1204,19 @@ printf '%s\n\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n' \
 
 wb14_card08</code></pre>
 </div>
-<h3>OUTPUT 08 - Expected PDB Database Management status</h3>
+<h3>OUTPUT 08 - Expected CDB and PDB Database Management status</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review which PDBs already have Database Management enabled.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review CDB enablement status first, then which PDBs already have Database Management enabled.</span>
   </div>
-  <pre class="code-scroll"><code>PDB_NAME                       | PDB_STATE      | DBMGMT_STATUS  | MANAGED_DATABASE_OCID
+  <pre class="code-scroll"><code>CDB_LIFECYCLE_STATE            | AVAILABLE
+CDB_DBMGMT_STATUS              | ENABLED
+CDB_MANAGED_DATABASE_OCID      | &lt;managed_database_ocid&gt;
+
+PDB_NAME                       | PDB_STATE      | DBMGMT_STATUS  | MANAGED_DATABASE_OCID
 ------------------------------ | -------------- | -------------- | ---------------------
 PDB01                          | AVAILABLE      | NOT_ENABLED    | -
 
@@ -1172,12 +1226,12 @@ PDB_NOT_ENABLED_COUNT          | 1
 PDB_LIST_JSON                  | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb01-pdb-list.json
 PDB_STATUS_SUMMARY_TXT         | /home/&lt;cloud_shell_user&gt;/workbook/reports/all-pdbs-dbmgmt-status-summary.txt
 
-wb13_card08</code></pre>
+wb14_card08</code></pre>
 </div>
       </section><section id="bash-09-enable-database-management-for-unmanaged-pdbs" class="article-section">
         <h2>BASH 09 - Enable Database Management for unmanaged PDBs</h2>
         <h3>BASH 09 - Enable Database Management for unmanaged PDBs</h3>
-<p>Run BASH 08 first to review the current status. This card rechecks each PDB before making changes, so it skips PDBs that are already enabled and retries any PDB that is still not visible as a managed database after a previous failed attempt. For each unmanaged PDB, it calls the Database service <code>enable-pluggable-database-management</code> command with the <code>SYSTEM</code> Vault secret, Database Management private endpoint OCID, PDB service name, protocol, port, and role. The PDB service name follows the <code>cdb01_pdb01.paas.oracle.com</code> convention by combining lowercase <code>CDB_NAME</code>, lowercase PDB name, and the <code>.paas.oracle.com</code> suffix.</p>
+<p>Run BASH 08 first when you want to review the current status table before enabling PDBs. BASH 09 refreshes the PDB inventory at the start, so it is safe to rerun after new PDBs are created; newly discovered PDBs are included automatically. This card rechecks each PDB before making changes, so it skips PDBs that are already enabled and retries any PDB that is still not visible as a managed database after a previous failed attempt. For each unmanaged PDB, it calls the Database service <code>enable-pluggable-database-management</code> command with the <code>SYSTEM</code> Vault secret, Database Management private endpoint OCID, PDB service name, protocol, port, and role. The PDB service name follows the <code>cdb01_pdb01.paas.oracle.com</code> convention by combining lowercase <code>CDB_NAME</code>, lowercase PDB name, and the <code>.paas.oracle.com</code> suffix.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -1191,14 +1245,26 @@ wb13_card08</code></pre>
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
 PDB_LIST_JSON="$JSON_DIR/cdb01-pdb-list.json"
+PDB_LIST_ERROR_TXT="$REPORT_DIR/cdb01-pdb-list-error.txt"
 PDB_ENABLE_SUMMARY_TXT="$REPORT_DIR/all-pdbs-dbmgmt-enable-summary.txt"
 
-if [ ! -s "$PDB_LIST_JSON" ]; then
+oci db pluggable-database list \
+  --region "$REGION" \
+  --database-id "$CDB_OCID" \
+  --all \
+  --query 'data[].{"id":id,"pdbName":"pdb-name","state":"lifecycle-state"}' \
+  &gt; "$PDB_LIST_JSON" \
+  2&gt; "$PDB_LIST_ERROR_TXT"
 
-  printf '\n%s\n%s\n%s\n\n' \
-    "STOP: Missing PDB inventory file." \
-    "Missing file: $PDB_LIST_JSON" \
-    "Action: run BASH 08, then rerun this card." &gt;&amp;2
+pdb_list_status=$?
+if [ "$pdb_list_status" -ne 0 ]; then
+
+  printf '\n%s\n%s\n%s\n%s\n%s\n\n' \
+    "STOP: Unable to refresh the PDB inventory under CDB01." \
+    "CDB OCID: $CDB_OCID" \
+    "OCI CLI status: $pdb_list_status" \
+    "Error file: $PDB_LIST_ERROR_TXT" \
+    "The shell prompt is still active; no PDB Database Management enablement was submitted." &gt;&amp;2
   return 1
 fi
 
@@ -1339,12 +1405,13 @@ IFS='|' read -r pdb_count submitted_count skipped_count failed_count &lt; "$REPO
 
 summary_output="$(sed -n '1,200p' "$PDB_ENABLE_SUMMARY_TXT")"
 
-printf '%s\n\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n' \
+printf '%s\n\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n%-30s | %s\n' \
   "$summary_output" \
   "PDB_COUNT" "$pdb_count" \
   "PDB_ENABLE_SUBMITTED_COUNT" "$submitted_count" \
   "PDB_SKIPPED_COUNT" "$skipped_count" \
   "PDB_ENABLE_FAILED_COUNT" "$failed_count" \
+  "PDB_LIST_JSON" "$PDB_LIST_JSON" \
   "PDB_ENABLE_SUMMARY_TXT" "$PDB_ENABLE_SUMMARY_TXT"
   printf '\n%s\n' "wb14_card09"
 }
@@ -1367,9 +1434,10 @@ PDB_COUNT                      | 1
 PDB_ENABLE_SUBMITTED_COUNT     | 1
 PDB_SKIPPED_COUNT              | 0
 PDB_ENABLE_FAILED_COUNT        | 0
+PDB_LIST_JSON                  | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb01-pdb-list.json
 PDB_ENABLE_SUMMARY_TXT         | /home/&lt;cloud_shell_user&gt;/workbook/reports/all-pdbs-dbmgmt-enable-summary.txt
 
-wb13_card09</code></pre>
+wb14_card09</code></pre>
 </div>
 <p>If the Database service returns <code>Either Database Management is already enabled or request to enable it is already created</code>, the card records <code>ENABLE_ALREADY_REQUESTED</code> and counts the PDB as skipped instead of failed. If <code>ACTION</code> is <code>ENABLE_FAILED</code>, inspect the <code>DETAIL</code> file. The card writes OCI CLI stderr there; if the CLI writes the diagnostic to stdout instead, the card copies stdout into the same error file. If neither stream has content, the card writes a synthetic diagnostic with the status code and payload file path.</p>
       </section><section id="bash-10-list-database-management-managed-databases" class="article-section">
@@ -1449,19 +1517,19 @@ VARIABLE                            | VALUE
 DBMGMT_MANAGED_DATABASE_LIST_JSON   | /home/&lt;cloud_shell_user&gt;/workbook/json/dbmgmt-managed-database-list.json
 PDB_LIST_JSON                       | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb01-pdb-list.json
 
-wb13_card10</code></pre>
+wb14_card10</code></pre>
 </div>
-      </section><section id="bash-11-connect-to-the-bastion-vm" class="article-section">
-        <h2>BASH 11 - Connect to the bastion VM</h2>
-        <h3>BASH 11 - Connect to the bastion VM</h3>
-<p>SQL*Plus must run from the bastion VM because Cloud Shell does not have direct access to the VCN admin subnet path used for database administration. This card resolves the CDB01 easy connect string, writes a <code>SYSDBA</code> connection template for the grant step, refreshes <code>BASTION_PUBLIC_IP</code> when needed, prints the SSH target, and then opens the SSH session as <code>opc</code>.</p>
+      </section><section id="bash-11-execute-the-cdb01-sql-grants-on-the-bastion-vm" class="article-section">
+        <h2>BASH 11 - Execute the CDB01 SQL grants on the bastion VM</h2>
+        <h3>BASH 11 - Execute the CDB01 SQL grants on the bastion VM</h3>
+<p>SQL*Plus must run from the bastion VM because Cloud Shell does not have direct access to the VCN admin subnet path used for database administration. This card resolves the CDB01 easy connect string, writes one reusable SQL grant file under <code>~/workbook/lib</code>, creates <code>/home/opc/lib</code> on the bastion, copies the SQL file there, and starts remote SQL*Plus execution as <code>SYSDBA</code>. The SQL file grants the privileges needed by the <code>SYSTEM</code> credential for Database Management workflows and is reused by BASH 11A for PDB services.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Resolve the bastion public IP and open an SSH session to the administration host that has VCN access.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a reusable SQL grant file, copy it to the bastion VM, and execute it remotely against the CDB01 service.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb14_card11() {
@@ -1471,6 +1539,22 @@ CDB_CONNECTION_STRINGS_JSON="$JSON_DIR/cdb01-connection-strings.json"
 CDB_EASY_CONNECT_TXT="$REPORT_DIR/cdb01-easy-connect-string.txt"
 CDB_CONNECTION_STRINGS_ERROR_TXT="$REPORT_DIR/cdb01-connection-strings-error.txt"
 CDB_SQLPLUS_COMMAND_TXT="$REPORT_DIR/cdb01-performance-hub-sqlplus-command.txt"
+DBMGMT_GRANT_SQL_DIR="$HOME/workbook/lib"
+DBMGMT_GRANT_SQL_FILE="$DBMGMT_GRANT_SQL_DIR/dbmgmt-system-grants.sql"
+BASTION_LIB_DIR="/home/opc/lib"
+BASTION_DBMGMT_GRANT_SQL_FILE="/home/opc/lib/dbmgmt-system-grants.sql"
+
+mkdir -p "$DBMGMT_GRANT_SQL_DIR"
+
+cat &gt; "$DBMGMT_GRANT_SQL_FILE" &lt;&lt;'SQL'
+whenever sqlerror exit sql.sqlcode
+GRANT CREATE PROCEDURE to SYSTEM;
+GRANT SELECT ANY DICTIONARY, SELECT_CATALOG_ROLE to SYSTEM;
+GRANT ALTER SYSTEM to SYSTEM;
+GRANT ADVISOR to SYSTEM;
+GRANT EXECUTE ON DBMS_WORKLOAD_REPOSITORY to SYSTEM;
+exit
+SQL
 
 oci db database get \
   --region "$REGION" \
@@ -1539,6 +1623,14 @@ if [ -z "${BASTION_PUBLIC_IP:-}" ] || [ "$BASTION_PUBLIC_IP" = "not loaded" ]; t
 fi
 
 BASTION_SSH_COMMAND="ssh -i \"$SSH_PRIVATE_KEY_FILE\" opc@$BASTION_PUBLIC_IP"
+BASTION_SQLPLUS_COMMAND="sqlplus -L \"sys@$CDB_EASY_CONNECT_STRING as sysdba\" @$BASTION_DBMGMT_GRANT_SQL_FILE"
+
+ssh -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new opc@"$BASTION_PUBLIC_IP" \
+  "mkdir -p $BASTION_LIB_DIR"
+
+scp -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new \
+  "$DBMGMT_GRANT_SQL_FILE" \
+  opc@"$BASTION_PUBLIC_IP":"$BASTION_DBMGMT_GRANT_SQL_FILE"
 
 printf '%-34s | %s\n' \
   "VARIABLE" "VALUE" \
@@ -1547,38 +1639,35 @@ printf '%-34s | %s\n' \
   "CDB_SQLPLUS_USERNAME" "SYS" \
   "DBMGMT_CREDENTIAL_USERNAME" "$DBMGMT_CREDENTIAL_USERNAME" \
   "DBMGMT_PASSWORD_SECRET_OCID" "$DBMGMT_PASSWORD_SECRET_OCID" \
+  "DBMGMT_GRANT_SQL_FILE" "$DBMGMT_GRANT_SQL_FILE" \
+  "BASTION_DBMGMT_GRANT_SQL_FILE" "$BASTION_DBMGMT_GRANT_SQL_FILE" \
   "CDB_SQLPLUS_COMMAND_TXT" "$CDB_SQLPLUS_COMMAND_TXT" \
   "BASTION_PUBLIC_IP" "$BASTION_PUBLIC_IP" \
   "SSH_PRIVATE_KEY_FILE" "$SSH_PRIVATE_KEY_FILE" \
   "BASTION_SSH_COMMAND" "$BASTION_SSH_COMMAND" \
-  "SQLPLUS_COMMAND_FILE" "$CDB_SQLPLUS_COMMAND_TXT" \
-  "NEXT_ACTION" "After SSH opens, run the SYSDBA SQL*Plus template from os prompt [opc@&lt;bastion_host&gt; ~]$."
+  "REMOTE_SQLPLUS_COMMAND" "$BASTION_SQLPLUS_COMMAND"
 
 printf '\n%s\n' "SQLPLUS_COMMAND"
-cat "$CDB_SQLPLUS_COMMAND_TXT"
-printf '\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' \
-  "SQL_SCRIPT" \
-  "GRANT CREATE PROCEDURE to SYSTEM;" \
-  "GRANT SELECT ANY DICTIONARY, SELECT_CATALOG_ROLE to SYSTEM;" \
-  "GRANT ALTER SYSTEM to SYSTEM;" \
-  "GRANT ADVISOR to SYSTEM;" \
-  "GRANT EXECUTE ON DBMS_WORKLOAD_REPOSITORY to SYSTEM;" \
-  "exit" \
-  "exit"
+printf '%s\n' "$BASTION_SQLPLUS_COMMAND"
+printf '\n%s\n' "SQL_SCRIPT_FILE"
+printf '%s\n' "$DBMGMT_GRANT_SQL_FILE"
+printf '\n%s\n' "SQL_SCRIPT"
+cat "$DBMGMT_GRANT_SQL_FILE"
 
-ssh -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new opc@"$BASTION_PUBLIC_IP"
+ssh -t -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new opc@"$BASTION_PUBLIC_IP" \
+  "$BASTION_SQLPLUS_COMMAND"
   printf '\n%s\n' "wb14_card11"
 }
 
 wb14_card11</code></pre>
 </div>
-<h3>OUTPUT 11 - Expected bastion SSH connection</h3>
+<h3>OUTPUT 11 - Expected remote CDB SQL grant execution</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the bastion SSH target before the session opens.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the bastion target, reusable SQL grant file, and remote SQL*Plus command.</span>
   </div>
   <pre class="code-scroll"><code>VARIABLE                           | VALUE
 ---------------------------------- | -----
@@ -1586,47 +1675,71 @@ CDB_EASY_CONNECT_STRING            | cdb01...
 CDB_SQLPLUS_USERNAME               | SYS
 DBMGMT_CREDENTIAL_USERNAME         | SYSTEM
 DBMGMT_PASSWORD_SECRET_OCID        | &lt;vault_secret_ocid&gt;
+DBMGMT_GRANT_SQL_FILE              | /home/&lt;cloud_shell_user&gt;/workbook/lib/dbmgmt-system-grants.sql
+BASTION_DBMGMT_GRANT_SQL_FILE      | /home/opc/lib/dbmgmt-system-grants.sql
 CDB_SQLPLUS_COMMAND_TXT            | /home/&lt;cloud_shell_user&gt;/workbook/reports/cdb01-performance-hub-sqlplus-command.txt
 BASTION_PUBLIC_IP                  | &lt;bastion_public_ip&gt;
 SSH_PRIVATE_KEY_FILE               | /home/&lt;cloud_shell_user&gt;/workbook/bastion-01_rsa
 BASTION_SSH_COMMAND                | ssh -i "/home/&lt;cloud_shell_user&gt;/workbook/bastion-01_rsa" opc@&lt;bastion_public_ip&gt;
-SQLPLUS_COMMAND_FILE               | /home/&lt;cloud_shell_user&gt;/workbook/reports/cdb01-performance-hub-sqlplus-command.txt
-NEXT_ACTION                        | After SSH opens, run the SYSDBA SQL*Plus template from os prompt [opc@&lt;bastion_host&gt; ~]$.
+REMOTE_SQLPLUS_COMMAND             | sqlplus -L "sys@cdb01... as sysdba" @/home/opc/lib/dbmgmt-system-grants.sql
 
 SQLPLUS_COMMAND
-sqlplus -L "sys@cdb01... as sysdba"
+sqlplus -L "sys@cdb01... as sysdba" @/home/opc/lib/dbmgmt-system-grants.sql
+
+SQL_SCRIPT_FILE
+/home/&lt;cloud_shell_user&gt;/workbook/lib/dbmgmt-system-grants.sql
 
 SQL_SCRIPT
+whenever sqlerror exit sql.sqlcode
 GRANT CREATE PROCEDURE to SYSTEM;
 GRANT SELECT ANY DICTIONARY, SELECT_CATALOG_ROLE to SYSTEM;
 GRANT ALTER SYSTEM to SYSTEM;
 GRANT ADVISOR to SYSTEM;
 GRANT EXECUTE ON DBMS_WORKLOAD_REPOSITORY to SYSTEM;
 exit
-exit
 
-wb13_card11</code></pre>
+wb14_card11</code></pre>
 </div>
-      </section><section id="bash-11a-execute-the-pdb01-sql-grants" class="article-section">
-        <h2>BASH 11A - Execute the PDB01 SQL grants</h2>
-        <h3>BASH 11A - Execute the PDB01 SQL grants</h3>
-<p>This card uses the same bastion connection method as BASH 11. It changes only the database connect string so SQL*Plus targets the PDB01 service instead of the CDB service.</p>
+      </section><section id="bash-11a-execute-pdb-sql-grants" class="article-section">
+        <h2>BASH 11A - Execute PDB SQL grants</h2>
+        <h3>BASH 11A - Execute PDB SQL grants</h3>
+<p>This card uses the same bastion execution method as BASH 11. It prompts for the target PDB name, defaults to <code>PDB01</code>, changes only the database connect string so SQL*Plus targets that PDB service instead of the CDB service, and reuses <code>~/workbook/lib/dbmgmt-system-grants.sql</code>.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Resolve the PDB01 SQL*Plus command and open an SSH session to the bastion host where the command can be executed.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Prompt for the target PDB name, resolve the PDB SQL*Plus command, reuse the BASH 11 SQL grant file, copy it to the bastion VM, and execute it remotely.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb14_card12() {
+  <pre class="code-scroll"><code>wb14_card11a() {
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
 CDB_EASY_CONNECT_TXT="$REPORT_DIR/cdb01-easy-connect-string.txt"
 CDB_CONNECTION_STRINGS_ERROR_TXT="$REPORT_DIR/cdb01-connection-strings-error.txt"
-PDB_SQLPLUS_GRANT_SQL="$HOME/workbook/pdb01-performance-hub-grants.sql"
-PDB_SQLPLUS_COMMAND_TXT="$REPORT_DIR/pdb01-performance-hub-sqlplus-command.txt"
+DBMGMT_GRANT_SQL_DIR="$HOME/workbook/lib"
+DBMGMT_GRANT_SQL_FILE="$DBMGMT_GRANT_SQL_DIR/dbmgmt-system-grants.sql"
+BASTION_LIB_DIR="/home/opc/lib"
+BASTION_DBMGMT_GRANT_SQL_FILE="/home/opc/lib/dbmgmt-system-grants.sql"
+
+printf 'Enter PDB name [PDB01]: '
+IFS= read -r PDB_NAME_INPUT
+TARGET_PDB_NAME="${PDB_NAME_INPUT:-PDB01}"
+TARGET_PDB_NAME="$(printf '%s' "$TARGET_PDB_NAME" | tr '[:lower:]' '[:upper:]')"
+PDB_SQLPLUS_COMMAND_TXT="$REPORT_DIR/${TARGET_PDB_NAME}-performance-hub-sqlplus-command.txt"
+
+mkdir -p "$DBMGMT_GRANT_SQL_DIR"
+
+cat &gt; "$DBMGMT_GRANT_SQL_FILE" &lt;&lt;'SQL'
+whenever sqlerror exit sql.sqlcode
+GRANT CREATE PROCEDURE to SYSTEM;
+GRANT SELECT ANY DICTIONARY, SELECT_CATALOG_ROLE to SYSTEM;
+GRANT ALTER SYSTEM to SYSTEM;
+GRANT ADVISOR to SYSTEM;
+GRANT EXECUTE ON DBMS_WORKLOAD_REPOSITORY to SYSTEM;
+exit
+SQL
 
 oci db database get \
   --region "$REGION" \
@@ -1658,19 +1771,9 @@ if [ -z "$CDB_EASY_CONNECT_STRING" ] || [ "$CDB_EASY_CONNECT_STRING" = "null" ];
 fi
 
 cdb_name_lower="$(printf '%s\n' "${CDB_NAME:-CDB01}" | tr '[:upper:]' '[:lower:]')"
-pdb_name_lower="$(printf '%s\n' "${PDB_NAME:-PDB01}" | tr '[:upper:]' '[:lower:]')"
+pdb_name_lower="$(printf '%s\n' "$TARGET_PDB_NAME" | tr '[:upper:]' '[:lower:]')"
 PDB_SERVICE_NAME="${cdb_name_lower}_${pdb_name_lower}.paas.oracle.com"
 PDB_EASY_CONNECT_STRING="$(printf '%s\n' "$CDB_EASY_CONNECT_STRING" | sed "s#/[^/]*\$#/$PDB_SERVICE_NAME#")"
-
-cat &gt; "$PDB_SQLPLUS_GRANT_SQL" &lt;&lt;'SQL'
-GRANT CREATE PROCEDURE to SYSTEM;
-GRANT SELECT ANY DICTIONARY, SELECT_CATALOG_ROLE to SYSTEM;
-GRANT ALTER SYSTEM to SYSTEM;
-GRANT ADVISOR to SYSTEM;
-GRANT EXECUTE ON DBMS_WORKLOAD_REPOSITORY to SYSTEM;
-exit
-exit
-SQL
 
 printf 'sqlplus -L "sys@%s as sysdba"\n' \
   "$PDB_EASY_CONNECT_STRING" \
@@ -1695,43 +1798,38 @@ if [ -z "${BASTION_PUBLIC_IP:-}" ] || [ "$BASTION_PUBLIC_IP" = "not loaded" ]; t
 fi
 
 BASTION_SSH_COMMAND="ssh -i \"$SSH_PRIVATE_KEY_FILE\" opc@$BASTION_PUBLIC_IP"
+BASTION_SQLPLUS_COMMAND="sqlplus -L \"sys@$PDB_EASY_CONNECT_STRING as sysdba\" @$BASTION_DBMGMT_GRANT_SQL_FILE"
+
+ssh -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new opc@"$BASTION_PUBLIC_IP" \
+  "mkdir -p $BASTION_LIB_DIR"
+
+scp -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new \
+  "$DBMGMT_GRANT_SQL_FILE" \
+  opc@"$BASTION_PUBLIC_IP":"$BASTION_DBMGMT_GRANT_SQL_FILE"
 
 printf '%s\n%s\n' "PDB_SERVICE_NAME" "$PDB_SERVICE_NAME"
 printf '\n%s\n%s\n' "PDB_EASY_CONNECT_STRING" "$PDB_EASY_CONNECT_STRING"
 printf '\n%s\n%s\n' "BASTION_SSH_COMMAND" "$BASTION_SSH_COMMAND"
 printf '\n%s\n' "SQLPLUS_COMMAND"
-cat "$PDB_SQLPLUS_COMMAND_TXT"
-printf '\n%s\n%s\n' "SQL_SCRIPT_FILE" "$PDB_SQLPLUS_GRANT_SQL"
+printf '%s\n' "$BASTION_SQLPLUS_COMMAND"
+printf '\n%s\n%s\n' "SQL_SCRIPT_FILE" "$DBMGMT_GRANT_SQL_FILE"
 printf '\n%s\n' "SQL_SCRIPT"
-cat "$PDB_SQLPLUS_GRANT_SQL"
-printf '\n%s\n' "After SSH opens, run the SQL*Plus command from os prompt [opc@&lt;bastion_host&gt; ~]$."
+cat "$DBMGMT_GRANT_SQL_FILE"
 
-ssh -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new opc@"$BASTION_PUBLIC_IP"
-  printf '\n%s\n' "wb14_card12"
+ssh -t -i "$SSH_PRIVATE_KEY_FILE" -o StrictHostKeyChecking=accept-new opc@"$BASTION_PUBLIC_IP" \
+  "$BASTION_SQLPLUS_COMMAND"
+  printf '\n%s\n' "wb14_card11a"
 }
 
-wb14_card12</code></pre>
+wb14_card11a</code></pre>
 </div>
-<h3>OUTPUT 12 - Expected command completion</h3>
+<h3>OUTPUT 11A - Expected PDB SQL grant execution</h3>
 <div class="code-card">
   <div class="code-toolbar">
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb14_card12</code></pre>
-</div>
-<h3>OUTPUT 11A - Expected PDB01 SQL grant execution</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the SQL*Plus command template and the SQL script used to grant Database Management privileges to <code>SYSTEM</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Review the selected PDB service, reusable SQL grant file, and remote SQL*Plus command.</span>
   </div>
   <pre class="code-scroll"><code>PDB_SERVICE_NAME
 cdb01_pdb01.paas.oracle.com
@@ -1743,23 +1841,21 @@ BASTION_SSH_COMMAND
 ssh -i "/home/&lt;cloud_shell_user&gt;/workbook/bastion-01_rsa" opc@&lt;bastion_public_ip&gt;
 
 SQLPLUS_COMMAND
-sqlplus -L "sys@cdb01.../cdb01_pdb01.paas.oracle.com as sysdba"
+sqlplus -L "sys@cdb01.../cdb01_pdb01.paas.oracle.com as sysdba" @/home/opc/lib/dbmgmt-system-grants.sql
 
 SQL_SCRIPT_FILE
-/home/&lt;cloud_shell_user&gt;/workbook/pdb01-performance-hub-grants.sql
+/home/&lt;cloud_shell_user&gt;/workbook/lib/dbmgmt-system-grants.sql
 
 SQL_SCRIPT
+whenever sqlerror exit sql.sqlcode
 GRANT CREATE PROCEDURE to SYSTEM;
 GRANT SELECT ANY DICTIONARY, SELECT_CATALOG_ROLE to SYSTEM;
 GRANT ALTER SYSTEM to SYSTEM;
 GRANT ADVISOR to SYSTEM;
 GRANT EXECUTE ON DBMS_WORKLOAD_REPOSITORY to SYSTEM;
 exit
-exit
 
-After SSH opens, run the SQL*Plus command from os prompt [opc@&lt;bastion_host&gt; ~]$.
-
-wb13_card11a</code></pre>
+wb14_card11a</code></pre>
 </div>
       </section><section id="bash-12-store-the-database-management-report" class="article-section">
         <h2>BASH 12 - Store the Database Management report</h2>
@@ -1773,7 +1869,7 @@ wb13_card11a</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Write a local Database Management report with private endpoint, credential, and managed database list file locations.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
-  <pre class="code-scroll"><code>wb14_card13() {
+  <pre class="code-scroll"><code>wb14_card12() {
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
 DBMGMT_REPORT="$REPORT_DIR/cdb01-database-management.txt"
@@ -1812,23 +1908,10 @@ chmod +x "$DBMGMT_REPORT_SCRIPT"
 } &gt; "$DBMGMT_REPORT"
 
 "$DBMGMT_REPORT_SCRIPT" "$DBMGMT_REPORT"
-  printf '\n%s\n' "wb14_card13"
+  printf '\n%s\n' "wb14_card12"
 }
 
-wb14_card13</code></pre>
-</div>
-<h3>OUTPUT 13 - Expected command completion</h3>
-<div class="code-card">
-  <div class="code-toolbar">
-    <span class="code-type">Output</span>
-  </div>
-  <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm that the command completed and retained the card identifier for troubleshooting.</span>
-  </div>
-  <pre class="code-scroll"><code>Checking &lt;resource_or_report&gt; ...
-STATUS | &lt;completed_or_already_at_target_state&gt;
-
-wb14_card13</code></pre>
+wb14_card12</code></pre>
 </div>
 <h3>OUTPUT 12 - Expected Database Management report</h3>
 <div class="code-card">
@@ -1855,7 +1938,7 @@ DBMGMT_PASSWORD_SECRET_OCID            | &lt;vault_secret_ocid&gt;
 PDB_LIST_JSON                          | /home/&lt;cloud_shell_user&gt;/workbook/json/cdb01-pdb-list.json
 DBMGMT_MANAGED_DATABASE_LIST_JSON      | /home/&lt;cloud_shell_user&gt;/workbook/json/dbmgmt-managed-database-list.json
 
-wb13_card12</code></pre>
+wb14_card12</code></pre>
 </div>
       </section><section id="credential-follow-up-in-oci" class="article-section">
         <h2>Credential follow-up in OCI</h2>

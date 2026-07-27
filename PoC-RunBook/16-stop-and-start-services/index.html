@@ -33,7 +33,7 @@
         <h1>Stop and Start Services</h1>
         <p class="subtitle">This section stops and starts the compute-heavy parts of a non-production PoC environment when the environment does not need 24/7 operation. The stop path downscales <code>VMCluster-01</code> enabled ECPUs to <code>0</code>, stops the bastion VM with a graceful <code>SOFTSTOP</code>, and validates both resources after the change. The start path restores Exadata Exascale enabled ECPUs and starts the bastion VM when the service window reopens.</p>
         <div class="hero-meta">
-          <span>Last updated July 20, 2026</span>
+          <span>Last updated July 23, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -2057,6 +2057,7 @@ jq -r --arg domain "$EXADATA_DOMAIN" '.data | sort_by(."host-name" // .hostname 
 
 for item in \
   "DATABASE_COMPARTMENT_OCID|$DATABASE_COMPARTMENT_OCID" \
+  "FSS_MOUNT_TARGET_COMPARTMENT_OCID|$FSS_MOUNT_TARGET_COMPARTMENT_OCID" \
   "EXADATA_SSH_PRIVATE_KEY_FILE|$EXADATA_SSH_PRIVATE_KEY_FILE" \
   "SUBNET_DBCLIENT_OCID|$EXADATA_SUBNET_OCID" \
   "EXADATA_DOMAIN|$EXADATA_DOMAIN"; do
@@ -2166,7 +2167,7 @@ wb16_card13</code></pre>
 <p>After BASH 13 completes, you can open a VM cluster node from Cloud Shell at any time. For example, connect to node 1 as the <code>oracle</code> user with <code>connect-cluster-node.sh 1 oracle</code>. The Cloud Shell command calls the internal second-hop helper in each bastion user’s <code>~/admin/lib</code> directory.</p>
       </section><section id="cluster-file-storage-mount" class="article-section">
         <h2>Cluster File Storage Mount</h2>
-        <p>This card adapts the Chapter 17 recovery mount workflow for the Chapter 16 <code>~/admin</code> environment. It discovers the db-client File Storage mount target and private DNS name, restores the VM-cluster SSH key from the private admin bucket when necessary, and saves non-sensitive recovery values in <code>~/admin/cli.env</code>. It then creates the runnable <code>~/admin/bin/mount-filesystem-cluster.sh</code>, copies its internal helper, key, and host list to the bastion, and mounts the export on every discovered VM cluster node.</p>
+        <p>This card adapts the Chapter 17 recovery mount workflow for the Chapter 16 <code>~/admin</code> environment. It prompts for the File Storage compartment, file system name, export path, db-client mount target name, and cluster mount point, then discovers the required OCIDs from those names. It confirms the file system, mount target, and export are ACTIVE and related to each other, restores the VM-cluster SSH key from the private admin bucket when necessary, and saves non-sensitive recovery values in <code>~/admin/cli.env</code>. It then creates the runnable <code>~/admin/bin/mount-filesystem-cluster.sh</code>, copies its internal helper, key, and host list to the bastion, and mounts the export on every discovered VM cluster node.</p>
 <h3>BASH 14 - Mount File Storage on Exadata VM cluster nodes</h3>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
@@ -2174,7 +2175,7 @@ wb16_card13</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Discover the File Storage and VM-cluster access values needed after restart, create a reusable <code>~/admin</code> mount helper, and validate the mount on all cluster nodes.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Prompt for the File Storage names used by this environment, discover and validate the service resources, create a reusable <code>~/admin</code> mount helper, and validate the mount on all cluster nodes.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>. ~/admin/bin/env.sh --quiet || return 1
@@ -2188,6 +2189,24 @@ FSS_EXPORT_PATH="${FSS_EXPORT_PATH:-/FileSystem-01}"
 FSS_MOUNT_POINT="${FSS_MOUNT_POINT:-/mnt/FileSystem-01}"
 FSS_DBCLIENT_MOUNT_TARGET_NAME="${FSS_DBCLIENT_MOUNT_TARGET_NAME:-mt-FileSystem-01-dbclient}"
 FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-all-nodes.sh}"
+FSS_MOUNT_TARGET_COMPARTMENT_OCID="${FSS_MOUNT_TARGET_COMPARTMENT_OCID:-${POC_COMPARTMENT_OCID:-$DATABASE_COMPARTMENT_OCID}}"
+
+printf 'File Storage compartment OCID [%s]: ' "$FSS_MOUNT_TARGET_COMPARTMENT_OCID"
+read -r INPUT_VALUE
+[ -z "$INPUT_VALUE" ] || FSS_MOUNT_TARGET_COMPARTMENT_OCID="$INPUT_VALUE"
+printf 'File Storage file system name [%s]: ' "$FSS_NAME"
+read -r INPUT_VALUE
+[ -z "$INPUT_VALUE" ] || FSS_NAME="$INPUT_VALUE"
+printf 'File Storage export path [%s]: ' "$FSS_EXPORT_PATH"
+read -r INPUT_VALUE
+[ -z "$INPUT_VALUE" ] || FSS_EXPORT_PATH="$INPUT_VALUE"
+printf 'File Storage db-client mount target name [%s]: ' "$FSS_DBCLIENT_MOUNT_TARGET_NAME"
+read -r INPUT_VALUE
+[ -z "$INPUT_VALUE" ] || FSS_DBCLIENT_MOUNT_TARGET_NAME="$INPUT_VALUE"
+printf 'Cluster mount point [%s]: ' "$FSS_MOUNT_POINT"
+read -r INPUT_VALUE
+[ -z "$INPUT_VALUE" ] || FSS_MOUNT_POINT="$INPUT_VALUE"
+
 EXADATA_SSH_PRIVATE_KEY_FILE="$KEY_DIR/$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-vmcluster-01_rsa}")"
 BASTION_KEY_PATH="$KEY_DIR/$(basename "$SSH_PRIVATE_KEY_FILE")"
 CLUSTER_KEY_PATH="$EXADATA_SSH_PRIVATE_KEY_FILE"
@@ -2198,51 +2217,103 @@ LOCAL_MOUNT_SCRIPT="$BIN_DIR/mount-filesystem-cluster.sh"
 REMOTE_MOUNT_SCRIPT="~/admin/lib/$FSS_REMOTE_SCRIPT_NAME"
 REMOTE_HOSTS_FILE="~/admin/reports/filesystem-01-cluster-hosts.txt"
 
-for name in REGION DATABASE_COMPARTMENT_OCID VM_CLUSTER_OCID BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE ADMIN_BUCKET_NAME OBJECT_STORAGE_NAMESPACE; do
+for name in REGION TENANCY_ID DATABASE_COMPARTMENT_OCID FSS_MOUNT_TARGET_COMPARTMENT_OCID VM_CLUSTER_OCID BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE ADMIN_BUCKET_NAME OBJECT_STORAGE_NAMESPACE FSS_NAME FSS_EXPORT_PATH FSS_MOUNT_POINT FSS_DBCLIENT_MOUNT_TARGET_NAME; do
   eval "value=\${$name:-}"
-  [ -n "$value" ] || { printf 'STOP: Missing required variable: %s. Run BASH 01 first.\n' "$name" &gt;&amp;2; return 1; }
+  [ -n "$value" ] &amp;&amp; [ "$value" != "null" ] || { printf 'STOP: Missing required variable: %s. Run BASH 01 first.\n' "$name" &gt;&amp;2; return 1; }
 done
 
 mkdir -p "$KEY_DIR" "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
 chmod 700 "$KEY_DIR" "$BIN_DIR" "$LIB_DIR" "$REPORT_DIR" "$JSON_DIR"
 [ -s "$BASTION_KEY_PATH" ] || { printf 'STOP: Missing bastion private key: %s. Run BASH 12 first.\n' "$BASTION_KEY_PATH" &gt;&amp;2; return 1; }
 
-printf 'Discovering File Storage db-client mount target ...\n'
-FSS_FILE_SYSTEM_OCID="${FSS_FILE_SYSTEM_OCID:-}"
-if [ -z "$FSS_FILE_SYSTEM_OCID" ] || [ "$FSS_FILE_SYSTEM_OCID" = "null" ]; then
-  printf 'Discovering File Storage file system from export path %s ...\n' "$FSS_EXPORT_PATH"
-  FSS_FILE_SYSTEM_OCID="$(oci fs export list \
+printf 'Discovering and validating File Storage service status ...\n'
+FSS_AD_LIST_FILE="$JSON_DIR/fss-availability-domains.json"
+oci iam availability-domain list \
+  --region "$REGION" \
+  --compartment-id "$TENANCY_ID" \
+  --output json &gt; "$FSS_AD_LIST_FILE" || return 1
+FSS_FILE_SYSTEM_CANDIDATES="$JSON_DIR/fss-file-system-candidates.json"
+printf '[]\n' &gt; "$FSS_FILE_SYSTEM_CANDIDATES"
+while IFS= read -r FSS_CANDIDATE_AD; do
+  [ -n "$FSS_CANDIDATE_AD" ] || continue
+  FSS_AD_FILE="$JSON_DIR/fss-file-systems-$(printf '%s' "$FSS_CANDIDATE_AD" | tr ':/' '--').json"
+  oci fs file-system list \
     --region "$REGION" \
-    --compartment-id "$DATABASE_COMPARTMENT_OCID" \
-    --query "data[?path=='$FSS_EXPORT_PATH'].\"file-system-id\" | [0]" \
-    --raw-output)"
-fi
-[ -n "$FSS_FILE_SYSTEM_OCID" ] &amp;&amp; [ "$FSS_FILE_SYSTEM_OCID" != "null" ] || { printf 'STOP: A File Storage file system with export path "%s" was not found.\n' "$FSS_EXPORT_PATH" &gt;&amp;2; return 1; }
-FSS_AVAILABILITY_DOMAIN="$(oci fs file-system get \
+    --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" \
+    --display-name "$FSS_NAME" \
+    --availability-domain "$FSS_CANDIDATE_AD" \
+    --lifecycle-state ACTIVE \
+    --all \
+    --output json &gt; "$FSS_AD_FILE" || return 1
+  jq -s '.[0] + .[1].data' "$FSS_FILE_SYSTEM_CANDIDATES" "$FSS_AD_FILE" &gt; "$FSS_FILE_SYSTEM_CANDIDATES.tmp" &amp;&amp; mv "$FSS_FILE_SYSTEM_CANDIDATES.tmp" "$FSS_FILE_SYSTEM_CANDIDATES"
+done &lt; &lt;(jq -r '.data[].name' "$FSS_AD_LIST_FILE")
+FSS_FILE_SYSTEM_COUNT="$(jq 'length' "$FSS_FILE_SYSTEM_CANDIDATES")"
+[ "$FSS_FILE_SYSTEM_COUNT" = "1" ] || { printf 'STOP: Expected exactly one ACTIVE File Storage file system named %s.\nActive file systems found: %s\nFSS_MOUNT_TARGET_COMPARTMENT_OCID: %s\n' "$FSS_NAME" "$FSS_FILE_SYSTEM_COUNT" "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" &gt;&amp;2; return 1; }
+FSS_FILE_SYSTEM_OCID="$(jq -r '.[0].id' "$FSS_FILE_SYSTEM_CANDIDATES")"
+FSS_AVAILABILITY_DOMAIN="$(jq -r '.[0]."availability-domain"' "$FSS_FILE_SYSTEM_CANDIDATES")"
+FSS_FILE_SYSTEM_STATE="$(oci fs file-system get \
   --region "$REGION" \
   --file-system-id "$FSS_FILE_SYSTEM_OCID" \
-  --query 'data."availability-domain"' \
-  --raw-output)"
+  --query 'data."lifecycle-state"' \
+  --raw-output 2&gt;/dev/null || true)"
+[ "$FSS_FILE_SYSTEM_STATE" = "ACTIVE" ] || { printf 'STOP: FSS_FILE_SYSTEM_OCID is not ACTIVE or was not found.\nFSS_FILE_SYSTEM_OCID: %s\nLifecycle state: %s\nRun Chapter 15 BASH 02, then rerun this card.\n' "$FSS_FILE_SYSTEM_OCID" "${FSS_FILE_SYSTEM_STATE:-not returned}" &gt;&amp;2; return 1; }
 [ -n "$FSS_AVAILABILITY_DOMAIN" ] &amp;&amp; [ "$FSS_AVAILABILITY_DOMAIN" != "null" ] || { printf 'STOP: The File Storage availability domain could not be discovered.\n' &gt;&amp;2; return 1; }
-FSS_DBCLIENT_MOUNT_TARGET_OCID="$(oci fs mount-target list \
+
+FSS_DBCLIENT_EXPORT_JSON="$JSON_DIR/fss-dbclient-export.json"
+FSS_DBCLIENT_EXPORT_OCID="$(oci fs export list \
   --region "$REGION" \
-  --compartment-id "$DATABASE_COMPARTMENT_OCID" \
+  --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" \
+  --file-system-id "$FSS_FILE_SYSTEM_OCID" \
+  --query "data[?path=='$FSS_EXPORT_PATH' &amp;&amp; \"lifecycle-state\"=='ACTIVE'].id | [0]" \
+  --raw-output 2&gt;/dev/null || true)"
+[ -n "$FSS_DBCLIENT_EXPORT_OCID" ] &amp;&amp; [ "$FSS_DBCLIENT_EXPORT_OCID" != "null" ] || { printf 'STOP: Active File Storage export was not found.\nFSS_FILE_SYSTEM_OCID: %s\nFSS_EXPORT_PATH: %s\nRun Chapter 15 BASH 02, then rerun this card.\n' "$FSS_FILE_SYSTEM_OCID" "$FSS_EXPORT_PATH" &gt;&amp;2; return 1; }
+oci fs export get \
+  --region "$REGION" \
+  --export-id "$FSS_DBCLIENT_EXPORT_OCID" \
+  --output json &gt; "$FSS_DBCLIENT_EXPORT_JSON" || return 1
+FSS_DBCLIENT_EXPORT_STATE="$(jq -r '.data."lifecycle-state" // empty' "$FSS_DBCLIENT_EXPORT_JSON")"
+FSS_DBCLIENT_EXPORT_FILE_SYSTEM_OCID="$(jq -r '.data."file-system-id" // empty' "$FSS_DBCLIENT_EXPORT_JSON")"
+FSS_DBCLIENT_EXPORT_SET_OCID="$(jq -r '.data."export-set-id" // empty' "$FSS_DBCLIENT_EXPORT_JSON")"
+FSS_DBCLIENT_EXPORT_PATH="$(jq -r '.data.path // empty' "$FSS_DBCLIENT_EXPORT_JSON")"
+[ "$FSS_DBCLIENT_EXPORT_STATE" = "ACTIVE" ] || { printf 'STOP: FSS_DBCLIENT_EXPORT_OCID is not ACTIVE.\nFSS_DBCLIENT_EXPORT_OCID: %s\nLifecycle state: %s\nRun Chapter 15 BASH 02, then rerun this card.\n' "$FSS_DBCLIENT_EXPORT_OCID" "${FSS_DBCLIENT_EXPORT_STATE:-not returned}" &gt;&amp;2; return 1; }
+[ "$FSS_DBCLIENT_EXPORT_FILE_SYSTEM_OCID" = "$FSS_FILE_SYSTEM_OCID" ] || { printf 'STOP: FSS_DBCLIENT_EXPORT_OCID does not belong to FSS_FILE_SYSTEM_OCID.\nFSS_DBCLIENT_EXPORT_OCID: %s\nExport file system OCID: %s\nFSS_FILE_SYSTEM_OCID: %s\n' "$FSS_DBCLIENT_EXPORT_OCID" "$FSS_DBCLIENT_EXPORT_FILE_SYSTEM_OCID" "$FSS_FILE_SYSTEM_OCID" &gt;&amp;2; return 1; }
+[ "$FSS_DBCLIENT_EXPORT_PATH" = "$FSS_EXPORT_PATH" ] || { printf 'STOP: FSS_DBCLIENT_EXPORT_OCID path does not match FSS_EXPORT_PATH.\nExport path: %s\nFSS_EXPORT_PATH: %s\n' "$FSS_DBCLIENT_EXPORT_PATH" "$FSS_EXPORT_PATH" &gt;&amp;2; return 1; }
+
+FSS_DBCLIENT_MOUNT_TARGET_JSON="$JSON_DIR/fss-dbclient-mount-target.json"
+FSS_DBCLIENT_MOUNT_TARGET_COUNT="$(oci fs mount-target list \
+  --region "$REGION" \
+  --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" \
   --availability-domain "$FSS_AVAILABILITY_DOMAIN" \
   --display-name "$FSS_DBCLIENT_MOUNT_TARGET_NAME" \
+  --lifecycle-state ACTIVE \
   --all \
-  --query 'data[0].id' \
+  --query "length(data[?\"export-set-id\"=='$FSS_DBCLIENT_EXPORT_SET_OCID'])" \
   --raw-output)"
-[ -n "$FSS_DBCLIENT_MOUNT_TARGET_OCID" ] &amp;&amp; [ "$FSS_DBCLIENT_MOUNT_TARGET_OCID" != "null" ] || { printf 'STOP: File Storage mount target "%s" was not found.\n' "$FSS_DBCLIENT_MOUNT_TARGET_NAME" &gt;&amp;2; return 1; }
+[ "$FSS_DBCLIENT_MOUNT_TARGET_COUNT" = "1" ] || { printf 'STOP: Expected exactly one ACTIVE File Storage db-client mount target with the configured name.\nFSS_DBCLIENT_MOUNT_TARGET_NAME: %s\nExport set OCID: %s\nActive matching mount targets found: %s\nFSS_MOUNT_TARGET_COMPARTMENT_OCID: %s\n' "$FSS_DBCLIENT_MOUNT_TARGET_NAME" "$FSS_DBCLIENT_EXPORT_SET_OCID" "$FSS_DBCLIENT_MOUNT_TARGET_COUNT" "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" &gt;&amp;2; return 1; }
+FSS_DBCLIENT_MOUNT_TARGET_OCID="$(oci fs mount-target list \
+  --region "$REGION" \
+  --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" \
+  --availability-domain "$FSS_AVAILABILITY_DOMAIN" \
+  --display-name "$FSS_DBCLIENT_MOUNT_TARGET_NAME" \
+  --lifecycle-state ACTIVE \
+  --all \
+  --query "data[?\"export-set-id\"=='$FSS_DBCLIENT_EXPORT_SET_OCID'].id | [0]" \
+  --raw-output)"
+oci fs mount-target get \
+  --region "$REGION" \
+  --mount-target-id "$FSS_DBCLIENT_MOUNT_TARGET_OCID" \
+  --output json &gt; "$FSS_DBCLIENT_MOUNT_TARGET_JSON" || return 1
+FSS_DBCLIENT_MOUNT_TARGET_STATE="$(jq -r '.data."lifecycle-state" // empty' "$FSS_DBCLIENT_MOUNT_TARGET_JSON")"
+FSS_DBCLIENT_MOUNT_TARGET_DISPLAY_NAME="$(jq -r '.data."display-name" // empty' "$FSS_DBCLIENT_MOUNT_TARGET_JSON")"
+FSS_DBCLIENT_MOUNT_TARGET_EXPORT_SET_OCID="$(jq -r '.data."export-set-id" // empty' "$FSS_DBCLIENT_MOUNT_TARGET_JSON")"
+[ "$FSS_DBCLIENT_MOUNT_TARGET_EXPORT_SET_OCID" = "$FSS_DBCLIENT_EXPORT_SET_OCID" ] || { printf 'STOP: FSS_DBCLIENT_MOUNT_TARGET_OCID does not expose FSS_DBCLIENT_EXPORT_OCID.\nMount target export set OCID: %s\nExport export set OCID: %s\n' "$FSS_DBCLIENT_MOUNT_TARGET_EXPORT_SET_OCID" "$FSS_DBCLIENT_EXPORT_SET_OCID" &gt;&amp;2; return 1; }
 
-FSS_DBCLIENT_PRIVATE_IP_OCID="$(oci fs mount-target get \
+FSS_DBCLIENT_PRIVATE_IP_OCID="$(jq -r '.data."private-ip-ids"[0] // empty' "$FSS_DBCLIENT_MOUNT_TARGET_JSON")"
+FSS_DBCLIENT_SUBNET_OCID="$(jq -r '.data."subnet-id" // empty' "$FSS_DBCLIENT_MOUNT_TARGET_JSON")"
+FSS_DBCLIENT_PRIVATE_IP_ADDRESS="$(oci network private-ip get \
   --region "$REGION" \
-  --mount-target-id "$FSS_DBCLIENT_MOUNT_TARGET_OCID" \
-  --query 'data."private-ip-ids"[0]' \
-  --raw-output)"
-FSS_DBCLIENT_SUBNET_OCID="$(oci fs mount-target get \
-  --region "$REGION" \
-  --mount-target-id "$FSS_DBCLIENT_MOUNT_TARGET_OCID" \
-  --query 'data."subnet-id"' \
+  --private-ip-id "$FSS_DBCLIENT_PRIVATE_IP_OCID" \
+  --query 'data."ip-address"' \
   --raw-output)"
 FSS_MOUNT_TARGET_HOST_LABEL="$(oci network private-ip get \
   --region "$REGION" \
@@ -2264,11 +2335,12 @@ FSS_VCN_DNS_LABEL="$(oci network vcn get \
   --vcn-id "$FSS_VCN_OCID" \
   --query 'data."dns-label"' \
   --raw-output)"
-for name in FSS_DBCLIENT_PRIVATE_IP_OCID FSS_DBCLIENT_SUBNET_OCID FSS_MOUNT_TARGET_HOST_LABEL FSS_DBCLIENT_SUBNET_DNS_LABEL FSS_VCN_DNS_LABEL; do
+for name in FSS_DBCLIENT_PRIVATE_IP_OCID FSS_DBCLIENT_PRIVATE_IP_ADDRESS FSS_DBCLIENT_SUBNET_OCID FSS_DBCLIENT_SUBNET_DNS_LABEL FSS_VCN_DNS_LABEL; do
   eval "value=\${$name:-}"
   [ -n "$value" ] &amp;&amp; [ "$value" != "null" ] || { printf 'STOP: Could not discover %s for the File Storage mount target.\n' "$name" &gt;&amp;2; return 1; }
 done
-FSS_CLUSTER_MOUNT_HOST="$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_DBCLIENT_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com"
+FSS_DBCLIENT_MOUNT_HOST="$FSS_DBCLIENT_PRIVATE_IP_ADDRESS"
+FSS_CLUSTER_MOUNT_HOST="$FSS_DBCLIENT_MOUNT_HOST"
 
 if [ ! -s "$CLUSTER_KEY_PATH" ]; then
   printf 'Restoring VM-cluster private key object: %s ...\n' "$CLUSTER_KEY_OBJECT_NAME"
@@ -2302,6 +2374,8 @@ for item in \
   "FSS_AVAILABILITY_DOMAIN|$FSS_AVAILABILITY_DOMAIN" \
   "FSS_DBCLIENT_MOUNT_TARGET_NAME|$FSS_DBCLIENT_MOUNT_TARGET_NAME" \
   "FSS_DBCLIENT_MOUNT_TARGET_OCID|$FSS_DBCLIENT_MOUNT_TARGET_OCID" \
+  "FSS_DBCLIENT_EXPORT_OCID|$FSS_DBCLIENT_EXPORT_OCID" \
+  "FSS_DBCLIENT_MOUNT_HOST|$FSS_CLUSTER_MOUNT_HOST" \
   "FSS_CLUSTER_MOUNT_HOST|$FSS_CLUSTER_MOUNT_HOST" \
   "FSS_REMOTE_SCRIPT_NAME|$FSS_REMOTE_SCRIPT_NAME"; do
   upsert_cli_env "${item%%|*}" "${item#*|}" &gt;/dev/null
@@ -2349,7 +2423,13 @@ printf '%-34s | %s\n' \
   "FIELD" "VALUE" \
   "----------------------------------" "-----" \
   "FSS_FILE_SYSTEM_OCID" "$FSS_FILE_SYSTEM_OCID" \
+  "FSS_FILE_SYSTEM_STATE" "$FSS_FILE_SYSTEM_STATE" \
   "FSS_AVAILABILITY_DOMAIN" "$FSS_AVAILABILITY_DOMAIN" \
+  "FSS_DBCLIENT_MOUNT_TARGET_NAME" "$FSS_DBCLIENT_MOUNT_TARGET_NAME" \
+  "FSS_DBCLIENT_MOUNT_TARGET_OCID" "$FSS_DBCLIENT_MOUNT_TARGET_OCID" \
+  "FSS_DBCLIENT_MOUNT_TARGET_STATE" "$FSS_DBCLIENT_MOUNT_TARGET_STATE" \
+  "FSS_DBCLIENT_EXPORT_OCID" "$FSS_DBCLIENT_EXPORT_OCID" \
+  "FSS_DBCLIENT_EXPORT_STATE" "$FSS_DBCLIENT_EXPORT_STATE" \
   "FSS_CLUSTER_MOUNT_HOST" "$FSS_CLUSTER_MOUNT_HOST" \
   "CLUSTER_KEY_PATH" "$CLUSTER_KEY_PATH" \
   "CLUSTER_HOSTS_FILE" "$CLUSTER_HOSTS_FILE" \
@@ -2368,13 +2448,19 @@ wb16_card14</code></pre>
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the mount target was discovered, the reusable admin helper was created, and each VM cluster node reports the File Storage mount.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the saved File Storage variables are valid, the reusable admin helper was created, and each VM cluster node reports the File Storage mount.</span>
   </div>
   <pre class="code-scroll"><code>FIELD                              | VALUE
 ---------------------------------- | -----
 FSS_FILE_SYSTEM_OCID               | &lt;file_system_ocid&gt;
+FSS_FILE_SYSTEM_STATE              | ACTIVE
 FSS_AVAILABILITY_DOMAIN            | &lt;availability_domain&gt;
-FSS_CLUSTER_MOUNT_HOST             | fs01.client.poc.oraclevcn.com
+FSS_DBCLIENT_MOUNT_TARGET_NAME     | mt-FileSystem-01-dbclient
+FSS_DBCLIENT_MOUNT_TARGET_OCID     | &lt;dbclient_mount_target_ocid&gt;
+FSS_DBCLIENT_MOUNT_TARGET_STATE    | ACTIVE
+FSS_DBCLIENT_EXPORT_OCID           | &lt;dbclient_export_ocid&gt;
+FSS_DBCLIENT_EXPORT_STATE          | ACTIVE
+FSS_CLUSTER_MOUNT_HOST             | &lt;mount_target_private_ip_or_dns_name&gt;
 CLUSTER_KEY_PATH                   | /home/&lt;cloud_shell_user&gt;/admin/keys/vmcluster-01_rsa
 CLUSTER_HOSTS_FILE                 | /home/&lt;cloud_shell_user&gt;/admin/reports/filesystem-01-cluster-hosts.txt
 LOCAL_MOUNT_SCRIPT                 | /home/&lt;cloud_shell_user&gt;/admin/bin/mount-filesystem-cluster.sh
@@ -2384,7 +2470,7 @@ ORACLE_REMOTE_HELPER               | /home/oracle/admin/lib/configure-filesystem
 Checking File Storage mount on exasc01&lt;node_suffix&gt;.client.poc.oraclevcn.com ...
 File Storage is already mounted at /mnt/FileSystem-01.
 Filesystem                                      Size  Used Avail Use% Mounted on
-fs01.client.poc.oraclevcn.com:/FileSystem-01   &lt;size&gt; &lt;used&gt; &lt;free&gt; &lt;pct&gt; /mnt/FileSystem-01
+&lt;mount_target_host&gt;:/FileSystem-01              &lt;size&gt; &lt;used&gt; &lt;free&gt; &lt;pct&gt; /mnt/FileSystem-01
 
 wb16_card14</code></pre>
 </div>
@@ -2395,7 +2481,7 @@ wb16_card14</code></pre>
 <li>BASH 01 - Prepare admin working files: rediscover the VCN, VM cluster, bastion, and related <code>~/admin/cli.env</code> values.</li>
 <li>BASH 02 - Review current service runtime state: confirm the updated VM cluster node count and lifecycle state.</li>
 <li>BASH 13 - Create reusable cluster node SSH script: rediscover all node hostnames and rebuild <code>~/admin/bin/connect-cluster-node.sh</code>.</li>
-<li>BASH 14 - Mount File Storage on Exadata VM cluster nodes: rediscover the File Storage mount target and validate or mount <code>FileSystem-01</code> on every current node.</li>
+<li>BASH 14 - Mount File Storage on Exadata VM cluster nodes: validate the saved File Storage variables and validate or mount <code>FileSystem-01</code> on every current node.</li>
 </ul>
 <h3>Manual enabled-ECPU upscale or downscale follow-up</h3>
 <p>If an administrator changes the enabled ECPU count manually in the OCI Console or CLI, wait until the VM cluster returns to <code>AVAILABLE</code>, then follow this procedure:</p>

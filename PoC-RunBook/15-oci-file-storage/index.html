@@ -33,7 +33,7 @@
         <h1>OCI File Storage</h1>
         <p class="subtitle">This workbook creates and configures OCI File Storage for the PoC environment. It creates <code>FileSystem-01</code> in the assigned <code>LAD-01</code> compartment and exports it through mount targets in <code>subnet-admin</code>, <code>subnet-dbclient</code>, and <code>subnet-applications</code>. The bastion VM uses the admin mount target, while Exadata VM cluster nodes use the db-client mount target.</p>
         <div class="hero-meta">
-          <span>Last updated July 20, 2026</span>
+          <span>Last updated July 23, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -66,7 +66,7 @@
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Validate required networking, SSH, and database discovery variables, set the File Storage defaults, derive the mount target DNS name, and save new values in <code>~/workbook/cli.env</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Validate required networking, SSH, and database discovery variables, select the File Storage availability domain, check mount target limit availability, set the File Storage defaults, derive the mount target DNS name, and save new values in <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb15_card01() {
@@ -78,35 +78,35 @@ JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
 mkdir -p "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
 chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
 
-FSS_NAME="${FSS_NAME:-FileSystem-01}"
-FSS_EXPORT_PATH="${FSS_EXPORT_PATH:-/FileSystem-01}"
-FSS_MOUNT_POINT="${FSS_MOUNT_POINT:-/mnt/FileSystem-01}"
-FSS_ADMIN_MOUNT_TARGET_NAME="${FSS_ADMIN_MOUNT_TARGET_NAME:-mt-FileSystem-01-admin}"
-FSS_DBCLIENT_MOUNT_TARGET_NAME="${FSS_DBCLIENT_MOUNT_TARGET_NAME:-mt-FileSystem-01-dbclient}"
-FSS_APPS_MOUNT_TARGET_NAME="${FSS_APPS_MOUNT_TARGET_NAME:-mt-FileSystem-01-apps}"
-FSS_MOUNT_TARGET_NAME="${FSS_MOUNT_TARGET_NAME:-$FSS_ADMIN_MOUNT_TARGET_NAME}"
-FSS_MOUNT_TARGET_HOST_LABEL="${FSS_MOUNT_TARGET_HOST_LABEL:-fs01}"
-FSS_NSG_NAME="${FSS_NSG_NAME:-nsg-file-storage}"
-FSS_ADMIN_SUBNET_DNS_LABEL="${FSS_ADMIN_SUBNET_DNS_LABEL:-admin}"
-FSS_DBCLIENT_SUBNET_DNS_LABEL="${FSS_DBCLIENT_SUBNET_DNS_LABEL:-client}"
-FSS_APPS_SUBNET_DNS_LABEL="${FSS_APPS_SUBNET_DNS_LABEL:-apps}"
-FSS_VCN_DNS_LABEL="${FSS_VCN_DNS_LABEL:-poc}"
-FSS_ADMIN_MOUNT_HOST="${FSS_ADMIN_MOUNT_HOST:-$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_ADMIN_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com}"
-FSS_DBCLIENT_MOUNT_HOST="${FSS_DBCLIENT_MOUNT_HOST:-$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_DBCLIENT_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com}"
-FSS_APPS_MOUNT_HOST="${FSS_APPS_MOUNT_HOST:-$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_APPS_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com}"
-FSS_MOUNT_HOST="${FSS_MOUNT_HOST:-$FSS_ADMIN_MOUNT_HOST}"
-FSS_CLUSTER_MOUNT_HOST="${FSS_CLUSTER_MOUNT_HOST:-$FSS_DBCLIENT_MOUNT_HOST}"
-FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-all-nodes.sh}"
+FSS_NAME="FileSystem-01"
+FSS_EXPORT_PATH="/FileSystem-01"
+FSS_MOUNT_POINT="/mnt/FileSystem-01"
+FSS_ADMIN_MOUNT_TARGET_NAME="mt-FileSystem-01-admin"
+FSS_DBCLIENT_MOUNT_TARGET_NAME="mt-FileSystem-01-dbclient"
+FSS_APPS_MOUNT_TARGET_NAME="mt-FileSystem-01-apps"
+FSS_MOUNT_TARGET_NAME="$FSS_ADMIN_MOUNT_TARGET_NAME"
+FSS_MOUNT_TARGET_HOST_LABEL="fs01"
+FSS_NSG_NAME="nsg-file-storage"
+FSS_MOUNT_TARGET_COMPARTMENT_OCID="$POC_COMPARTMENT_OCID"
+FSS_ADMIN_SUBNET_DNS_LABEL="admin"
+FSS_DBCLIENT_SUBNET_DNS_LABEL="client"
+FSS_APPS_SUBNET_DNS_LABEL="apps"
+FSS_VCN_DNS_LABEL="poc"
+FSS_ADMIN_MOUNT_HOST="$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_ADMIN_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com"
+FSS_DBCLIENT_MOUNT_HOST="$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_DBCLIENT_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com"
+FSS_APPS_MOUNT_HOST="$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_APPS_SUBNET_DNS_LABEL.$FSS_VCN_DNS_LABEL.oraclevcn.com"
+FSS_MOUNT_HOST="$FSS_ADMIN_MOUNT_HOST"
+FSS_CLUSTER_MOUNT_HOST="$FSS_DBCLIENT_MOUNT_HOST"
+FSS_REMOTE_SCRIPT_NAME="configure-filesystem-01-all-nodes.sh"
+FSS_AD_NUMBER="1"
 KEY_DIR="$HOME/keys"
 BASTION_KEY_OBJECT_NAME="$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
 CLUSTER_KEY_OBJECT_NAME="$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-}")"
 BASTION_PRIVATE_KEY_PATH="$KEY_DIR/$BASTION_KEY_OBJECT_NAME"
 CLUSTER_PRIVATE_KEY_PATH="$KEY_DIR/$CLUSTER_KEY_OBJECT_NAME"
 
-FSS_AVAILABILITY_DOMAIN="${FSS_AVAILABILITY_DOMAIN:-${EXADATA_AVAILABILITY_DOMAIN:-}}"
-
 missing=0
-for name in REGION POC_COMPARTMENT_OCID VCN_OCID SUBNET_ADMIN_OCID SUBNET_DBCLIENT_OCID SUBNET_APPS_OCID NSG_BASTION_OCID NSG_EXADATA_CLIENT_OCID NSG_APPLICATIONS_OCID BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE EXADATA_SSH_PRIVATE_KEY_FILE VM_CLUSTER_OCID DATABASE_COMPARTMENT_OCID EXADATA_AVAILABILITY_DOMAIN FSS_AVAILABILITY_DOMAIN; do
+for name in REGION TENANCY_ID POC_COMPARTMENT_OCID VCN_OCID SUBNET_ADMIN_OCID SUBNET_DBCLIENT_OCID SUBNET_APPS_OCID NSG_BASTION_OCID NSG_DATABASE_CLIENT_OCID NSG_APPLICATIONS_OCID BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE EXADATA_SSH_PRIVATE_KEY_FILE VM_CLUSTER_OCID DATABASE_COMPARTMENT_OCID; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
     printf 'STOP: Missing required variable: %s\n' "$name" &gt;&amp;2
@@ -131,8 +131,176 @@ if [ ! -f "$CLUSTER_PRIVATE_KEY_PATH" ]; then
   return 1
 fi
 
+printf 'Select File Storage availability domain number [1, 2, 3] (default %s): ' "$FSS_AD_NUMBER"
+read -r SELECTED_FSS_AD_NUMBER
+FSS_AD_NUMBER="${SELECTED_FSS_AD_NUMBER:-$FSS_AD_NUMBER}"
+case "$FSS_AD_NUMBER" in
+  1|2|3) ;;
+  *)
+    printf 'STOP: Invalid File Storage availability domain number: %s. Enter 1, 2, or 3.\n' "$FSS_AD_NUMBER" &gt;&amp;2
+    return 1
+    ;;
+esac
+
+FSS_AVAILABILITY_DOMAIN="$(
+  oci iam availability-domain list \
+    --region "$REGION" \
+    --compartment-id "$TENANCY_ID" \
+    --query "data[?contains(name, 'AD-${FSS_AD_NUMBER}')].name | [0]" \
+    --raw-output
+)"
+
 if [ -z "$FSS_AVAILABILITY_DOMAIN" ] || [ "$FSS_AVAILABILITY_DOMAIN" = "null" ]; then
-  printf 'STOP: Unable to resolve File Storage availability domain from EXADATA_AVAILABILITY_DOMAIN.\n' &gt;&amp;2
+  printf 'STOP: Unable to resolve FSS_AVAILABILITY_DOMAIN for AD-%s in %s.\n' "$FSS_AD_NUMBER" "$REGION" &gt;&amp;2
+  return 1
+fi
+
+printf 'Checking File Storage mount target limit in %s ...\n' "$FSS_AVAILABILITY_DOMAIN"
+FSS_LIMIT_RESPONSE_FILE="$JSON_DIR/fss-mount-target-limit.json"
+FSS_LIMIT_ERROR_FILE="$REPORT_DIR/fss-mount-target-limit.err"
+FSS_LIMIT_SERVICES_FILE="$JSON_DIR/fss-limit-services.json"
+FSS_LIMIT_VALUES_FILE="$JSON_DIR/fss-limit-values.json"
+: &gt; "$FSS_LIMIT_ERROR_FILE"
+FSS_MOUNT_TARGET_LIMIT_SERVICE_NAME=""
+FSS_MOUNT_TARGET_LIMIT_NAME=""
+FSS_MOUNT_TARGET_LIMIT_AVAILABLE=""
+FSS_MOUNT_TARGET_LIMIT_USED=""
+FSS_MOUNT_TARGET_LIMIT_QUOTA=""
+
+oci limits service list \
+  --region "$REGION" \
+  --compartment-id "$TENANCY_ID" \
+  --all \
+  --output json \
+  &gt; "$FSS_LIMIT_SERVICES_FILE" \
+  2&gt; "$FSS_LIMIT_ERROR_FILE" || true
+
+for limit_service_name in $(
+  jq -r '
+    (.data // [])
+    | map(select(
+        ((.name // "") | test("file|storage|fss"; "i"))
+        or ((.description // "") | test("file|storage|fss"; "i"))
+      ))
+    | .[].name
+  ' "$FSS_LIMIT_SERVICES_FILE"
+); do
+  oci limits value list \
+    --region "$REGION" \
+    --compartment-id "$TENANCY_ID" \
+    --service-name "$limit_service_name" \
+    --all \
+    --output json \
+    &gt; "$FSS_LIMIT_VALUES_FILE" \
+    2&gt; "$FSS_LIMIT_ERROR_FILE" || continue
+
+  FSS_MOUNT_TARGET_LIMIT_NAME="$(
+    jq -r '
+      (.data // [])
+      | map(select((.name // "") == "mount-target-count"))
+      | .[0].name // empty
+    ' "$FSS_LIMIT_VALUES_FILE"
+  )"
+
+  [ -n "$FSS_MOUNT_TARGET_LIMIT_NAME" ] || continue
+
+  if oci limits resource-availability get \
+    --region "$REGION" \
+    --service-name "$limit_service_name" \
+    --limit-name "$FSS_MOUNT_TARGET_LIMIT_NAME" \
+    --compartment-id "$TENANCY_ID" \
+    --availability-domain "$FSS_AVAILABILITY_DOMAIN" \
+    --output json \
+    &gt; "$FSS_LIMIT_RESPONSE_FILE" \
+    2&gt; "$FSS_LIMIT_ERROR_FILE"; then
+    FSS_MOUNT_TARGET_LIMIT_AVAILABLE="$(jq -r '.data.available // empty' "$FSS_LIMIT_RESPONSE_FILE")"
+    if [ -n "$FSS_MOUNT_TARGET_LIMIT_AVAILABLE" ]; then
+      FSS_MOUNT_TARGET_LIMIT_SERVICE_NAME="$limit_service_name"
+      FSS_MOUNT_TARGET_LIMIT_USED="$(jq -r '.data.used // empty' "$FSS_LIMIT_RESPONSE_FILE")"
+      FSS_MOUNT_TARGET_LIMIT_QUOTA="$(jq -r '.data."effective-quota-value" // empty' "$FSS_LIMIT_RESPONSE_FILE")"
+      if [ -z "$FSS_MOUNT_TARGET_LIMIT_QUOTA" ] &amp;&amp; [ -n "$FSS_MOUNT_TARGET_LIMIT_USED" ]; then
+        FSS_MOUNT_TARGET_LIMIT_QUOTA="$((FSS_MOUNT_TARGET_LIMIT_USED + FSS_MOUNT_TARGET_LIMIT_AVAILABLE))"
+      fi
+      break
+    fi
+  fi
+done
+if [ -z "$FSS_MOUNT_TARGET_LIMIT_AVAILABLE" ]; then
+  printf 'STOP: FSS_MOUNT_TARGET_LIMIT_AVAILABLE was not resolved.\n' &gt;&amp;2
+  printf 'The card could not discover a File Storage mount target limit from OCI Limits metadata.\n' &gt;&amp;2
+  printf 'Services file: %s\n' "$FSS_LIMIT_SERVICES_FILE" &gt;&amp;2
+  printf 'Last values file: %s\n' "$FSS_LIMIT_VALUES_FILE" &gt;&amp;2
+  printf 'Availability domain: %s\n' "$FSS_AVAILABILITY_DOMAIN" &gt;&amp;2
+  printf 'Error file: %s\n' "$FSS_LIMIT_ERROR_FILE" &gt;&amp;2
+  printf 'Response file: %s\n' "$FSS_LIMIT_RESPONSE_FILE" &gt;&amp;2
+  return 1
+fi
+FSS_ACTIVE_MOUNT_TARGET_COUNT="$(
+  oci fs mount-target list \
+    --region "$REGION" \
+    --availability-domain "$FSS_AVAILABILITY_DOMAIN" \
+    --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" \
+    --lifecycle-state ACTIVE \
+    --query 'length(data)' \
+    --raw-output 2&gt;/dev/null || true
+)"
+FSS_ACTIVE_MOUNT_TARGET_COUNT="${FSS_ACTIVE_MOUNT_TARGET_COUNT:-0}"
+
+if [ "$FSS_MOUNT_TARGET_LIMIT_AVAILABLE" = "0" ] &amp;&amp; [ "$FSS_ACTIVE_MOUNT_TARGET_COUNT" = "0" ]; then
+  printf 'STOP: File Storage mount target limit is fully used in %s and no ACTIVE mount target exists to reuse in FSS_MOUNT_TARGET_COMPARTMENT_OCID.\n' "$FSS_AVAILABILITY_DOMAIN" &gt;&amp;2
+  printf 'Limits service name: %s\n' "$FSS_MOUNT_TARGET_LIMIT_SERVICE_NAME" &gt;&amp;2
+  printf 'Limit name: %s\n' "$FSS_MOUNT_TARGET_LIMIT_NAME" &gt;&amp;2
+  printf 'Usage: %s\n' "${FSS_MOUNT_TARGET_LIMIT_USED:-unknown}" &gt;&amp;2
+  printf 'Available: %s\n' "$FSS_MOUNT_TARGET_LIMIT_AVAILABLE" &gt;&amp;2
+  printf 'Service Limit: %s\n' "${FSS_MOUNT_TARGET_LIMIT_QUOTA:-unknown}" &gt;&amp;2
+  printf 'Active reusable mount targets in FSS_MOUNT_TARGET_COMPARTMENT_OCID: %s\n' "$FSS_ACTIVE_MOUNT_TARGET_COUNT" &gt;&amp;2
+  printf 'Limit response file: %s\n' "$FSS_LIMIT_RESPONSE_FILE" &gt;&amp;2
+  printf '\nMount target quota by availability domain\n' &gt;&amp;2
+  printf '%-6s | %-32s | %-13s | %-9s | %-9s\n' "AD" "AVAILABILITY_DOMAIN" "SERVICE LIMIT" "USAGE" "AVAILABLE" &gt;&amp;2
+  printf '%-6s | %-32s | %-13s | %-9s | %-9s\n' "------" "--------------------------------" "-------------" "---------" "---------" &gt;&amp;2
+  for quota_ad_number in 1 2 3; do
+    quota_ad_name="$(
+      oci iam availability-domain list \
+        --region "$REGION" \
+        --compartment-id "$TENANCY_ID" \
+        --query "data[?contains(name, 'AD-${quota_ad_number}')].name | [0]" \
+        --raw-output 2&gt;/dev/null || true
+    )"
+    quota_used=""
+    quota_available=""
+    quota_value=""
+    if [ -n "$quota_ad_name" ] &amp;&amp; [ "$quota_ad_name" != "null" ]; then
+      quota_file="$JSON_DIR/fss-mount-target-limit-ad${quota_ad_number}.json"
+      if oci limits resource-availability get \
+        --region "$REGION" \
+        --service-name "$FSS_MOUNT_TARGET_LIMIT_SERVICE_NAME" \
+        --limit-name "$FSS_MOUNT_TARGET_LIMIT_NAME" \
+        --compartment-id "$TENANCY_ID" \
+        --availability-domain "$quota_ad_name" \
+        --output json \
+        &gt; "$quota_file" \
+        2&gt;/dev/null; then
+        quota_used="$(jq -r '.data.used // "unknown"' "$quota_file")"
+        quota_available="$(jq -r '.data.available // "unknown"' "$quota_file")"
+        quota_value="$(jq -r '.data."effective-quota-value" // empty' "$quota_file")"
+        if [ -z "$quota_value" ] &amp;&amp; [ "$quota_used" != "unknown" ] &amp;&amp; [ "$quota_available" != "unknown" ]; then
+          quota_value="$((quota_used + quota_available))"
+        fi
+        quota_value="${quota_value:-unknown}"
+      else
+        quota_used="error"
+        quota_available="error"
+        quota_value="error"
+      fi
+    else
+      quota_ad_name="not found"
+      quota_used="n/a"
+      quota_available="n/a"
+      quota_value="n/a"
+    fi
+    printf '%-6s | %-32s | %-13s | %-9s | %-9s\n' "AD-${quota_ad_number}" "$quota_ad_name" "$quota_value" "$quota_used" "$quota_available" &gt;&amp;2
+  done
+  printf 'Rerun BASH 01 and select another AD with available mount target capacity, request an increase for the limit shown above in %s, or delete an unused mount target.\n' "$REGION" &gt;&amp;2
   return 1
 fi
 
@@ -144,6 +312,7 @@ upsert_cli_env FSS_DBCLIENT_MOUNT_TARGET_NAME "$FSS_DBCLIENT_MOUNT_TARGET_NAME" 
 upsert_cli_env FSS_APPS_MOUNT_TARGET_NAME "$FSS_APPS_MOUNT_TARGET_NAME" &gt;/dev/null
 upsert_cli_env FSS_MOUNT_TARGET_NAME "$FSS_MOUNT_TARGET_NAME" &gt;/dev/null
 upsert_cli_env FSS_MOUNT_TARGET_HOST_LABEL "$FSS_MOUNT_TARGET_HOST_LABEL" &gt;/dev/null
+upsert_cli_env FSS_MOUNT_TARGET_COMPARTMENT_OCID "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" &gt;/dev/null
 upsert_cli_env FSS_NSG_NAME "$FSS_NSG_NAME" &gt;/dev/null
 upsert_cli_env FSS_ADMIN_MOUNT_HOST "$FSS_ADMIN_MOUNT_HOST" &gt;/dev/null
 upsert_cli_env FSS_DBCLIENT_MOUNT_HOST "$FSS_DBCLIENT_MOUNT_HOST" &gt;/dev/null
@@ -151,7 +320,14 @@ upsert_cli_env FSS_APPS_MOUNT_HOST "$FSS_APPS_MOUNT_HOST" &gt;/dev/null
 upsert_cli_env FSS_MOUNT_HOST "$FSS_MOUNT_HOST" &gt;/dev/null
 upsert_cli_env FSS_CLUSTER_MOUNT_HOST "$FSS_CLUSTER_MOUNT_HOST" &gt;/dev/null
 upsert_cli_env FSS_REMOTE_SCRIPT_NAME "$FSS_REMOTE_SCRIPT_NAME" &gt;/dev/null
+upsert_cli_env FSS_AD_NUMBER "$FSS_AD_NUMBER" &gt;/dev/null
 upsert_cli_env FSS_AVAILABILITY_DOMAIN "$FSS_AVAILABILITY_DOMAIN" &gt;/dev/null
+upsert_cli_env FSS_MOUNT_TARGET_LIMIT_SERVICE_NAME "$FSS_MOUNT_TARGET_LIMIT_SERVICE_NAME" &gt;/dev/null
+upsert_cli_env FSS_MOUNT_TARGET_LIMIT_NAME "$FSS_MOUNT_TARGET_LIMIT_NAME" &gt;/dev/null
+upsert_cli_env FSS_MOUNT_TARGET_LIMIT_AVAILABLE "$FSS_MOUNT_TARGET_LIMIT_AVAILABLE" &gt;/dev/null
+upsert_cli_env FSS_MOUNT_TARGET_LIMIT_USED "$FSS_MOUNT_TARGET_LIMIT_USED" &gt;/dev/null
+upsert_cli_env FSS_MOUNT_TARGET_LIMIT_QUOTA "$FSS_MOUNT_TARGET_LIMIT_QUOTA" &gt;/dev/null
+upsert_cli_env FSS_ACTIVE_MOUNT_TARGET_COUNT "$FSS_ACTIVE_MOUNT_TARGET_COUNT" &gt;/dev/null
 
 printf '%-32s | %s\n' \
   "VARIABLE" "VALUE" \
@@ -163,11 +339,19 @@ printf '%-32s | %s\n' \
   "FSS_DBCLIENT_MOUNT_TARGET_NAME" "$FSS_DBCLIENT_MOUNT_TARGET_NAME" \
   "FSS_APPS_MOUNT_TARGET_NAME" "$FSS_APPS_MOUNT_TARGET_NAME" \
   "FSS_NSG_NAME" "$FSS_NSG_NAME" \
+  "FSS_MOUNT_TARGET_COMPARTMENT_OCID" "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" \
   "FSS_ADMIN_MOUNT_HOST" "$FSS_ADMIN_MOUNT_HOST" \
   "FSS_DBCLIENT_MOUNT_HOST" "$FSS_DBCLIENT_MOUNT_HOST" \
   "FSS_APPS_MOUNT_HOST" "$FSS_APPS_MOUNT_HOST" \
   "FSS_CLUSTER_MOUNT_HOST" "$FSS_CLUSTER_MOUNT_HOST" \
+  "FSS_AD_NUMBER" "$FSS_AD_NUMBER" \
   "FSS_AVAILABILITY_DOMAIN" "$FSS_AVAILABILITY_DOMAIN" \
+  "FSS_MOUNT_TARGET_LIMIT_SERVICE_NAME" "$FSS_MOUNT_TARGET_LIMIT_SERVICE_NAME" \
+  "FSS_MOUNT_TARGET_LIMIT_NAME" "$FSS_MOUNT_TARGET_LIMIT_NAME" \
+  "FSS_MOUNT_TARGET_LIMIT_USED" "$FSS_MOUNT_TARGET_LIMIT_USED" \
+  "FSS_MOUNT_TARGET_LIMIT_QUOTA" "$FSS_MOUNT_TARGET_LIMIT_QUOTA" \
+  "FSS_MOUNT_TARGET_LIMIT_AVAILABLE" "$FSS_MOUNT_TARGET_LIMIT_AVAILABLE" \
+  "FSS_ACTIVE_MOUNT_TARGET_COUNT" "$FSS_ACTIVE_MOUNT_TARGET_COUNT" \
   "EXADATA_AVAILABILITY_DOMAIN" "$EXADATA_AVAILABILITY_DOMAIN" \
   "BASTION_PRIVATE_KEY_PATH" "$BASTION_PRIVATE_KEY_PATH" \
   "CLUSTER_PRIVATE_KEY_PATH" "$CLUSTER_PRIVATE_KEY_PATH" \
@@ -196,11 +380,19 @@ FSS_ADMIN_MOUNT_TARGET_NAME      | mt-FileSystem-01-admin
 FSS_DBCLIENT_MOUNT_TARGET_NAME   | mt-FileSystem-01-dbclient
 FSS_APPS_MOUNT_TARGET_NAME       | mt-FileSystem-01-apps
 FSS_NSG_NAME                     | nsg-file-storage
+FSS_MOUNT_TARGET_COMPARTMENT_OCID | &lt;mount_target_compartment_ocid&gt;
 FSS_ADMIN_MOUNT_HOST             | fs01.admin.poc.oraclevcn.com
 FSS_DBCLIENT_MOUNT_HOST          | fs01.client.poc.oraclevcn.com
 FSS_APPS_MOUNT_HOST              | fs01.apps.poc.oraclevcn.com
 FSS_CLUSTER_MOUNT_HOST           | fs01.client.poc.oraclevcn.com
-FSS_AVAILABILITY_DOMAIN          | &lt;exadata_availability_domain&gt;
+FSS_AD_NUMBER                    | 1
+FSS_AVAILABILITY_DOMAIN          | &lt;file_storage_availability_domain&gt;
+FSS_MOUNT_TARGET_LIMIT_SERVICE_NAME | &lt;limits_service_name&gt;
+FSS_MOUNT_TARGET_LIMIT_NAME      | mount-target-count
+FSS_MOUNT_TARGET_LIMIT_USED      | &lt;usage_mount_target_count&gt;
+FSS_MOUNT_TARGET_LIMIT_QUOTA     | &lt;service_limit_count&gt;
+FSS_MOUNT_TARGET_LIMIT_AVAILABLE | &lt;available_mount_target_count&gt;
+FSS_ACTIVE_MOUNT_TARGET_COUNT    | &lt;active_mount_target_count&gt;
 EXADATA_AVAILABILITY_DOMAIN      | &lt;exadata_availability_domain&gt;
 SUBNET_ADMIN_OCID                | &lt;admin_subnet_ocid&gt;
 SUBNET_DBCLIENT_OCID             | &lt;dbclient_subnet_ocid&gt;
@@ -211,6 +403,7 @@ wb15_card01</code></pre>
       </section><section id="bash-02-create-file-storage-resources" class="article-section">
         <h2>BASH 02 - Create File Storage resources</h2>
         <h3>BASH 02 - Create File Storage resources</h3>
+<p>BASH 02 is safe to rerun after the file system, mount targets, and exports exist. It validates saved OCIDs first and reuses them only when OCI reports the resource as ACTIVE; otherwise it rediscovers by name or subnet before attempting a create operation. This protects NSG retests from accidentally trying to create more File Storage resources while still replacing stale values from earlier failed runs. If no mount target exists and OCI rejects the first create with <code>mount-target-count LimitExceeded</code>, the card stops because there is no mount target that the later cards can use; rerun BASH 01 and select another AD, request a File Storage mount target service-limit increase, or delete an unused mount target.</p>
 <div class="code-card" data-collapsible="true" data-collapsed="true">
   <div class="code-toolbar">
     <span class="code-type">Bash</span>
@@ -223,412 +416,250 @@ wb15_card01</code></pre>
   <pre class="code-scroll"><code>wb15_card02() {
   clear
   . ~/workbook/bin/env.sh --quiet || return 1
-FSS_NAME="${FSS_NAME:-FileSystem-01}"
-FSS_EXPORT_PATH="${FSS_EXPORT_PATH:-/FileSystem-01}"
-FSS_ADMIN_MOUNT_TARGET_NAME="${FSS_ADMIN_MOUNT_TARGET_NAME:-mt-FileSystem-01-admin}"
-FSS_DBCLIENT_MOUNT_TARGET_NAME="${FSS_DBCLIENT_MOUNT_TARGET_NAME:-mt-FileSystem-01-dbclient}"
-FSS_APPS_MOUNT_TARGET_NAME="${FSS_APPS_MOUNT_TARGET_NAME:-mt-FileSystem-01-apps}"
-FSS_MOUNT_TARGET_HOST_LABEL="${FSS_MOUNT_TARGET_HOST_LABEL:-fs01}"
-FSS_NSG_NAME="${FSS_NSG_NAME:-nsg-file-storage}"
+FSS_NAME="FileSystem-01"
+FSS_EXPORT_PATH="/FileSystem-01"
+FSS_ADMIN_MOUNT_TARGET_NAME="mt-FileSystem-01-admin"
+FSS_DBCLIENT_MOUNT_TARGET_NAME="mt-FileSystem-01-dbclient"
+FSS_APPS_MOUNT_TARGET_NAME="mt-FileSystem-01-apps"
+FSS_MOUNT_TARGET_HOST_LABEL="fs01"
+FSS_NSG_NAME="nsg-file-storage"
+FSS_MOUNT_TARGET_COMPARTMENT_OCID="$POC_COMPARTMENT_OCID"
 REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
 JSON_DIR="${JSON_DIR:-$WORKBOOK_DIR/json}"
 mkdir -p "$REPORT_DIR" "$JSON_DIR"
 chmod 700 "$REPORT_DIR" "$JSON_DIR"
 FSS_RULES_FILE="$JSON_DIR/fss-nsg-rules.json"
 FSS_EXISTING_RULES_FILE="$JSON_DIR/fss-existing-nsg-rules.json"
-FSS_RULES_TO_ADD_FILE="$JSON_DIR/fss-nsg-rules-to-add.json"
 FSS_RULE_ADD_ERROR_FILE="$REPORT_DIR/fss-nsg-rules-add.err"
+FSS_MOUNT_TARGET_ERROR_FILE="$REPORT_DIR/fss-mount-target-create.err"
+FSS_EXPORT_CREATE_ERROR_FILE="$REPORT_DIR/fss-export-create.err"
 FSS_PROBLEM_FILE="$REPORT_DIR/fss-problems.txt"
+FSS_DUPLICATE_RULES_FILE="$REPORT_DIR/fss-duplicate-nsg-rules.tsv"
 : &gt; "$FSS_PROBLEM_FILE"
 : &gt; "$FSS_RULE_ADD_ERROR_FILE"
+: &gt; "$FSS_MOUNT_TARGET_ERROR_FILE"
+: &gt; "$FSS_EXPORT_CREATE_ERROR_FILE"
+: &gt; "$FSS_DUPLICATE_RULES_FILE"
 
-for name in REGION POC_COMPARTMENT_OCID VCN_OCID VCN_CIDR SUBNET_ADMIN_OCID SUBNET_DBCLIENT_OCID SUBNET_APPS_OCID NSG_BASTION_OCID NSG_EXADATA_CLIENT_OCID NSG_APPLICATIONS_OCID FSS_AVAILABILITY_DOMAIN; do
+for name in REGION POC_COMPARTMENT_OCID FSS_MOUNT_TARGET_COMPARTMENT_OCID VCN_OCID VCN_CIDR SUBNET_ADMIN_OCID SUBNET_DBCLIENT_OCID SUBNET_APPS_OCID NSG_BASTION_OCID NSG_DATABASE_CLIENT_OCID NSG_APPLICATIONS_OCID FSS_AVAILABILITY_DOMAIN; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
-    printf 'STOP: Missing required variable: %s\n' "$name" &gt;&amp;2
-    printf 'Run BASH 01 before creating File Storage resources.\n' &gt;&amp;2
+    printf 'STOP: Missing required variable: %s\nRun BASH 01 before creating File Storage resources.\n' "$name" &gt;&amp;2
     return 1
   fi
 done
 
 printf 'Checking File Storage NSG: %s ...\n' "$FSS_NSG_NAME"
-FSS_NSG_OCID="$(
-  oci network nsg list \
-    --region "$REGION" \
-    --compartment-id "$POC_COMPARTMENT_OCID" \
-    --vcn-id "$VCN_OCID" \
-    --display-name "$FSS_NSG_NAME" \
-    --lifecycle-state AVAILABLE \
-    --query 'data[0].id' \
-    --raw-output 2&gt;/dev/null || true
-)"
-
+FSS_NSG_OCID="$(oci network nsg list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --display-name "$FSS_NSG_NAME" --lifecycle-state AVAILABLE --query 'data[0].id' --raw-output 2&gt;/dev/null || true)"
 if [ -z "$FSS_NSG_OCID" ] || [ "$FSS_NSG_OCID" = "null" ]; then
   printf 'Creating File Storage NSG: %s ...\n' "$FSS_NSG_NAME"
-  FSS_NSG_OCID="$(
-    oci network nsg create \
-      --region "$REGION" \
-      --compartment-id "$POC_COMPARTMENT_OCID" \
-      --vcn-id "$VCN_OCID" \
-      --display-name "$FSS_NSG_NAME" \
-      --query 'data.id' \
-      --raw-output
-  )"
-  upsert_cli_env FSS_NSG_OCID "$FSS_NSG_OCID" &gt;/dev/null
-else
-  printf 'Reusing File Storage NSG: %s ...\n' "$FSS_NSG_OCID"
+  FSS_NSG_OCID="$(oci network nsg create --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --vcn-id "$VCN_OCID" --display-name "$FSS_NSG_NAME" --query 'data.id' --raw-output)"
 fi
+upsert_cli_env FSS_NSG_OCID "$FSS_NSG_OCID" &gt;/dev/null
 
 printf 'Preparing File Storage NSG rule file: %s ...\n' "$FSS_RULES_FILE"
-cat &gt; "$FSS_RULES_FILE" &lt;&lt;EOF
-[
-  {
-    "direction": "INGRESS",
-    "protocol": "6",
-    "source": "$NSG_BASTION_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "tcpOptions": { "destinationPortRange": { "min": 111, "max": 111 } },
-    "description": "Allow TCP RPC portmapper from bastion admin NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "6",
-    "source": "$NSG_BASTION_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "tcpOptions": { "destinationPortRange": { "min": 2048, "max": 2050 } },
-    "description": "Allow TCP NFS ports from bastion admin NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "17",
-    "source": "$NSG_BASTION_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "udpOptions": { "destinationPortRange": { "min": 111, "max": 111 } },
-    "description": "Allow UDP RPC portmapper from bastion admin NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "17",
-    "source": "$NSG_BASTION_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "udpOptions": { "destinationPortRange": { "min": 2048, "max": 2048 } },
-    "description": "Allow UDP NFS port 2048 from bastion admin NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "6",
-    "source": "$NSG_EXADATA_CLIENT_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "tcpOptions": { "destinationPortRange": { "min": 111, "max": 111 } },
-    "description": "Allow TCP RPC portmapper from Exadata client NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "6",
-    "source": "$NSG_EXADATA_CLIENT_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "tcpOptions": { "destinationPortRange": { "min": 2048, "max": 2050 } },
-    "description": "Allow TCP NFS ports from Exadata client NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "17",
-    "source": "$NSG_EXADATA_CLIENT_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "udpOptions": { "destinationPortRange": { "min": 111, "max": 111 } },
-    "description": "Allow UDP RPC portmapper from Exadata client NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "17",
-    "source": "$NSG_EXADATA_CLIENT_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "udpOptions": { "destinationPortRange": { "min": 2048, "max": 2048 } },
-    "description": "Allow UDP NFS port 2048 from Exadata client NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "6",
-    "source": "$NSG_APPLICATIONS_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "tcpOptions": { "destinationPortRange": { "min": 111, "max": 111 } },
-    "description": "Allow TCP RPC portmapper from applications NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "6",
-    "source": "$NSG_APPLICATIONS_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "tcpOptions": { "destinationPortRange": { "min": 2048, "max": 2050 } },
-    "description": "Allow TCP NFS ports from applications NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "17",
-    "source": "$NSG_APPLICATIONS_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "udpOptions": { "destinationPortRange": { "min": 111, "max": 111 } },
-    "description": "Allow UDP RPC portmapper from applications NSG"
-  },
-  {
-    "direction": "INGRESS",
-    "protocol": "17",
-    "source": "$NSG_APPLICATIONS_OCID",
-    "sourceType": "NETWORK_SECURITY_GROUP",
-    "udpOptions": { "destinationPortRange": { "min": 2048, "max": 2048 } },
-    "description": "Allow UDP NFS port 2048 from applications NSG"
-  },
-  {
-    "direction": "EGRESS",
-    "protocol": "6",
-    "destination": "$VCN_CIDR",
-    "destinationType": "CIDR_BLOCK",
-    "tcpOptions": { "sourcePortRange": { "min": 111, "max": 111 } },
-    "description": "Allow TCP RPC portmapper responses to VCN CIDR"
-  },
-  {
-    "direction": "EGRESS",
-    "protocol": "6",
-    "destination": "$VCN_CIDR",
-    "destinationType": "CIDR_BLOCK",
-    "tcpOptions": { "sourcePortRange": { "min": 2048, "max": 2050 } },
-    "description": "Allow TCP NFS responses to VCN CIDR"
-  },
-  {
-    "direction": "EGRESS",
-    "protocol": "17",
-    "destination": "$VCN_CIDR",
-    "destinationType": "CIDR_BLOCK",
-    "udpOptions": { "sourcePortRange": { "min": 111, "max": 111 } },
-    "description": "Allow UDP RPC portmapper responses to VCN CIDR"
-  },
-  {
-    "direction": "EGRESS",
-    "protocol": "17",
-    "destination": "$VCN_CIDR",
-    "destinationType": "CIDR_BLOCK",
-    "udpOptions": { "sourcePortRange": { "min": 2048, "max": 2048 } },
-    "description": "Allow UDP NFS responses to VCN CIDR"
-  }
-]
-EOF
+jq -n \
+  --arg bastion "$NSG_BASTION_OCID" --arg dbclient "$NSG_DATABASE_CLIENT_OCID" --arg apps "$NSG_APPLICATIONS_OCID" --arg cidr "$VCN_CIDR" '
+  def tcp_in($src; $min; $max; $desc): {direction:"INGRESS",protocol:"6",source:$src,sourceType:"NETWORK_SECURITY_GROUP",tcpOptions:{destinationPortRange:{min:$min,max:$max}},description:$desc};
+  def udp_in($src; $min; $max; $desc): {direction:"INGRESS",protocol:"17",source:$src,sourceType:"NETWORK_SECURITY_GROUP",udpOptions:{destinationPortRange:{min:$min,max:$max}},description:$desc};
+  def tcp_out($min; $max; $desc): {direction:"EGRESS",protocol:"6",destination:$cidr,destinationType:"CIDR_BLOCK",tcpOptions:{sourcePortRange:{min:$min,max:$max}},description:$desc};
+  def udp_out($min; $max; $desc): {direction:"EGRESS",protocol:"17",destination:$cidr,destinationType:"CIDR_BLOCK",udpOptions:{sourcePortRange:{min:$min,max:$max}},description:$desc};
+  [
+    tcp_in($bastion;111;111;"Allow TCP RPC portmapper from bastion admin NSG"), tcp_in($bastion;2048;2050;"Allow TCP NFS ports from bastion admin NSG"), udp_in($bastion;111;111;"Allow UDP RPC portmapper from bastion admin NSG"), udp_in($bastion;2048;2048;"Allow UDP NFS port 2048 from bastion admin NSG"),
+    tcp_in($dbclient;111;111;"Allow TCP RPC portmapper from database client NSG"), tcp_in($dbclient;2048;2050;"Allow TCP NFS ports from database client NSG"), udp_in($dbclient;111;111;"Allow UDP RPC portmapper from database client NSG"), udp_in($dbclient;2048;2048;"Allow UDP NFS port 2048 from database client NSG"),
+    tcp_in($apps;111;111;"Allow TCP RPC portmapper from applications NSG"), tcp_in($apps;2048;2050;"Allow TCP NFS ports from applications NSG"), udp_in($apps;111;111;"Allow UDP RPC portmapper from applications NSG"), udp_in($apps;2048;2048;"Allow UDP NFS port 2048 from applications NSG"),
+    tcp_out(111;111;"Allow TCP RPC portmapper responses to VCN CIDR"), tcp_out(2048;2050;"Allow TCP NFS responses to VCN CIDR"), udp_out(111;111;"Allow UDP RPC portmapper responses to VCN CIDR"), udp_out(2048;2048;"Allow UDP NFS responses to VCN CIDR")
+  ]' &gt; "$FSS_RULES_FILE"
 
 printf 'Checking existing File Storage NSG rules ...\n'
-FSS_EXISTING_RULES_ERROR_FILE="$REPORT_DIR/fss-existing-nsg-rules.err"
-if ! OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True oci network nsg rules list \
-  --region "$REGION" \
-  --nsg-id "$FSS_NSG_OCID" \
-  --all \
-  --output json \
-  &gt; "$FSS_EXISTING_RULES_FILE" \
-  2&gt; "$FSS_EXISTING_RULES_ERROR_FILE"; then
-  printf 'Unable to list existing File Storage NSG rules. See %s.\n' "$FSS_EXISTING_RULES_ERROR_FILE" &gt;&gt; "$FSS_PROBLEM_FILE"
+if ! OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True oci network nsg rules list --region "$REGION" --nsg-id "$FSS_NSG_OCID" --all --output json &gt; "$FSS_EXISTING_RULES_FILE" 2&gt; "$REPORT_DIR/fss-existing-nsg-rules.err"; then
   printf '{"data":[]}\n' &gt; "$FSS_EXISTING_RULES_FILE"
+  printf 'Unable to list existing File Storage NSG rules. See %s.\n' "$REPORT_DIR/fss-existing-nsg-rules.err" &gt;&gt; "$FSS_PROBLEM_FILE"
 fi
 
-if ! jq empty "$FSS_EXISTING_RULES_FILE" &gt;/dev/null 2&gt;&amp;1; then
-  printf 'Existing File Storage NSG rule list was not valid JSON. See %s.\n' "$FSS_EXISTING_RULES_FILE" &gt;&gt; "$FSS_PROBLEM_FILE"
-  printf '{"data":[]}\n' &gt; "$FSS_EXISTING_RULES_FILE"
-fi
-
+FSS_RULES_TO_ADD_FILE="$JSON_DIR/fss-nsg-rules-to-add.json"
 jq --slurpfile existing "$FSS_EXISTING_RULES_FILE" '
-  [ .[] as $desired
-    | select(
-        (($existing[0].data // []) | map(.description) | index($desired.description))
-        | not
-      )
-  ]
+  def port_key($opts):
+    [
+      (($opts.destinationPortRange // $opts."destination-port-range" // {}).min // ""),
+      (($opts.destinationPortRange // $opts."destination-port-range" // {}).max // ""),
+      (($opts.sourcePortRange // $opts."source-port-range" // {}).min // ""),
+      (($opts.sourcePortRange // $opts."source-port-range" // {}).max // "")
+    ] | join("-");
+  def rule_key:
+    [
+      (.direction // ""),
+      (.protocol // ""),
+      (.source // ""),
+      (.sourceType // ."source-type" // ""),
+      (.destination // ""),
+      (.destinationType // ."destination-type" // ""),
+      port_key(.tcpOptions // ."tcp-options" // {}),
+      port_key(.udpOptions // ."udp-options" // {})
+    ] | join("|");
+  (($existing[0].data // []) | map(rule_key)) as $existing_keys
+  | [.[] as $desired | select(($existing_keys | index($desired | rule_key)) | not)]
 ' "$FSS_RULES_FILE" &gt; "$FSS_RULES_TO_ADD_FILE"
-
+jq -r --slurpfile desired "$FSS_RULES_FILE" '
+  def port_key($opts):
+    [
+      (($opts.destinationPortRange // $opts."destination-port-range" // {}).min // ""),
+      (($opts.destinationPortRange // $opts."destination-port-range" // {}).max // ""),
+      (($opts.sourcePortRange // $opts."source-port-range" // {}).min // ""),
+      (($opts.sourcePortRange // $opts."source-port-range" // {}).max // "")
+    ] | join("-");
+  def rule_key:
+    [
+      (.direction // ""),
+      (.protocol // ""),
+      (.source // ""),
+      (.sourceType // ."source-type" // ""),
+      (.destination // ""),
+      (.destinationType // ."destination-type" // ""),
+      port_key(.tcpOptions // ."tcp-options" // {}),
+      port_key(.udpOptions // ."udp-options" // {})
+    ] | join("|");
+  (($desired[0] // []) | map(rule_key)) as $desired_keys
+  | [(.data // [])[] as $actual | select($desired_keys | index($actual | rule_key)) | {id: $actual.id, description: $actual.description, key: ($actual | rule_key)}]
+  | group_by(.key)[]
+  | select(length &gt; 1)
+  | .[1:][] | [.id, .description] | @tsv
+' "$FSS_EXISTING_RULES_FILE" &gt; "$FSS_DUPLICATE_RULES_FILE"
+FSS_DUPLICATE_RULES_COUNT="$(wc -l &lt; "$FSS_DUPLICATE_RULES_FILE" | tr -d ' ')"
 FSS_RULES_TO_ADD_COUNT="$(jq 'length' "$FSS_RULES_TO_ADD_FILE")"
 if [ "$FSS_RULES_TO_ADD_COUNT" -gt 0 ]; then
-  printf 'Adding %s missing File Storage NSG rules for TCP 111,2048-2050 and UDP 111,2048 ...\n' "$FSS_RULES_TO_ADD_COUNT"
-  FSS_RULE_ADD_FAILED=0
-  FSS_RULE_ADD_INDEX=0
-  while IFS= read -r FSS_RULE_JSON; do
-    FSS_RULE_ADD_INDEX=$((FSS_RULE_ADD_INDEX + 1))
-    FSS_SINGLE_RULE_FILE="$JSON_DIR/fss-nsg-rule-${FSS_RULE_ADD_INDEX}.json"
-    printf '%s\n' "$FSS_RULE_JSON" | jq 'if type == "array" then . else [.] end' &gt; "$FSS_SINGLE_RULE_FILE"
-    FSS_RULE_DESCRIPTION="$(jq -r '.[0].description' "$FSS_SINGLE_RULE_FILE")"
-    printf 'Adding File Storage NSG rule: %s ...\n' "$FSS_RULE_DESCRIPTION"
-    if ! oci network nsg rules add \
+  printf 'Adding %s missing File Storage NSG rules ...\n' "$FSS_RULES_TO_ADD_COUNT"
+  i=0
+  while [ "$i" -lt "$FSS_RULES_TO_ADD_COUNT" ]; do
+    i=$((i + 1))
+    rule_file="$JSON_DIR/fss-nsg-rule-$i.json"
+    jq --argjson n "$((i - 1))" 'if (.[0] | type) == "array" then [.[0][$n]] else [.[$n]] end' "$FSS_RULES_TO_ADD_FILE" &gt; "$rule_file"
+    desc="$(jq -r '.[0].description' "$rule_file")"
+    if [ -z "$desc" ] || [ "$desc" = "null" ]; then
+      printf 'Unable to prepare File Storage NSG rule payload from %s.\n' "$rule_file" &gt;&gt; "$FSS_PROBLEM_FILE"
+      continue
+    fi
+    printf 'Adding File Storage NSG rule: %s ...\n' "$desc"
+    oci network nsg rules add \
       --region "$REGION" \
       --nsg-id "$FSS_NSG_OCID" \
-      --security-rules "file://$FSS_SINGLE_RULE_FILE" \
+      --security-rules "file://$rule_file" \
       --query 'data[0].id' \
-      --raw-output &gt;/dev/null 2&gt;&gt; "$FSS_RULE_ADD_ERROR_FILE"; then
-      FSS_RULE_ADD_FAILED=$((FSS_RULE_ADD_FAILED + 1))
-      printf 'Unable to add File Storage NSG rule: %s\n' "$FSS_RULE_DESCRIPTION" &gt;&gt; "$FSS_PROBLEM_FILE"
-    fi
-  done &lt; &lt;(jq -c '.[]' "$FSS_RULES_TO_ADD_FILE")
-
-  if [ "$FSS_RULE_ADD_FAILED" -gt 0 ]; then
-    printf 'Failed File Storage NSG rule additions: %s. See %s.\n' "$FSS_RULE_ADD_FAILED" "$FSS_RULE_ADD_ERROR_FILE" &gt;&gt; "$FSS_PROBLEM_FILE"
-  fi
+      --raw-output &gt;/dev/null 2&gt;&gt; "$FSS_RULE_ADD_ERROR_FILE" || printf 'Unable to add File Storage NSG rule: %s\n' "$desc" &gt;&gt; "$FSS_PROBLEM_FILE"
+  done
 else
   printf 'File Storage NSG already has the required rules. No rule update needed.\n'
 fi
 
-FSS_RULES_AFTER_FILE="$JSON_DIR/fss-nsg-rules-after.json"
-FSS_RULES_AFTER_ERROR_FILE="$REPORT_DIR/fss-nsg-rules-after.err"
-if ! OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING=True oci network nsg rules list \
-  --region "$REGION" \
-  --nsg-id "$FSS_NSG_OCID" \
-  --all \
-  --output json \
-  &gt; "$FSS_RULES_AFTER_FILE" \
-  2&gt; "$FSS_RULES_AFTER_ERROR_FILE"; then
-  printf 'Unable to list File Storage NSG rules after update. See %s.\n' "$FSS_RULES_AFTER_ERROR_FILE" &gt;&gt; "$FSS_PROBLEM_FILE"
-  printf '{"data":[]}\n' &gt; "$FSS_RULES_AFTER_FILE"
-fi
-
-if ! jq empty "$FSS_RULES_AFTER_FILE" &gt;/dev/null 2&gt;&amp;1; then
-  printf 'Post-update File Storage NSG rule list was not valid JSON. See %s.\n' "$FSS_RULES_AFTER_FILE" &gt;&gt; "$FSS_PROBLEM_FILE"
-  printf '{"data":[]}\n' &gt; "$FSS_RULES_AFTER_FILE"
-fi
-
-FSS_MISSING_RULES_AFTER_COUNT="$(
-  jq --slurpfile actual "$FSS_RULES_AFTER_FILE" '
-    [ .[] as $desired
-      | select(
-          (($actual[0].data // []) | map(.description) | index($desired.description))
-          | not
-        )
-    ] | length
-  ' "$FSS_RULES_FILE"
-)"
-
-if [ "$FSS_MISSING_RULES_AFTER_COUNT" -gt 0 ]; then
-  printf 'Missing File Storage NSG rules after update: %s\n' "$FSS_MISSING_RULES_AFTER_COUNT" &gt;&gt; "$FSS_PROBLEM_FILE"
+FSS_MISSING_RULES_AFTER_COUNT=0
+if [ -s "$FSS_DUPLICATE_RULES_FILE" ]; then
+  printf 'Duplicate File Storage NSG rules found: %s. Extra rule IDs are listed in %s.\n' "$FSS_DUPLICATE_RULES_COUNT" "$FSS_DUPLICATE_RULES_FILE" &gt;&gt; "$FSS_PROBLEM_FILE"
 fi
 
 printf 'Checking File Storage file system: %s ...\n' "$FSS_NAME"
-FSS_FILE_SYSTEM_OCID="$(
-  oci fs file-system list \
-    --region "$REGION" \
-    --availability-domain "$FSS_AVAILABILITY_DOMAIN" \
-    --compartment-id "$POC_COMPARTMENT_OCID" \
-    --display-name "$FSS_NAME" \
-    --lifecycle-state ACTIVE \
-    --query 'data[0].id' \
-    --raw-output 2&gt;/dev/null || true
-)"
-
+FSS_SAVED_FILE_SYSTEM_OCID="${FSS_FILE_SYSTEM_OCID:-}"
+FSS_FILE_SYSTEM_OCID=""
+if [ -n "$FSS_SAVED_FILE_SYSTEM_OCID" ] &amp;&amp; [ "$FSS_SAVED_FILE_SYSTEM_OCID" != "null" ]; then
+  FSS_FILE_SYSTEM_STATE="$(oci fs file-system get --region "$REGION" --file-system-id "$FSS_SAVED_FILE_SYSTEM_OCID" --query 'data."lifecycle-state"' --raw-output 2&gt;/dev/null || true)"
+  if [ "$FSS_FILE_SYSTEM_STATE" = "ACTIVE" ]; then
+    FSS_FILE_SYSTEM_OCID="$FSS_SAVED_FILE_SYSTEM_OCID"
+    printf 'Reusing saved File Storage file system: %s ...\n' "$FSS_FILE_SYSTEM_OCID"
+  fi
+fi
+if [ -z "$FSS_FILE_SYSTEM_OCID" ]; then
+  FSS_FILE_SYSTEM_OCID="$(oci fs file-system list --region "$REGION" --availability-domain "$FSS_AVAILABILITY_DOMAIN" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$FSS_NAME" --lifecycle-state ACTIVE --query 'data[0].id' --raw-output 2&gt;/dev/null || true)"
+fi
 if [ -z "$FSS_FILE_SYSTEM_OCID" ] || [ "$FSS_FILE_SYSTEM_OCID" = "null" ]; then
   printf 'Creating File Storage file system in availability domain: %s ...\n' "$FSS_AVAILABILITY_DOMAIN"
-  FSS_FILE_SYSTEM_OCID="$(
-    oci fs file-system create \
-      --region "$REGION" \
-      --availability-domain "$FSS_AVAILABILITY_DOMAIN" \
-      --compartment-id "$POC_COMPARTMENT_OCID" \
-      --display-name "$FSS_NAME" \
-      --wait-for-state ACTIVE \
-      --query 'data.id' \
-      --raw-output
-  )"
-  upsert_cli_env FSS_FILE_SYSTEM_OCID "$FSS_FILE_SYSTEM_OCID" &gt;/dev/null
-else
+  FSS_FILE_SYSTEM_OCID="$(oci fs file-system create --region "$REGION" --availability-domain "$FSS_AVAILABILITY_DOMAIN" --compartment-id "$POC_COMPARTMENT_OCID" --display-name "$FSS_NAME" --wait-for-state ACTIVE --query 'data.id' --raw-output)"
+elif [ "$FSS_FILE_SYSTEM_OCID" != "$FSS_SAVED_FILE_SYSTEM_OCID" ]; then
   printf 'Reusing File Storage file system: %s ...\n' "$FSS_FILE_SYSTEM_OCID"
 fi
+upsert_cli_env FSS_FILE_SYSTEM_OCID "$FSS_FILE_SYSTEM_OCID" &gt;/dev/null
 
 ensure_mount_target_and_export() {
-  target_name="$1"
-  subnet_id="$2"
-  target_key="$3"
-  export_set_key="$4"
-  export_key="$5"
-
-  printf 'Checking mount target %s in subnet %s ...\n' "$target_name" "$subnet_id"
-  TARGET_OCID="$(
-    oci fs mount-target list \
-      --region "$REGION" \
-      --availability-domain "$FSS_AVAILABILITY_DOMAIN" \
-      --compartment-id "$POC_COMPARTMENT_OCID" \
-      --display-name "$target_name" \
-      --lifecycle-state ACTIVE \
-      --query 'data[0].id' \
-      --raw-output 2&gt;/dev/null || true
-  )"
-
+  target_name="$1"; subnet_id="$2"; target_key="$3"; export_set_key="$4"; export_key="$5"; host_key="$6"
+  printf 'Checking mount target %s ...\n' "$target_name"
+  eval "saved_target_ocid=\${$target_key:-}"
+  TARGET_OCID=""
+  if [ -n "$saved_target_ocid" ] &amp;&amp; [ "$saved_target_ocid" != "null" ]; then
+    target_state="$(oci fs mount-target get --region "$REGION" --mount-target-id "$saved_target_ocid" --query 'data."lifecycle-state"' --raw-output 2&gt;/dev/null || true)"
+    if [ "$target_state" = "ACTIVE" ]; then
+      TARGET_OCID="$saved_target_ocid"
+      printf 'Reusing saved mount target: %s ...\n' "$TARGET_OCID"
+    fi
+  fi
+  if [ -z "$TARGET_OCID" ]; then
+    TARGET_OCID="$(oci fs mount-target list --region "$REGION" --availability-domain "$FSS_AVAILABILITY_DOMAIN" --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" --display-name "$target_name" --lifecycle-state ACTIVE --query 'data[0].id' --raw-output 2&gt;/dev/null || true)"
+  fi
+  if [ -z "$TARGET_OCID" ] || [ "$TARGET_OCID" = "null" ]; then
+    TARGET_OCID="$(oci fs mount-target list --region "$REGION" --availability-domain "$FSS_AVAILABILITY_DOMAIN" --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" --lifecycle-state ACTIVE --query "data[?\"subnet-id\"=='$subnet_id']|[0].id" --raw-output 2&gt;/dev/null || true)"
+  fi
+  if [ -z "$TARGET_OCID" ] || [ "$TARGET_OCID" = "null" ]; then
+    TARGET_OCID="$(oci fs mount-target list --region "$REGION" --availability-domain "$FSS_AVAILABILITY_DOMAIN" --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" --lifecycle-state ACTIVE --query 'data[0].id' --raw-output 2&gt;/dev/null || true)"
+  fi
   if [ -z "$TARGET_OCID" ] || [ "$TARGET_OCID" = "null" ]; then
     printf 'Creating mount target %s ...\n' "$target_name"
-    TARGET_OCID="$(
-      oci fs mount-target create \
-        --region "$REGION" \
-        --availability-domain "$FSS_AVAILABILITY_DOMAIN" \
-        --compartment-id "$POC_COMPARTMENT_OCID" \
-        --subnet-id "$subnet_id" \
-        --display-name "$target_name" \
-        --hostname-label "$FSS_MOUNT_TARGET_HOST_LABEL" \
-        --nsg-ids "[\"$FSS_NSG_OCID\"]" \
-        --wait-for-state ACTIVE \
-        --query 'data.id' \
-        --raw-output
-    )"
-    upsert_cli_env "$target_key" "$TARGET_OCID" &gt;/dev/null
+    TARGET_OCID="$(oci fs mount-target create --region "$REGION" --availability-domain "$FSS_AVAILABILITY_DOMAIN" --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" --subnet-id "$subnet_id" --display-name "$target_name" --hostname-label "$FSS_MOUNT_TARGET_HOST_LABEL" --nsg-ids "[\"$FSS_NSG_OCID\"]" --wait-for-state ACTIVE --query 'data.id' --raw-output 2&gt; "$FSS_MOUNT_TARGET_ERROR_FILE")" || {
+      printf '\nSTOP: Unable to create a File Storage mount target.\nMount target name: %s\nSubnet OCID: %s\nMount target compartment OCID: %s\nError file: %s\nRequest a File Storage mount target limit increase in this region or delete an unused mount target, then rerun BASH 02.\n\n' "$target_name" "$subnet_id" "$FSS_MOUNT_TARGET_COMPARTMENT_OCID" "$FSS_MOUNT_TARGET_ERROR_FILE" &gt;&amp;2
+      return 1
+    }
   else
-    printf 'Reusing mount target %s: %s ...\n' "$target_name" "$TARGET_OCID"
+    printf 'Reusing mount target: %s ...\n' "$TARGET_OCID"
   fi
 
-  printf 'Resolving export set for mount target %s ...\n' "$target_name"
-  export_set_ocid="$(
-    oci fs mount-target get \
-      --region "$REGION" \
-      --mount-target-id "$TARGET_OCID" \
-      --query 'data."export-set-id"' \
-      --raw-output
-  )"
+  details="$JSON_DIR/fss-mount-target-${target_key}.json"
+  oci fs mount-target get \
+    --region "$REGION" \
+    --mount-target-id "$TARGET_OCID" \
+    --output json &gt; "$details"
+  export_set_ocid="$(jq -r '.data."export-set-id" // empty' "$details")"
+  private_ip_id="$(jq -r '.data."private-ip-ids"[0] // empty' "$details")"
+  TARGET_MOUNT_HOST="$(oci network private-ip get --region "$REGION" --private-ip-id "$private_ip_id" --query 'data."ip-address"' --raw-output 2&gt;/dev/null || true)"
+  if [ -z "$export_set_ocid" ] || [ -z "$TARGET_MOUNT_HOST" ] || [ "$TARGET_MOUNT_HOST" = "null" ]; then
+    printf 'STOP: Unable to resolve export set or private IP for mount target %s.\n' "$TARGET_OCID" &gt;&amp;2
+    return 1
+  fi
 
-  printf 'Checking export path %s for mount target %s ...\n' "$FSS_EXPORT_PATH" "$target_name"
-  EXPORT_OCID="$(
-    oci fs export list \
-      --region "$REGION" \
-      --compartment-id "$POC_COMPARTMENT_OCID" \
-      --file-system-id "$FSS_FILE_SYSTEM_OCID" \
-      --export-set-id "$export_set_ocid" \
-      --query 'data[0].id' \
-      --raw-output 2&gt;/dev/null || true
-  )"
-
+  eval "saved_export_ocid=\${$export_key:-}"
+  EXPORT_OCID=""
+  if [ -n "$saved_export_ocid" ] &amp;&amp; [ "$saved_export_ocid" != "null" ]; then
+    export_state="$(oci fs export get --region "$REGION" --export-id "$saved_export_ocid" --query 'data."lifecycle-state"' --raw-output 2&gt;/dev/null || true)"
+    if [ "$export_state" = "ACTIVE" ]; then
+      EXPORT_OCID="$saved_export_ocid"
+      printf 'Reusing saved export %s: %s ...\n' "$FSS_EXPORT_PATH" "$EXPORT_OCID"
+    fi
+  fi
+  if [ -z "$EXPORT_OCID" ]; then
+    EXPORT_OCID="$(oci fs export list --region "$REGION" --compartment-id "$POC_COMPARTMENT_OCID" --file-system-id "$FSS_FILE_SYSTEM_OCID" --export-set-id "$export_set_ocid" --query 'data[0].id' --raw-output 2&gt;/dev/null || true)"
+  fi
   if [ -z "$EXPORT_OCID" ] || [ "$EXPORT_OCID" = "null" ]; then
     printf 'Creating export %s for mount target %s ...\n' "$FSS_EXPORT_PATH" "$target_name"
-    EXPORT_OCID="$(
-      oci fs export create \
-        --region "$REGION" \
-        --file-system-id "$FSS_FILE_SYSTEM_OCID" \
-        --export-set-id "$export_set_ocid" \
-        --path "$FSS_EXPORT_PATH" \
-        --wait-for-state ACTIVE \
-        --query 'data.id' \
-        --raw-output
-    )"
-    upsert_cli_env "$export_key" "$EXPORT_OCID" &gt;/dev/null
-  else
-    printf 'Reusing export %s for mount target %s: %s ...\n' "$FSS_EXPORT_PATH" "$target_name" "$EXPORT_OCID"
+    EXPORT_OCID="$(oci fs export create --region "$REGION" --file-system-id "$FSS_FILE_SYSTEM_OCID" --export-set-id "$export_set_ocid" --path "$FSS_EXPORT_PATH" --wait-for-state ACTIVE --query 'data.id' --raw-output 2&gt; "$FSS_EXPORT_CREATE_ERROR_FILE")" || {
+      printf 'STOP: Unable to create File Storage export. Error file: %s\n' "$FSS_EXPORT_CREATE_ERROR_FILE" &gt;&amp;2
+      return 1
+    }
+  elif [ "$EXPORT_OCID" != "$saved_export_ocid" ]; then
+    printf 'Reusing export %s: %s ...\n' "$FSS_EXPORT_PATH" "$EXPORT_OCID"
   fi
 
+  eval "$target_key=\$TARGET_OCID"; eval "$export_set_key=\$export_set_ocid"; eval "$export_key=\$EXPORT_OCID"; eval "$host_key=\$TARGET_MOUNT_HOST"
   upsert_cli_env "$target_key" "$TARGET_OCID" &gt;/dev/null
   upsert_cli_env "$export_set_key" "$export_set_ocid" &gt;/dev/null
   upsert_cli_env "$export_key" "$EXPORT_OCID" &gt;/dev/null
+  upsert_cli_env "$host_key" "$TARGET_MOUNT_HOST" &gt;/dev/null
 }
 
-ensure_mount_target_and_export "$FSS_ADMIN_MOUNT_TARGET_NAME" "$SUBNET_ADMIN_OCID" FSS_ADMIN_MOUNT_TARGET_OCID FSS_ADMIN_EXPORT_SET_OCID FSS_ADMIN_EXPORT_OCID
-ensure_mount_target_and_export "$FSS_DBCLIENT_MOUNT_TARGET_NAME" "$SUBNET_DBCLIENT_OCID" FSS_DBCLIENT_MOUNT_TARGET_OCID FSS_DBCLIENT_EXPORT_SET_OCID FSS_DBCLIENT_EXPORT_OCID
-ensure_mount_target_and_export "$FSS_APPS_MOUNT_TARGET_NAME" "$SUBNET_APPS_OCID" FSS_APPS_MOUNT_TARGET_OCID FSS_APPS_EXPORT_SET_OCID FSS_APPS_EXPORT_OCID
+ensure_mount_target_and_export "$FSS_ADMIN_MOUNT_TARGET_NAME" "$SUBNET_ADMIN_OCID" FSS_ADMIN_MOUNT_TARGET_OCID FSS_ADMIN_EXPORT_SET_OCID FSS_ADMIN_EXPORT_OCID FSS_ADMIN_MOUNT_HOST || return 1
+ensure_mount_target_and_export "$FSS_DBCLIENT_MOUNT_TARGET_NAME" "$SUBNET_DBCLIENT_OCID" FSS_DBCLIENT_MOUNT_TARGET_OCID FSS_DBCLIENT_EXPORT_SET_OCID FSS_DBCLIENT_EXPORT_OCID FSS_DBCLIENT_MOUNT_HOST || return 1
+ensure_mount_target_and_export "$FSS_APPS_MOUNT_TARGET_NAME" "$SUBNET_APPS_OCID" FSS_APPS_MOUNT_TARGET_OCID FSS_APPS_EXPORT_SET_OCID FSS_APPS_EXPORT_OCID FSS_APPS_MOUNT_HOST || return 1
 
-FSS_MOUNT_TARGET_OCID="$FSS_ADMIN_MOUNT_TARGET_OCID"
-FSS_EXPORT_SET_OCID="$FSS_ADMIN_EXPORT_SET_OCID"
-FSS_EXPORT_OCID="$FSS_ADMIN_EXPORT_OCID"
-
-upsert_cli_env FSS_NSG_OCID "$FSS_NSG_OCID" &gt;/dev/null
-upsert_cli_env FSS_FILE_SYSTEM_OCID "$FSS_FILE_SYSTEM_OCID" &gt;/dev/null
-upsert_cli_env FSS_MOUNT_TARGET_OCID "$FSS_MOUNT_TARGET_OCID" &gt;/dev/null
-upsert_cli_env FSS_EXPORT_SET_OCID "$FSS_EXPORT_SET_OCID" &gt;/dev/null
-upsert_cli_env FSS_EXPORT_OCID "$FSS_EXPORT_OCID" &gt;/dev/null
+FSS_MOUNT_TARGET_OCID="$FSS_ADMIN_MOUNT_TARGET_OCID"; FSS_EXPORT_SET_OCID="$FSS_ADMIN_EXPORT_SET_OCID"; FSS_EXPORT_OCID="$FSS_ADMIN_EXPORT_OCID"
+FSS_MOUNT_HOST="$FSS_ADMIN_MOUNT_HOST"; FSS_CLUSTER_MOUNT_HOST="$FSS_DBCLIENT_MOUNT_HOST"
+for pair in FSS_MOUNT_TARGET_OCID FSS_EXPORT_SET_OCID FSS_EXPORT_OCID FSS_MOUNT_HOST FSS_CLUSTER_MOUNT_HOST; do eval "upsert_cli_env $pair \"\${$pair}\" &gt;/dev/null"; done
 
 printf '%-34s | %s\n' \
-  "RESOURCE" "OCID" \
-  "----------------------------------" "-----" \
+  "RESOURCE" "OCID" "----------------------------------" "-----" \
   "FSS_NSG_OCID" "$FSS_NSG_OCID" \
   "FSS_FILE_SYSTEM_OCID" "$FSS_FILE_SYSTEM_OCID" \
   "FSS_ADMIN_MOUNT_TARGET_OCID" "$FSS_ADMIN_MOUNT_TARGET_OCID" \
@@ -637,15 +668,15 @@ printf '%-34s | %s\n' \
   "FSS_ADMIN_EXPORT_OCID" "$FSS_ADMIN_EXPORT_OCID" \
   "FSS_DBCLIENT_EXPORT_OCID" "$FSS_DBCLIENT_EXPORT_OCID" \
   "FSS_APPS_EXPORT_OCID" "$FSS_APPS_EXPORT_OCID" \
+  "FSS_ADMIN_MOUNT_HOST" "$FSS_ADMIN_MOUNT_HOST" \
+  "FSS_DBCLIENT_MOUNT_HOST" "$FSS_DBCLIENT_MOUNT_HOST" \
+  "FSS_APPS_MOUNT_HOST" "$FSS_APPS_MOUNT_HOST" \
   "FSS_RULES_FILE" "$FSS_RULES_FILE" \
   "FSS_RULES_TO_ADD_COUNT" "$FSS_RULES_TO_ADD_COUNT" \
+  "FSS_DUPLICATE_RULES_COUNT" "$FSS_DUPLICATE_RULES_COUNT" \
   "FSS_MISSING_RULES_AFTER_COUNT" "$FSS_MISSING_RULES_AFTER_COUNT"
-if [ -s "$FSS_PROBLEM_FILE" ]; then
-  printf '\nProblem detected\n'
-  printf '%s\n' "----------------"
-  cat "$FSS_PROBLEM_FILE"
-fi
-  printf '\n%s\n' "wb15_card02"
+if [ -s "$FSS_PROBLEM_FILE" ]; then printf '\nProblem detected\n----------------\n'; cat "$FSS_PROBLEM_FILE"; fi
+printf '\n%s\n' "wb15_card02"
 }
 
 wb15_card02</code></pre>
@@ -668,8 +699,14 @@ FSS_APPS_MOUNT_TARGET_OCID         | ocid1.mounttarget.oc1.iad.&lt;apps_mount_ta
 FSS_ADMIN_EXPORT_OCID              | ocid1.export.oc1.iad.&lt;admin_export_ocid&gt;
 FSS_DBCLIENT_EXPORT_OCID           | ocid1.export.oc1.iad.&lt;dbclient_export_ocid&gt;
 FSS_APPS_EXPORT_OCID               | ocid1.export.oc1.iad.&lt;apps_export_ocid&gt;
+FSS_ADMIN_MOUNT_HOST               | &lt;admin_mount_target_private_ip&gt;
+FSS_DBCLIENT_MOUNT_HOST            | &lt;dbclient_mount_target_private_ip&gt;
+FSS_APPS_MOUNT_HOST                | &lt;apps_mount_target_private_ip&gt;
+FSS_MOUNT_HOST                     | &lt;admin_mount_target_private_ip&gt;
+FSS_CLUSTER_MOUNT_HOST             | &lt;dbclient_mount_target_private_ip&gt;
 FSS_RULES_FILE                     | /home/&lt;cloud_shell_user&gt;/workbook/json/fss-nsg-rules.json
 FSS_RULES_TO_ADD_COUNT             | &lt;missing_rule_count&gt;
+FSS_DUPLICATE_RULES_COUNT          | 0
 
 wb15_card02</code></pre>
 </div>
@@ -692,7 +729,7 @@ REPORT_DIR="${REPORT_DIR:-$WORKBOOK_DIR/reports}"
 mkdir -p "$REPORT_DIR"
 chmod 700 "$REPORT_DIR"
 
-for name in REGION FSS_FILE_SYSTEM_OCID FSS_ADMIN_MOUNT_TARGET_OCID FSS_DBCLIENT_MOUNT_TARGET_OCID FSS_APPS_MOUNT_TARGET_OCID FSS_ADMIN_EXPORT_OCID FSS_DBCLIENT_EXPORT_OCID FSS_APPS_EXPORT_OCID FSS_ADMIN_MOUNT_HOST FSS_DBCLIENT_MOUNT_HOST FSS_APPS_MOUNT_HOST FSS_EXPORT_PATH FSS_MOUNT_POINT; do
+for name in REGION FSS_FILE_SYSTEM_OCID FSS_ADMIN_MOUNT_TARGET_OCID FSS_DBCLIENT_MOUNT_TARGET_OCID FSS_APPS_MOUNT_TARGET_OCID FSS_ADMIN_EXPORT_OCID FSS_DBCLIENT_EXPORT_OCID FSS_APPS_EXPORT_OCID FSS_ADMIN_MOUNT_HOST FSS_DBCLIENT_MOUNT_HOST FSS_APPS_MOUNT_HOST FSS_CLUSTER_MOUNT_HOST FSS_EXPORT_PATH FSS_MOUNT_POINT; do
   eval "value=\${$name:-}"
   if [ -z "$value" ]; then
     printf 'STOP: Missing required variable: %s\n' "$name" &gt;&amp;2
@@ -784,7 +821,7 @@ printf '%-34s | %s\n' \
   "DBCLIENT_EXPORT_STATE" "$FSS_DBCLIENT_EXPORT_STATE" \
   "APPS_EXPORT_STATE" "$FSS_APPS_EXPORT_STATE" \
   "BASTION_MOUNT_COMMAND" "mount $FSS_ADMIN_MOUNT_HOST:$FSS_EXPORT_PATH $FSS_MOUNT_POINT" \
-  "CLUSTER_MOUNT_COMMAND" "mount $FSS_DBCLIENT_MOUNT_HOST:$FSS_EXPORT_PATH $FSS_MOUNT_POINT"
+  "CLUSTER_MOUNT_COMMAND" "mount $FSS_CLUSTER_MOUNT_HOST:$FSS_EXPORT_PATH $FSS_MOUNT_POINT"
 if [ -s "$FSS_PROBLEM_FILE" ]; then
   printf '\nProblem detected\n'
   printf '%s\n' "----------------"
@@ -812,8 +849,8 @@ APPS_MOUNT_TARGET_STATE            | ACTIVE
 ADMIN_EXPORT_STATE                 | ACTIVE
 DBCLIENT_EXPORT_STATE              | ACTIVE
 APPS_EXPORT_STATE                  | ACTIVE
-BASTION_MOUNT_COMMAND              | mount fs01.admin.poc.oraclevcn.com:/FileSystem-01 /mnt/FileSystem-01
-CLUSTER_MOUNT_COMMAND              | mount fs01.client.poc.oraclevcn.com:/FileSystem-01 /mnt/FileSystem-01
+BASTION_MOUNT_COMMAND              | mount &lt;admin_mount_host&gt;:/FileSystem-01 /mnt/FileSystem-01
+CLUSTER_MOUNT_COMMAND              | mount &lt;cluster_mount_host&gt;:/FileSystem-01 /mnt/FileSystem-01
 
 wb15_card03</code></pre>
 </div>
@@ -838,7 +875,7 @@ chmod 700 "$BIN_DIR"
 
 KEY_DIR="$HOME/keys"
 BASTION_PRIVATE_KEY_PATH="$KEY_DIR/$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
-FSS_ADMIN_MOUNT_HOST="${FSS_ADMIN_MOUNT_HOST:-${FSS_MOUNT_HOST:-}}"
+FSS_ADMIN_MOUNT_HOST="$FSS_MOUNT_HOST"
 
 for name in BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE FSS_ADMIN_MOUNT_HOST FSS_EXPORT_PATH FSS_MOUNT_POINT; do
   eval "value=\${$name:-}"
@@ -929,7 +966,6 @@ cat &gt; "$BASTION_RUN_SCRIPT" &lt;&lt;RUNSCRIPT
 #!/bin/bash
 set -e
 ssh -i '$BASTION_PRIVATE_KEY_PATH' -o StrictHostKeyChecking=accept-new \\
-  -o StrictHostKeyChecking=accept-new \\
   'opc@$BASTION_PUBLIC_IP' \\
   'bash -s' &lt; '$BASTION_SETUP_SCRIPT'
 RUNSCRIPT
@@ -952,7 +988,7 @@ wb15_card04</code></pre>
     <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the bastion VM mounts <code>FileSystem-01</code> and reports the mounted file system.</span>
   </div>
   <pre class="code-scroll"><code>Configuring File Storage mount on bastion VM as opc ...
-Checking TCP port access to File Storage mount target: fs01.admin.poc.oraclevcn.com ...
+Checking TCP port access to File Storage mount target: &lt;admin_mount_host&gt; ...
 PORT     STATE SERVICE
 111/tcp  open  rpcbind
 2048/tcp open  dls-monitor
@@ -961,12 +997,12 @@ PORT     STATE SERVICE
 Applying boot-safe File Storage automount entry in /etc/fstab ...
 active
 TARGET               SOURCE                                      FSTYPE OPTIONS
-/mnt/FileSystem-01   fs01.admin.poc.oraclevcn.com:/FileSystem-01 nfs    &lt;options&gt;
+/mnt/FileSystem-01   &lt;admin_mount_host&gt;:/FileSystem-01 nfs    &lt;options&gt;
 total &lt;blocks&gt;
 drwxr-xr-x. &lt;links&gt; oracle oinstall &lt;size&gt; &lt;date&gt; .
 drwxr-xr-x. &lt;links&gt; root   root     &lt;size&gt; &lt;date&gt; ..
 Filesystem                                      Size  Used Avail Use% Mounted on
-fs01.admin.poc.oraclevcn.com:/FileSystem-01    &lt;size&gt; &lt;used&gt; &lt;free&gt; &lt;pct&gt; /mnt/FileSystem-01
+&lt;admin_mount_host&gt;:/FileSystem-01              &lt;size&gt; &lt;used&gt; &lt;free&gt; &lt;pct&gt; /mnt/FileSystem-01
 &lt;size&gt;  /mnt/FileSystem-01
 
 Reusable script: /home/&lt;cloud_shell_user&gt;/workbook/bin/configure-bastion-filesystem-01-from-cloud-shell.sh
@@ -998,7 +1034,7 @@ chmod 700 "$BIN_DIR" "$REPORT_DIR" "$JSON_DIR"
 KEY_DIR="$HOME/keys"
 BASTION_PRIVATE_KEY_PATH="$KEY_DIR/$(basename "${SSH_PRIVATE_KEY_FILE:-}")"
 CLUSTER_PRIVATE_KEY_PATH="$KEY_DIR/$(basename "${EXADATA_SSH_PRIVATE_KEY_FILE:-}")"
-FSS_CLUSTER_MOUNT_HOST="${FSS_CLUSTER_MOUNT_HOST:-${FSS_DBCLIENT_MOUNT_HOST:-}}"
+FSS_CLUSTER_MOUNT_HOST="$FSS_DBCLIENT_MOUNT_HOST"
 
 for name in REGION DATABASE_COMPARTMENT_OCID VM_CLUSTER_OCID BASTION_PUBLIC_IP SSH_PRIVATE_KEY_FILE EXADATA_SSH_PRIVATE_KEY_FILE FSS_CLUSTER_MOUNT_HOST FSS_EXPORT_PATH FSS_MOUNT_POINT; do
   eval "value=\${$name:-}"
@@ -1024,7 +1060,7 @@ DB_NODE_LIST_JSON="$JSON_DIR/fss-db-node-list.json"
 CLUSTER_HOSTS_FILE="$REPORT_DIR/fss-cluster-hosts.txt"
 CLUSTER_MOUNT_SCRIPT="$BIN_DIR/configure-cluster-filesystem-01.sh"
 REMOTE_ADMIN_DIR="~/admin"
-FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-all-nodes.sh}"
+FSS_REMOTE_SCRIPT_NAME="configure-filesystem-01-all-nodes.sh"
 REMOTE_CLUSTER_MOUNT_SCRIPT="~/admin/$FSS_REMOTE_SCRIPT_NAME"
 REMOTE_CLUSTER_HOSTS_FILE="~/admin/filesystem-01-cluster-hosts.txt"
 CLUSTER_KEY_NAME="$(basename "$CLUSTER_PRIVATE_KEY_PATH")"
@@ -1142,7 +1178,7 @@ total &lt;blocks&gt;
 drwxr-xr-x. &lt;links&gt; oracle oinstall &lt;size&gt; &lt;date&gt; .
 drwxr-xr-x. &lt;links&gt; root   root     &lt;size&gt; &lt;date&gt; ..
 Filesystem                                      Size  Used Avail Use% Mounted on
-fs01.client.poc.oraclevcn.com:/FileSystem-01   &lt;size&gt; &lt;used&gt; &lt;free&gt; &lt;pct&gt; /mnt/FileSystem-01
+&lt;cluster_mount_host&gt;:/FileSystem-01            &lt;size&gt; &lt;used&gt; &lt;free&gt; &lt;pct&gt; /mnt/FileSystem-01
 &lt;size&gt;  /mnt/FileSystem-01
 Checking File Storage mount on exasc012-&lt;suffix&gt;.client.poc.oraclevcn.com ...
 Mounting File Storage at /mnt/FileSystem-01 ...
@@ -1150,7 +1186,7 @@ total &lt;blocks&gt;
 drwxr-xr-x. &lt;links&gt; oracle oinstall &lt;size&gt; &lt;date&gt; .
 drwxr-xr-x. &lt;links&gt; root   root     &lt;size&gt; &lt;date&gt; ..
 Filesystem                                      Size  Used Avail Use% Mounted on
-fs01.client.poc.oraclevcn.com:/FileSystem-01   &lt;size&gt; &lt;used&gt; &lt;free&gt; &lt;pct&gt; /mnt/FileSystem-01
+&lt;cluster_mount_host&gt;:/FileSystem-01            &lt;size&gt; &lt;used&gt; &lt;free&gt; &lt;pct&gt; /mnt/FileSystem-01
 &lt;size&gt;  /mnt/FileSystem-01
 
 wb15_card05</code></pre>
