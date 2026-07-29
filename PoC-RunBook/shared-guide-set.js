@@ -120,6 +120,12 @@
             "rootPath": "17-recover-variables/index.html",
             "nestedPath": "../17-recover-variables/index.html",
             "label": "17. Recover Variables"
+      },
+      {
+            "key": "18-create-new-pdb",
+            "rootPath": "18-create-new-pdb/index.html",
+            "nestedPath": "../18-create-new-pdb/index.html",
+            "label": "18. Create New PDB"
       }
 ]
   };
