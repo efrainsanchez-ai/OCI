@@ -33,7 +33,7 @@
         <h1>Recover Variables</h1>
         <p class="subtitle">Whenever this workbook is edited, update the visible <code>Last updated &lt;Month Day, Year&gt;</code> label in <code>index.html</code> to the current publication date.</p>
         <div class="hero-meta">
-          <span>Last updated July 23, 2026</span>
+          <span>Last updated July 28, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -588,6 +588,7 @@ printf '%-34s | %s\n' \
   "SUBNET_DBCLIENT_OCID" "${SUBNET_DBCLIENT_OCID:-}" \
   "SUBNET_DB_BACKUP_OCID" "${SUBNET_DB_BACKUP_OCID:-}" \
   "SUBNET_DBTOOLS_OCID" "${SUBNET_DBTOOLS_OCID:-}" \
+  "NSG_DATABASE_CLIENT_OCID" "${NSG_DATABASE_CLIENT_OCID:-}" \
   "NSG_BASTION_OCID" "${NSG_BASTION_OCID:-}" \
   "BASTION_VM_OCID" "${BASTION_VM_OCID:-}" \
   "BASTION_PUBLIC_IP" "${BASTION_PUBLIC_IP:-}" \
@@ -603,11 +604,27 @@ printf '%-34s | %s\n' \
   "DB_HOME_OCID" "${DB_HOME_OCID:-}" \
   "CDB_OCID" "${CDB_OCID:-}" \
   "PDB_OCID" "${PDB_OCID:-}" \
+  "CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" "${CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID:-}" \
+  "CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" "${CDB_CREDENTIAL_KEY_COMPARTMENT_OCID:-}" \
+  "CDB_CREDENTIAL_VAULT_OCID" "${CDB_CREDENTIAL_VAULT_OCID:-}" \
+  "CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" "${CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT:-}" \
+  "CDB_CREDENTIAL_KEY_OCID" "${CDB_CREDENTIAL_KEY_OCID:-}" \
+  "CDB_SYS_SECRET_OCID" "${CDB_SYS_SECRET_OCID:-}" \
+  "CDB_SYSTEM_SECRET_OCID" "${CDB_SYSTEM_SECRET_OCID:-}" \
+  "DBMGMT_SYSTEM_SECRET_OCID" "${DBMGMT_SYSTEM_SECRET_OCID:-}" \
+  "DBMGMT_PASSWORD_SECRET_OCID" "${DBMGMT_PASSWORD_SECRET_OCID:-}" \
   "DBMGMT_PRIVATE_ENDPOINT_OCID" "${DBMGMT_PRIVATE_ENDPOINT_OCID:-}" \
   "DBMGMT_SECRET_POLICY_OCID" "${DBMGMT_SECRET_POLICY_OCID:-}" \
+  "FSS_AD_NUMBER" "${FSS_AD_NUMBER:-}" \
+  "FSS_AVAILABILITY_DOMAIN" "${FSS_AVAILABILITY_DOMAIN:-}" \
+  "FSS_MOUNT_TARGET_COMPARTMENT_OCID" "${FSS_MOUNT_TARGET_COMPARTMENT_OCID:-}" \
   "FSS_FILE_SYSTEM_OCID" "${FSS_FILE_SYSTEM_OCID:-}" \
   "FSS_DBCLIENT_MOUNT_TARGET_OCID" "${FSS_DBCLIENT_MOUNT_TARGET_OCID:-}" \
+  "FSS_DBCLIENT_EXPORT_SET_OCID" "${FSS_DBCLIENT_EXPORT_SET_OCID:-}" \
   "FSS_DBCLIENT_EXPORT_OCID" "${FSS_DBCLIENT_EXPORT_OCID:-}" \
+  "FSS_APPS_MOUNT_TARGET_OCID" "${FSS_APPS_MOUNT_TARGET_OCID:-}" \
+  "FSS_APPS_EXPORT_SET_OCID" "${FSS_APPS_EXPORT_SET_OCID:-}" \
+  "FSS_APPS_EXPORT_OCID" "${FSS_APPS_EXPORT_OCID:-}" \
   "FSS_CLUSTER_MOUNT_HOST" "${FSS_CLUSTER_MOUNT_HOST:-}" \
   "FSS_EXPORT_PATH" "${FSS_EXPORT_PATH:-}" \
   "FSS_MOUNT_POINT" "${FSS_MOUNT_POINT:-}"
@@ -636,6 +653,7 @@ POC_PARENT_COMPARTMENT_NAME        | Partner
 POC_COMPARTMENT_NAME               | LAD-01
 POC_COMPARTMENT_OCID               | &lt;poc_compartment_ocid&gt;
 VCN_OCID                           | &lt;vcn_ocid&gt;
+NSG_DATABASE_CLIENT_OCID           | &lt;database_client_nsg_ocid&gt;
 NSG_BASTION_OCID                   | &lt;bastion_nsg_ocid&gt;
 BASTION_VM_OCID                    | &lt;bastion_vm_ocid&gt;
 BASTION_PUBLIC_IP                  | &lt;bastion_public_ip&gt;
@@ -649,11 +667,25 @@ EXADATA_TOTAL_ECPU_COUNT           | &lt;total_ecpu_count&gt;
 EXADATA_VM_FS_STORAGE_GB           | &lt;vm_file_system_storage_gb&gt;
 CDB_OCID                           | &lt;cdb_ocid&gt;
 PDB_OCID                           | &lt;pdb_ocid&gt;
+CDB_CREDENTIAL_VAULT_OCID          | &lt;vault_ocid&gt;
+CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT | &lt;vault_management_endpoint&gt;
+CDB_CREDENTIAL_KEY_OCID            | &lt;key_ocid&gt;
+CDB_SYS_SECRET_OCID                | &lt;sys_secret_ocid&gt;
+CDB_SYSTEM_SECRET_OCID             | &lt;system_secret_ocid&gt;
+DBMGMT_SYSTEM_SECRET_OCID          | &lt;system_secret_ocid&gt;
+DBMGMT_PASSWORD_SECRET_OCID        | &lt;system_secret_ocid&gt;
 DBMGMT_PRIVATE_ENDPOINT_OCID       | &lt;dbmgmt_private_endpoint_ocid&gt;
 DBMGMT_SECRET_POLICY_OCID          | &lt;dbmgmt_secret_policy_ocid&gt;
+FSS_AD_NUMBER                      | 1
+FSS_AVAILABILITY_DOMAIN            | &lt;file_storage_availability_domain&gt;
+FSS_MOUNT_TARGET_COMPARTMENT_OCID  | &lt;poc_compartment_ocid&gt;
 FSS_FILE_SYSTEM_OCID                | &lt;file_system_ocid&gt;
 FSS_DBCLIENT_MOUNT_TARGET_OCID      | &lt;dbclient_mount_target_ocid&gt;
+FSS_DBCLIENT_EXPORT_SET_OCID        | &lt;dbclient_export_set_ocid&gt;
 FSS_DBCLIENT_EXPORT_OCID            | &lt;dbclient_export_ocid&gt;
+FSS_APPS_MOUNT_TARGET_OCID          | &lt;apps_mount_target_ocid&gt;
+FSS_APPS_EXPORT_SET_OCID            | &lt;apps_export_set_ocid&gt;
+FSS_APPS_EXPORT_OCID                | &lt;apps_export_ocid&gt;
 FSS_CLUSTER_MOUNT_HOST              | &lt;dbclient_mount_target_host&gt;
 FSS_EXPORT_PATH                     | /FileSystem-01
 FSS_MOUNT_POINT                     | /mnt/FileSystem-01
