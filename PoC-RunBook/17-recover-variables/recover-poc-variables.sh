@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Maintenance: Update SCRIPT_CREATED_AT to the current timestamp whenever this script changes.
-SCRIPT_CREATED_AT="2026-07-29 00:00:00 CST"
+SCRIPT_CREATED_AT="2026-07-29 10:20:08 CST"
 printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
 
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
