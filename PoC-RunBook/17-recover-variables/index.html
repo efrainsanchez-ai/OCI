@@ -33,7 +33,7 @@
         <h1>Recover Variables</h1>
         <p class="subtitle">Whenever this workbook is edited, update the visible <code>Last updated &lt;Month Day, Year&gt;</code> label in <code>index.html</code> to the current publication date.</p>
         <div class="hero-meta">
-          <span>Last updated July 28, 2026</span>
+          <span>Last updated July 29, 2026</span>
         </div>
         <details class="disclaimer">
           <summary>Educational use and validation required <span class="disclaimer-action">click here</span></summary>
@@ -384,13 +384,38 @@ else
   printf ' - No matching VCN found; the recovery script will report missing network artifacts.\n'
 fi
 
+FSS_AD_NUMBER="${FSS_AD_NUMBER:-1}"
+printf '\nSelect File Storage availability domain number [1, 2, 3] (default %s): ' "$FSS_AD_NUMBER"
+IFS= read -r SELECTED_FSS_AD_NUMBER
+FSS_AD_NUMBER="${SELECTED_FSS_AD_NUMBER:-$FSS_AD_NUMBER}"
+case "$FSS_AD_NUMBER" in
+  1|2|3) ;;
+  *) printf 'STOP: Invalid File Storage availability domain number: %s. Enter 1, 2, or 3.\n' "$FSS_AD_NUMBER" &gt;&amp;2; return 1 ;;
+esac
+FSS_AVAILABILITY_DOMAIN="$(
+  oci iam availability-domain list \
+    --region "$REGION" \
+    --compartment-id "$TENANCY_ID" \
+    --query "data[?contains(name, 'AD-${FSS_AD_NUMBER}')].name | [0]" \
+    --raw-output
+)"
+[ -n "$FSS_AVAILABILITY_DOMAIN" ] &amp;&amp; [ "$FSS_AVAILABILITY_DOMAIN" != "null" ] || {
+  printf 'STOP: Unable to resolve FSS_AVAILABILITY_DOMAIN for AD-%s in %s.\n' "$FSS_AD_NUMBER" "$REGION" &gt;&amp;2
+  return 1
+}
+FSS_MOUNT_TARGET_COMPARTMENT_OCID="$POC_COMPARTMENT_OCID"
+printf ' - File Storage availability domain: %s\n' "$FSS_AVAILABILITY_DOMAIN"
+
 for item in \
   "TENANCY_ID|$TENANCY_ID" "REGION|$REGION" \
   "POC_PARENT_COMPARTMENT_NAME|$POC_PARENT_COMPARTMENT_NAME" \
   "POC_PARENT_COMPARTMENT_OCID|$POC_PARENT_COMPARTMENT_OCID" \
   "POC_COMPARTMENT_NAME|$POC_COMPARTMENT_NAME" \
   "POC_COMPARTMENT_OCID|$POC_COMPARTMENT_OCID" \
-  "VCN_NAME|$VCN_NAME"; do
+  "VCN_NAME|$VCN_NAME" \
+  "FSS_AD_NUMBER|$FSS_AD_NUMBER" \
+  "FSS_AVAILABILITY_DOMAIN|$FSS_AVAILABILITY_DOMAIN" \
+  "FSS_MOUNT_TARGET_COMPARTMENT_OCID|$FSS_MOUNT_TARGET_COMPARTMENT_OCID"; do
   upsert_cli_env "${item%%|*}" "${item#*|}" &gt;/dev/null
 done
 
@@ -403,7 +428,10 @@ printf '%-30s | %s\n' \
   "POC_COMPARTMENT_NAME" "$POC_COMPARTMENT_NAME" \
   "POC_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID" \
   "VCN_NAME" "$VCN_NAME" \
-  "VCN_OCID" "${VCN_OCID:-&lt;not_found&gt;}"
+  "VCN_OCID" "${VCN_OCID:-&lt;not_found&gt;}" \
+  "FSS_AD_NUMBER" "$FSS_AD_NUMBER" \
+  "FSS_AVAILABILITY_DOMAIN" "$FSS_AVAILABILITY_DOMAIN" \
+  "FSS_MOUNT_TARGET_COMPARTMENT_OCID" "$FSS_MOUNT_TARGET_COMPARTMENT_OCID"
   printf '\n%s\n' "wb17_card02"
 }
 
@@ -426,6 +454,9 @@ POC_COMPARTMENT_NAME           | LAD-01
 POC_COMPARTMENT_OCID           | &lt;poc_compartment_ocid&gt;
 VCN_NAME                       | VCN-LAD-01
 VCN_OCID                       | &lt;vcn_ocid_or_not_found&gt;
+FSS_AD_NUMBER                  | 1
+FSS_AVAILABILITY_DOMAIN        | &lt;file_storage_availability_domain&gt;
+FSS_MOUNT_TARGET_COMPARTMENT_OCID | &lt;poc_compartment_ocid&gt;
 
 wb17_card02</code></pre>
 </div>
@@ -488,7 +519,7 @@ wb17_card03</code></pre>
   </div>
   <pre class="code-scroll"><code>Downloading recovery script ...
 Source: https://efrainsanchez-ai.github.io/OCI/PoC-RunBook/17-recover-variables/recover-poc-variables.sh
-Recovery script created: 2026-07-29 10:20:08 CST
+Recovery script created: 2026-07-29 10:46:41 CST
 
 Reading active OCI CLI profile ...
   - Region candidate: &lt;region&gt;

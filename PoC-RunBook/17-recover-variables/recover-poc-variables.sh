@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Maintenance: Update SCRIPT_CREATED_AT to the current timestamp whenever this script changes.
-SCRIPT_CREATED_AT="2026-07-29 10:20:08 CST"
+SCRIPT_CREATED_AT="2026-07-29 10:46:41 CST"
 printf 'Recovery script created: %s\n' "$SCRIPT_CREATED_AT"
 
 WORKBOOK_DIR="${WORKBOOK_DIR:-$HOME/workbook}"
@@ -60,6 +60,16 @@ lookup_secret() {
   secret_name="$1"
   for compartment_id in "$SECURITY_COMPARTMENT_OCID" "$POC_COMPARTMENT_OCID"; do
     ok "$compartment_id" || continue
+    secret_ocid="$(
+      oci vault secret list \
+        --region "$REGION" \
+        --compartment-id "$compartment_id" \
+        --vault-id "$CDB_CREDENTIAL_VAULT_OCID" \
+        --all \
+        --query "data[?\"secret-name\"=='$secret_name' && \"lifecycle-state\"!='DELETED']|[0].id" \
+        --raw-output 2>/dev/null || true
+    )"
+    ok "$secret_ocid" && { printf '%s\n' "$secret_ocid"; return 0; }
     secret_ocid="$(first_id oci vault secret list --region "$REGION" --compartment-id "$compartment_id" --name "$secret_name" --all)"
     ok "$secret_ocid" && { printf '%s\n' "$secret_ocid"; return 0; }
   done
@@ -69,7 +79,8 @@ phase 'Reading active OCI CLI profile'
 read_profile
 for key in \
   TENANCY_ID REGION POC_PARENT_COMPARTMENT_NAME POC_PARENT_COMPARTMENT_OCID \
-  POC_COMPARTMENT_NAME POC_COMPARTMENT_OCID VCN_NAME; do
+  POC_COMPARTMENT_NAME POC_COMPARTMENT_OCID VCN_NAME \
+  FSS_AD_NUMBER FSS_AVAILABILITY_DOMAIN FSS_MOUNT_TARGET_COMPARTMENT_OCID; do
   require_recovery_variable "$key"
 done
 note "Region from recovery preflight: $REGION"
@@ -235,10 +246,22 @@ fi
 phase 'Discovering backup, Vault, and Database Management artifacts'
 CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID="${CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID:-$SECURITY_COMPARTMENT_OCID}"
 CDB_CREDENTIAL_KEY_COMPARTMENT_OCID="${CDB_CREDENTIAL_KEY_COMPARTMENT_OCID:-$SECURITY_COMPARTMENT_OCID}"
-CDB_CREDENTIAL_VAULT_OCID="$(ociq oci kms management vault list --region "$REGION" --compartment-id "$CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" --all --query "data[?\"display-name\"=='$CDB_CREDENTIAL_VAULT_NAME']|[0].id")"
+CDB_CREDENTIAL_VAULT_OCID="$(
+  ociq oci kms management vault list \
+    --region "$REGION" \
+    --compartment-id "$CDB_CREDENTIAL_VAULT_COMPARTMENT_OCID" \
+    --all \
+    --query "data[?\"display-name\"=='$CDB_CREDENTIAL_VAULT_NAME' && \"lifecycle-state\"!='DELETED']|[0].id"
+)"
 note "Credential vault: ${CDB_CREDENTIAL_VAULT_OCID:-<not_found>}"
 CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT="$(ociq oci kms management vault get --region "$REGION" --vault-id "$CDB_CREDENTIAL_VAULT_OCID" --query 'data."management-endpoint"')"
-CDB_CREDENTIAL_KEY_OCID="$(ociq oci kms management key list --endpoint "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" --compartment-id "$CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" --all --query "data[?\"display-name\"=='$CDB_CREDENTIAL_KEY_NAME']|[0].id")"
+CDB_CREDENTIAL_KEY_OCID="$(
+  ociq oci kms management key list \
+    --endpoint "$CDB_CREDENTIAL_VAULT_MANAGEMENT_ENDPOINT" \
+    --compartment-id "$CDB_CREDENTIAL_KEY_COMPARTMENT_OCID" \
+    --all \
+    --query "data[?\"display-name\"=='$CDB_CREDENTIAL_KEY_NAME' && \"lifecycle-state\"!='DELETED']|[0].id"
+)"
 note "Credential key: ${CDB_CREDENTIAL_KEY_OCID:-<not_found>}"
 CDB_SYS_SECRET_OCID="$(lookup_secret "$CDB_SYS_SECRET_NAME")"; CDB_SYSTEM_SECRET_OCID="$(lookup_secret "$CDB_SYSTEM_SECRET_NAME")"
 note "SYS secret: ${CDB_SYS_SECRET_OCID:-<not_found>}"
@@ -365,28 +388,14 @@ FSS_APPS_MOUNT_HOST="${FSS_APPS_MOUNT_HOST:-$FSS_MOUNT_TARGET_HOST_LABEL.$FSS_AP
 FSS_MOUNT_HOST="${FSS_MOUNT_HOST:-$FSS_ADMIN_MOUNT_HOST}"
 FSS_CLUSTER_MOUNT_HOST="${FSS_CLUSTER_MOUNT_HOST:-$FSS_DBCLIENT_MOUNT_HOST}"
 FSS_REMOTE_SCRIPT_NAME="${FSS_REMOTE_SCRIPT_NAME:-configure-filesystem-01-mount.sh}"
-FSS_AD_NUMBER="${FSS_AD_NUMBER:-1}"
-if ! ok "${FSS_AVAILABILITY_DOMAIN:-}"; then
-  FSS_AVAILABILITY_DOMAIN="$(
-    ociq oci iam availability-domain list \
-      --region "$REGION" \
-      --compartment-id "$TENANCY_ID" \
-      --query "data[?contains(name, 'AD-${FSS_AD_NUMBER}')].name | [0]"
-  )"
-fi
-FSS_AVAILABILITY_DOMAIN="${FSS_AVAILABILITY_DOMAIN:-${AVAILABILITY_DOMAIN:-${EXADATA_AVAILABILITY_DOMAIN:-}}}"
 FSS_NSG_OCID="$(lookup_nsg "$FSS_NSG_NAME")"
 note "File Storage NSG: ${FSS_NSG_OCID:-<not_found>}"
-FSS_AD_LIST="$({
-  ok "$FSS_AVAILABILITY_DOMAIN" && printf '%s
-' "$FSS_AVAILABILITY_DOMAIN"
-  oci iam availability-domain list     --region "$REGION"     --compartment-id "$TENANCY_ID"     --output json 2>/dev/null     | jq -r '.data[]?.name // empty' 2>/dev/null || true
-} | awk 'NF && !seen[$0]++')"
+FSS_AD_LIST="$FSS_AVAILABILITY_DOMAIN"
 
 FSS_FILE_SYSTEM_OCID=""
 for candidate_ad in $FSS_AD_LIST; do
   FSS_FILE_SYSTEM_JSON="$JSON_DIR/recovered-fss-file-system-${candidate_ad##*:}.json"
-  oci fs file-system list     --region "$REGION"     --availability-domain "$candidate_ad"     --compartment-id "$POC_COMPARTMENT_OCID"     --lifecycle-state ACTIVE     --output json > "$FSS_FILE_SYSTEM_JSON" 2>/dev/null || printf '{"data":[]}
+  oci fs file-system list     --region "$REGION"     --availability-domain "$candidate_ad"     --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID"     --lifecycle-state ACTIVE     --output json > "$FSS_FILE_SYSTEM_JSON" 2>/dev/null || printf '{"data":[]}
 ' > "$FSS_FILE_SYSTEM_JSON"
   FSS_FILE_SYSTEM_OCID="$(jq -r --arg name "$FSS_NAME" '.data[]? | select(."display-name" == $name) | .id' "$FSS_FILE_SYSTEM_JSON" 2>/dev/null | sed -n '1p')"
   if ok "$FSS_FILE_SYSTEM_OCID"; then
@@ -422,7 +431,7 @@ recover_fss_mount_target() {
     export_set_ocid="$(ociq oci fs mount-target get --region "$REGION" --mount-target-id "$target_ocid" --query 'data."export-set-id"')"
     if ok "$FSS_FILE_SYSTEM_OCID" && ok "$export_set_ocid"; then
       export_ocid="$(
-        oci fs export list           --region "$REGION"           --compartment-id "$POC_COMPARTMENT_OCID"           --file-system-id "$FSS_FILE_SYSTEM_OCID"           --export-set-id "$export_set_ocid"           --path "$FSS_EXPORT_PATH"           --query 'data[0].id'           --raw-output 2>/dev/null || true
+        oci fs export list           --region "$REGION"           --compartment-id "$FSS_MOUNT_TARGET_COMPARTMENT_OCID"           --file-system-id "$FSS_FILE_SYSTEM_OCID"           --export-set-id "$export_set_ocid"           --query 'data[0].id'           --raw-output 2>/dev/null || true
       )"
     fi
   fi
