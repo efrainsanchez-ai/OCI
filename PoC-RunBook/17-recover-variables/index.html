@@ -31,7 +31,7 @@
       <div class="hero-copy">
         <p class="eyebrow">Chapter 17</p>
         <h1>Recover Variables</h1>
-        <p class="subtitle">Whenever this workbook is edited, update the visible <code>Last updated &lt;Month Day, Year&gt;</code> label in <code>index.html</code> to the current publication date.</p>
+        <p class="subtitle">Recover the OCI PoC workbook environment after Cloud Shell storage loss or operator handoff by recreating workbook helpers, confirming the target compartment, VCN, and File Storage availability domain, then rediscovering existing resources into ~/workbook/cli.env.</p>
         <div class="hero-meta">
           <span>Last updated July 29, 2026</span>
         </div>
@@ -53,12 +53,12 @@
       </nav>
       <section id="overview" class="article-section">
         <h2>Overview</h2>
-        <p>Whenever this workbook is edited, update the visible <code>Last updated &lt;Month Day, Year&gt;</code> label in <code>index.html</code> to the current publication date.</p>
+        <p>Use this recovery workbook when the original Cloud Shell workspace is unavailable and an operator must rebuild <code>~/workbook/cli.env</code> from existing OCI resources. Start with BASH 01 and BASH 02 so the discovery script has the confirmed compartment, VCN, and File Storage AD inputs before it scans OCI.</p>
       </section><section id="introduction" class="article-section">
         <h2>Introduction</h2>
         <p>This workbook rebuilds the local <code>~/workbook</code> environment when Cloud Shell storage is lost, another OCI user takes over, or the original <code>~/workbook/cli.env</code> file is unavailable. It does not recreate OCI resources. Instead, it discovers existing resources by using the names, compartment assumptions, and discovery approach established in earlier workbooks, especially Chapter 16.</p>
-<p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, stores <code>helpers.sh</code> under <code>~/workbook/lib</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, and creates a minimal export-enabled <code>cli.env</code>. BASH 01A confirms and saves the active profile, parent and assigned compartment, and VCN name. BASH 02 downloads the reusable discovery tool under <code>~/workbook/bin</code> and writes recovered variables back into <code>~/workbook/cli.env</code>. Text reports are stored under <code>~/workbook/reports</code>, and JSON discovery files are stored under <code>~/workbook/json</code>.</p>
-<p>The default compartment path is <code>(root)/Partner/LAD-01</code>. If your deployment used another assigned child compartment under <code>Partner</code>, enter that name when prompted. The script stops before discovery unless you confirm the resolved path.</p>
+<p>The recovery flow assumes there is no usable <code>~/workbook</code> directory. BASH 01 creates a fresh workbook directory, stores <code>helpers.sh</code> under <code>~/workbook/lib</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, and creates a minimal export-enabled <code>cli.env</code>. BASH 02 confirms and saves the active OCI CLI profile, parent and assigned compartment, VCN name, File Storage availability domain number, resolved File Storage availability domain, and File Storage mount target compartment. BASH 03 downloads the reusable discovery tool under <code>~/workbook/bin</code>, discovers existing OCI resources, and writes recovered variables back into <code>~/workbook/cli.env</code>. Text reports are stored under <code>~/workbook/reports</code>, and JSON discovery files are stored under <code>~/workbook/json</code>.</p>
+<p>The default compartment path is <code>(root)/Partner/LAD-01</code>, and the default File Storage availability domain number is <code>1</code>. If your deployment used another assigned child compartment under <code>Partner</code> or selected a different File Storage AD in Chapter 15, enter those values when prompted. The script stops before discovery unless you confirm the resolved compartment path and the File Storage AD can be resolved.</p>
       </section><section id="what-gets-recovered" class="article-section">
         <h2>What gets recovered</h2>
         <div class="table-wrap">
@@ -153,7 +153,7 @@
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, store <code>helpers.sh</code> under <code>~/workbook/lib</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, and persist the local workbook path variables in export-enabled <code>cli.env</code> so recovery can run even when the Cloud Shell home directory was reset.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Create a fresh <code>~/workbook</code> directory, store <code>helpers.sh</code> under <code>~/workbook/lib</code> and <code>env.sh</code> under <code>~/workbook/bin</code>, and persist the local workbook path variables in export-enabled <code>cli.env</code> so BASH 02 can capture the compartment, VCN, and File Storage AD recovery inputs before discovery runs.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb17_card01() {
@@ -304,7 +304,7 @@ wb17_card01</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Before downloading the recovery script, confirm the active OCI CLI profile and one assigned PoC compartment, save those variables to <code>~/workbook/cli.env</code>, and select the VCN name that the recovery script will discover.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Before downloading the recovery script, confirm the active OCI CLI profile, assigned PoC compartment, VCN name, and File Storage availability domain, then save those recovery inputs to <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb17_card02() {
@@ -443,7 +443,7 @@ wb17_card02</code></pre>
     <span class="code-type">Output</span>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the active profile, selected compartment path, and VCN name were saved before discovery starts.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Confirm the active profile, selected compartment path, VCN name, and File Storage AD values were saved before discovery starts.</span>
   </div>
   <pre class="code-scroll"><code>VARIABLE                       | VALUE
 ------------------------------ | -----
@@ -469,7 +469,7 @@ wb17_card02</code></pre>
     <button class="copy-btn" type="button">Copy</button>
   </div>
   <div class="code-description code-objective">
-    <span class="code-objective-text"><span class="objective-label">Objective:</span> Download the maintained recovery script into <code>~/workbook/bin</code>, use the confirmed profile, compartment, and VCN values from BASH 02, discover existing OCI resources from their workbook names, show recovery status feedback while discovery runs, and save recovered values to <code>~/workbook/cli.env</code>.</span>
+    <span class="code-objective-text"><span class="objective-label">Objective:</span> Download the maintained recovery script into <code>~/workbook/bin</code>, use the confirmed profile, compartment, VCN, and File Storage AD values from BASH 02, discover existing OCI resources from their workbook names, show recovery status feedback while discovery runs, and save recovered values to <code>~/workbook/cli.env</code>.</span>
     <button class="code-toggle-btn" type="button" aria-expanded="false">Expand</button>
   </div>
   <pre class="code-scroll"><code>wb17_card03() {
